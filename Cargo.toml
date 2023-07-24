@@ -10,3 +10,6 @@ libc = "0.2.139"
 
 [build-dependencies]
 bindgen = { version = "0.66.1", features = ["experimental"] }
+
+[dev-dependencies]
+pico-args = "0.5.0"
