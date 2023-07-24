@@ -50,7 +50,12 @@ fn main() {
 
 fn generate_configuration(args: Vec<String>) -> Configuration {
     if args.len() < 3 {
-        panic!("usage: {} in out", args[0]);
+        panic!(
+            "usage: {} in out",
+            env::current_exe()
+                .expect("env::current_exe() failed")
+                .display()
+        );
     }
     
     return Configuration {
@@ -152,10 +157,12 @@ fn run_forward(
         meter(total_rcv_clone.clone(), total_fwd_clone.clone());
     });
     
+    // Declare supporting variables
     let frame: *mut *const u8 = ptr::null_mut();
     let pkthdr: *mut *const netmap_pkthdr = ptr::null_mut();
     
     loop {
+        // Receive a packet
         let pkt_id = unsafe { nethuns_recv_netmap(socket_in, pkthdr, frame) };
         
         if pkt_id == 0 {
@@ -165,21 +172,26 @@ fn run_forward(
         total_rcv.fetch_add(1, Ordering::SeqCst);
         
         unsafe {
-            while 0 != nethuns_send_netmap(socket_out, *frame, (*(*pkthdr)).len) {
+            assert!(frame.is_null() == false);
+            assert!(pkthdr.is_null() == false);
+            
+            while nethuns_send_netmap(socket_out, *frame, nethuns_len_netmap(*pkthdr)) != 0 {
                 nethuns_flush_netmap(socket_out);
             }
         }
         
         total_fwd.fetch_add(1, Ordering::SeqCst);
         
-        unsafe {
-            // nethuns_rx_release(socket_in, pkt_id);
-            todo!();
-        }
-        break;
+        nethuns_rx_release(socket_in, pkt_id as usize);
+        continue;
     }
     
-    todo!();
+    // unsafe {
+    //     nethuns_close_netmap(socket_in);
+    //     nethuns_close_netmap(socket_out);
+    // }
+    
+    // Ok(())
 }
 
 ///
@@ -200,5 +212,20 @@ fn meter(total_rcv: Arc<AtomicU64>, total_fwd: Arc<AtomicU64>) {
         let r = total_rcv.swap(0, Ordering::SeqCst);
         let f = total_fwd.swap(0, Ordering::SeqCst);
         println!("pkt/sec: {r} fwd/s {f}");
+    }
+}
+
+///
+fn nethuns_rx_release(socket: *mut nethuns_socket_netmap, pkt_id: usize) {
+    assert!(socket.is_null() == false);
+    assert!(pkt_id > 0);
+    
+    let socket = socket as *mut nethuns_socket_base;
+    
+    let ring_slot =
+        unsafe { nethuns_ring_get_slot(&mut ((*socket).rx_ring) as *mut nethuns_ring, pkt_id - 1) };
+    
+    unsafe {
+        (*ring_slot).inuse = 0;
     }
 }
