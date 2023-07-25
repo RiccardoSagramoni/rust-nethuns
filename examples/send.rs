@@ -8,7 +8,9 @@ use bus::{Bus, BusReader};
 use pico_args;
 use std::collections::VecDeque;
 use std::error::Error;
-use std::ffi::{c_char, c_int, c_long, c_uchar, CStr, CString};
+use std::ffi::{
+    c_char, c_int, c_long, c_uchar, c_uint, c_ulong, CStr, CString,
+};
 use std::os::raw::c_void;
 use std::{env, ptr, thread};
 
@@ -47,7 +49,7 @@ Other options:
 -z, --zerocopy                  Enable send zero-copy. By default, classic send that requires a copy is used.
 ";
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 struct Args {
     interface: CString,
     batch_size: c_int,
@@ -62,58 +64,17 @@ enum SendError {
     Exception(String),
 }
 
+// #[derive(Debug)]
+// struct nethuns_socket_options_wrapper {
+//     opt: nethuns_socket_options,
+// }
+
+unsafe impl Send for nethuns_socket_options {}
+
+unsafe impl Sync for nethuns_socket_options {}
+
 fn main() {
-    // Parse options from command line
-    let args = match parse_args() {
-        Ok(a) => a,
-        Err(e) => {
-            eprintln!("Error in parsing command line options: {e}.");
-            eprint!("{}", HELP_BRIEF);
-            std::process::exit(0);
-        }
-    };
-    
-    println!(
-        "Test {} started with parameters: \n{:#?}",
-        env::args().next().unwrap(),
-        args
-    );
-    
-    // Define payload for packets
-    let payload: [c_uchar; 34] = [
-        0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xf0, 0xbf, /* L`..UF.. */
-        0x97, 0xe2, 0xff, 0xae, 0x08, 0x00, 0x45, 0x00, /* ......E. */
-        0x00, 0x54, 0xb3, 0xf9, 0x40, 0x00, 0x40, 0x11, /* .T..@.@. */
-        0xf5, 0x32, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, /* .2...... */
-        0x07, 0x08,
-    ];
-    
-    // Nethuns options
-    let mut netopt: nethuns_socket_options = nethuns_socket_options {
-        numblocks: 1,
-        numpackets: 2048,
-        packetsize: 2048,
-        timeout_ms: 0,
-        dir: nethuns_capture_dir_nethuns_in_out,
-        capture: nethuns_capture_mode_nethuns_cap_zero_copy,
-        mode: nethuns_socket_mode_nethuns_socket_rx_tx,
-        promisc: false,
-        rxhash: false,
-        tx_qdisc_bypass: true,
-        xdp_prog: ptr::null(),
-        xdp_prog_sec: ptr::null(),
-        xsk_map_name: ptr::null(),
-        reuse_maps: false,
-        pin_dir: ptr::null(),
-    };
-    
-    // output sockets
-    // let mut out_sockets: Vec<*mut nethuns_socket_t> =
-    //     vec![ptr::null_mut(); args.num_sockets as usize];
-    
-    // one errbuf per thread
-    // let mut errbuf: Vec<[c_char; NETHUNS_ERRBUF_SIZE as usize]> =
-    //     vec![[0; NETHUNS_ERRBUF_SIZE as usize]; args.num_sockets as usize];
+    let (args, payload, mut net_opt) = configure();
     
     // stats counter
     // TODO: sincronizzazione
@@ -121,57 +82,33 @@ fn main() {
     
     // Create a thread for computing statistics
     let stats_th = thread::spawn(meter);
-    // Vector of threads
-    let mut threads: VecDeque<thread::JoinHandle<()>> = VecDeque::new();
-    // Define bus for SPMC communication between threads
-    let mut bus: Bus<()> = Bus::new(5);
     
-    // case single thread (main) with generic number of sockets
+    // Define bus for SPMC communication between threads
+    let mut bus: Bus<()> = Bus::new(5); // TODO: optimize?
+    
     if !args.multithreading {
-        // Define bus reader for receiving SIGINT signal
+        // case single thread (main) with generic number of sockets
         let rx = bus.add_rx();
         set_sigint_handler(bus);
-        
-        // Vector for storing socket ids
-        let mut out_sockets: Vec<*mut nethuns_socket_t> =
-            vec![ptr::null_mut(); args.num_sockets as usize];
-        
-        if let Err(e) = st_send(&args, &mut netopt, &mut out_sockets, &payload, rx) {
-            match e {
-                SendError::NethunsException(s) => {
-                    if s.is_null() == false {
-                        unsafe {
-                            nethuns_close_netmap(s);
-                        }
-                    }
-                    eprintln!("Nethuns socket failed: {:?}", s);
-                }
-                SendError::Exception(e) => {
-                    eprintln!("Error: {:?}", e);
-                }
-            }
-        }
-        
-        // Close all sockets
-        for s in out_sockets {
-            if s.is_null() == false {
-                unsafe {
-                    nethuns_close_netmap(s);
-                }
-            }
-        }
-        
+        st_execution(args, &mut net_opt, &payload, rx);
     } else {
         // case multithreading enabled (num_threads == num_sockets)
-        for _ in 0..args.num_sockets {
-            threads.push_back(thread::spawn(mt_send));
+        let mut threads: Vec<thread::JoinHandle<()>> = Vec::new();
+        
+        for th_idx in 0..args.num_sockets {
+            let args = args.clone();
+            let rx = bus.add_rx();
+            threads.push(thread::spawn(move || {
+                mt_execution(args, &mut net_opt, th_idx, &payload, rx)
+            }));
         }
+        
         set_sigint_handler(bus);
-    }
-    
-    for t in threads {
-        if let Err(e) = t.join() {
-            eprintln!("Error joining thread: {:?}", e);
+        
+        for t in threads {
+            if let Err(e) = t.join() {
+                eprintln!("Error joining thread: {:?}", e);
+            }
         }
     }
     
@@ -200,6 +137,56 @@ fn main() {
 }
 
 ///
+fn configure() -> (Args, [c_uchar; 34], nethuns_socket_options) {
+    // Parse options from command line
+    let args = match parse_args() {
+        Ok(a) => a,
+        Err(e) => {
+            eprintln!("Error in parsing command line options: {e}.");
+            eprint!("{}", HELP_BRIEF);
+            std::process::exit(0);
+        }
+    };
+    
+    println!(
+        "Test {} started with parameters: \n{:#?}",
+        env::args().next().unwrap(),
+        args
+    );
+    
+    // Define payload for packets
+    let payload: [c_uchar; 34] = [
+        0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xf0, 0xbf, /* L`..UF.. */
+        0x97, 0xe2, 0xff, 0xae, 0x08, 0x00, 0x45, 0x00, /* ......E. */
+        0x00, 0x54, 0xb3, 0xf9, 0x40, 0x00, 0x40, 0x11, /* .T..@.@. */
+        0xf5, 0x32, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, /* .2...... */
+        0x07, 0x08,
+    ];
+    
+    // Nethuns options
+    let net_opt: nethuns_socket_options = nethuns_socket_options {
+        numblocks: 1,
+        numpackets: 2048,
+        packetsize: 2048,
+        timeout_ms: 0,
+        dir: nethuns_capture_dir_nethuns_in_out,
+        capture: nethuns_capture_mode_nethuns_cap_zero_copy,
+        mode: nethuns_socket_mode_nethuns_socket_rx_tx,
+        promisc: false,
+        rxhash: false,
+        tx_qdisc_bypass: true,
+        xdp_prog: ptr::null(),
+        xdp_prog_sec: ptr::null(),
+        xsk_map_name: ptr::null(),
+        reuse_maps: false,
+        pin_dir: ptr::null(),
+    };
+    dbg!(net_opt);
+    
+    (args, payload, net_opt)
+}
+
+///
 fn parse_args() -> Result<Args, Box<dyn Error>> {
     let mut pargs = pico_args::Arguments::from_env();
     
@@ -210,7 +197,9 @@ fn parse_args() -> Result<Args, Box<dyn Error>> {
     }
     
     let args = Args {
-        interface: CString::new::<String>(pargs.value_from_str(["-i", "--interface"])?)?,
+        interface: CString::new::<String>(
+            pargs.value_from_str(["-i", "--interface"])?,
+        )?,
         batch_size: pargs.value_from_str(["-b", "--batch_size"]).unwrap_or(1),
         num_sockets: pargs.value_from_str(["-n", "--sockets"]).unwrap_or(1),
         multithreading: pargs.contains(["-m", "--multithreading"]),
@@ -251,6 +240,43 @@ fn meter() {
 }
 
 ///
+fn st_execution(
+    args: Args,
+    netopt: &mut nethuns_socket_options,
+    payload: &[u_char],
+    rx: BusReader<()>,
+) {
+    // Vector for storing socket ids
+    let mut out_sockets: Vec<*mut nethuns_socket_t> =
+        vec![ptr::null_mut(); args.num_sockets as usize];
+    
+    if let Err(e) = st_send(&args, netopt, &mut out_sockets, &payload, rx) {
+        match e {
+            SendError::NethunsException(s) => {
+                if s.is_null() == false {
+                    unsafe {
+                        nethuns_close_netmap(s);
+                    }
+                }
+                eprintln!("Nethuns socket failed: {:?}", s);
+            }
+            SendError::Exception(e) => {
+                eprintln!("Error: {:?}", e);
+            }
+        }
+    }
+    
+    // Close all sockets
+    for s in out_sockets {
+        if s.is_null() == false {
+            unsafe {
+                nethuns_close_netmap(s);
+            }
+        }
+    }
+}
+
+///
 fn st_send(
     args: &Args,
     net_opt: &mut nethuns_socket_options,
@@ -258,16 +284,18 @@ fn st_send(
     payload: &[u_char],
     mut bus_rx: BusReader<()>,
 ) -> Result<(), SendError> {
-    // one packet index per socket (pos of next slot/packet to send in tx ring)
-    let pktid: Vec<u64> = vec![0; args.num_sockets as usize];
-    
+    // One packet index per socket (pos of next slot/packet to send in tx ring)
+    let mut pktid: Vec<u64> = vec![0; args.num_sockets as usize];
     // Error buffer
-    let mut errbuf: [c_char; NETHUNS_ERRBUF_SIZE as usize] = [0; NETHUNS_ERRBUF_SIZE as usize];
+    let mut errbuf: [c_char; NETHUNS_ERRBUF_SIZE as usize] =
+        [0; NETHUNS_ERRBUF_SIZE as usize];
     
     for i in 0..args.num_sockets {
         fill_tx_ring(
             i,
-            &mut out_sockets[i as usize],
+            out_sockets
+                .get_mut(i as usize)
+                .expect("out_sockets.get_mut() failed"),
             args,
             net_opt,
             &payload,
@@ -279,11 +307,26 @@ fn st_send(
         match bus_rx.try_recv() {
             Ok(()) => break,
             Err(_) => {
-                for i in 0..args.num_sockets {
+                for i in 0..args.num_sockets as usize {
                     if args.zerocopy {
-                        transmit_zc(i);
+                        transmit_zc(
+                            args,
+                            out_sockets
+                                .get_mut(i)
+                                .expect("out_sockets.get_mut() failed"),
+                            pktid.get_mut(i).expect("pktid.get_mut() failed"),
+                            payload.len(),
+                            i,
+                        );
                     } else {
-                        transmit_c(i);
+                        transmit_c(
+                            args,
+                            out_sockets
+                                .get_mut(i)
+                                .expect("out_sockets.get_mut() failed"),
+                            payload,
+                            i,
+                        );
                     }
                 }
             }
@@ -317,7 +360,9 @@ fn fill_tx_ring(
     } else {
         NETHUNS_ANY_QUEUE
     };
-    let result = unsafe { nethuns_bind_netmap(*out_socket, args.interface.as_ptr(), queue_len) };
+    let result = unsafe {
+        nethuns_bind_netmap(*out_socket, args.interface.as_ptr(), queue_len)
+    };
     if result < 0 {
         return Err(SendError::NethunsException(*out_socket));
     }
@@ -337,9 +382,11 @@ fn fill_tx_ring(
                 memcpy(
                     pkt as *mut c_void,
                     payload.as_ptr() as *const c_void,
-                    payload.len() as u64,
+                    payload.len() as c_ulong,
                 );
             }
+            
+            // TODO set pktid a 0 for zerocopy
         }
     }
     
@@ -347,27 +394,121 @@ fn fill_tx_ring(
 }
 
 /// transmit packets in the tx ring (use optimized send, zero copy)
-fn transmit_zc(out_socket: &mut *mut nethuns_socket_netmap, pktid: &mut u64) {
-    // // prepare batch
-    // for (int n = 0; n < batch_size; n++) {
-    //     if (nethuns_send_slot(out[th_idx], pktid[th_idx], pkt_size) <= 0)
-    //         break;
-    //     pktid[th_idx]++;
-    //     totals.at(th_idx)++;
-    // }
-    // nethuns_flush(out[th_idx]);             // send batch
-    
+fn transmit_zc(
+    args: &Args,
+    out_socket: &mut *mut nethuns_socket_netmap,
+    pktid: &mut u64,
+    pkt_size: usize,
+    th_idx: usize,
+) {
+    // prepare batch
     for n in 0..args.batch_size {
-        let x = unsafe { nethuns_send_slot(out_sockets, pktid[i as usize], 1) };
+        let result =
+            unsafe { nethuns_send_slot(*out_socket, *pktid, pkt_size) };
+        if result <= 0 {
+            break;
+        }
+        (*pktid) += 1;
+        // TODO totals.at(th_idx)++;
+    }
+    // send batch
+    unsafe {
+        nethuns_flush(*out_socket);
     }
 }
 
 ///
-fn transmit_c(i: c_int) {
-    todo!();
+fn transmit_c(
+    args: &Args,
+    out_socket: &mut *mut nethuns_socket_netmap,
+    payload: &[c_uchar],
+    th_idx: usize,
+) {
+    // prepare batch
+    for n in 0..args.batch_size {
+        let result = unsafe {
+            nethuns_send(*out_socket, payload.as_ptr(), payload.len() as c_uint)
+        };
+        if result <= 0 {
+            break;
+        }
+        // TODO totals.at(th_idx)++;
+    }
+    // send batch
+    unsafe {
+        nethuns_flush(*out_socket);
+    }
 }
 
 ///
-fn mt_send() {
+fn mt_execution(
+    args: Args,
+    net_opt: &mut nethuns_socket_options,
+    th_idx: c_int,
+    payload: &[u_char],
+    mut rx: BusReader<()>,
+) {
+    let mut out_socket: *mut nethuns_socket_t = ptr::null_mut();
+    
+    if let Err(e) =
+        mt_send(&args, net_opt, th_idx, &mut out_socket, &payload, rx)
+    {
+        match e {
+            SendError::NethunsException(s) => {
+                if s.is_null() == false {
+                    unsafe {
+                        nethuns_close_netmap(s);
+                    }
+                }
+                eprintln!("Nethuns socket failed: {:?}", s);
+            }
+            SendError::Exception(e) => {
+                eprintln!("Error: {:?}", e);
+            }
+        }
+    }
+    
+    // Close socket
+    unsafe {
+        nethuns_close_netmap(out_socket);
+    }
+}
+
+///
+fn mt_send(
+    args: &Args,
+    net_opt: &mut nethuns_socket_options,
+    th_idx: c_int,
+    out_socket: &mut *mut nethuns_socket_t,
+    payload: &[u_char],
+    mut rx: BusReader<()>,
+) -> Result<(), SendError> {
+    // Error buffer
+    let mut errbuf: [c_char; NETHUNS_ERRBUF_SIZE as usize] =
+        [0; NETHUNS_ERRBUF_SIZE as usize];
+    
+    let mut pktid: u64 = 0;
+    
+    fill_tx_ring(th_idx, out_socket, args, net_opt, payload, &mut errbuf)?;
+    
+    loop {
+        match rx.try_recv() {
+            Ok(()) => break,
+            Err(_) => {
+                if args.zerocopy {
+                    transmit_zc(
+                        args,
+                        out_socket,
+                        &mut pktid,
+                        payload.len(),
+                        th_idx as usize,
+                    )
+                } else {
+                    transmit_c(args, out_socket, payload, th_idx as usize)
+                }
+            }
+        }
+    }
+    
     todo!();
 }
