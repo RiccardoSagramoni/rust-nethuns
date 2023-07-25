@@ -2,9 +2,8 @@
 #![allow(non_camel_case_types)]
 #![allow(non_snake_case)]
 
-include!(concat!(env!("OUT_DIR"), "/bindings.rs"));
-
 use bus::{Bus, BusReader};
+use rust_nethuns::*;
 use std::error::Error;
 use std::ffi::{c_char, c_int, c_uchar, c_uint, c_ulong, CStr, CString};
 use std::os::raw::c_void;
@@ -62,9 +61,6 @@ enum SendError {
     NethunsException(*mut nethuns_socket_netmap),
     Exception(String),
 }
-
-unsafe impl Send for nethuns_socket_options {}
-unsafe impl Sync for nethuns_socket_options {}
 
 fn main() {
     let (args, payload, mut net_opt) = configure_example();
@@ -366,7 +362,7 @@ fn st_send(
                     pktid.get_mut(i).expect("pktid.get_mut() failed"),
                     payload.len(),
                     &totals,
-                    i
+                    i,
                 );
             } else {
                 transmit_c(
@@ -376,7 +372,7 @@ fn st_send(
                         .expect("out_sockets.get_mut() failed"),
                     payload,
                     &totals,
-                    i
+                    i,
                 );
             }
         }
@@ -479,7 +475,7 @@ fn mt_send(
                 &mut pktid,
                 payload.len(),
                 &totals,
-                th_idx as usize
+                th_idx as usize,
             )
         } else {
             transmit_c(args, &mut out_socket, payload, &totals, th_idx as usize)
@@ -564,7 +560,7 @@ fn fill_tx_ring(
 }
 
 /// Transmit packets in the tx ring (use optimized send, zero copy).
-/// 
+///
 /// # Arguments
 /// - `args`: Parsed command-line arguments.
 /// - `out_socket`: Socket descriptor.
@@ -572,14 +568,14 @@ fn fill_tx_ring(
 /// - `pkt_size`: Packet size.
 /// - `totals`: Vector for storing the number of packets sent from each socket.
 /// - `socket_idx`: Socket index.
-/// 
+///
 fn transmit_zc(
     args: &Args,
     out_socket: &mut *mut nethuns_socket_netmap,
     pktid: &mut u64,
     pkt_size: usize,
     totals: &Arc<Mutex<Vec<u64>>>,
-    socket_idx: usize
+    socket_idx: usize,
 ) {
     // Prepare batch
     for _ in 0..args.batch_size {
@@ -600,20 +596,20 @@ fn transmit_zc(
 }
 
 /// Transmit packets in the tx ring (use classic send, copy)
-/// 
+///
 /// # Arguments
 /// - `args`: Parsed command-line arguments.
 /// - `out_socket`: Socket descriptor.
 /// - `payload`: Payload for packets.
 /// - `totals`: Vector for storing the number of packets sent from each socket.
 /// - `socket_idx`: Socket index.
-/// 
+///
 fn transmit_c(
     args: &Args,
     out_socket: &mut *mut nethuns_socket_netmap,
     payload: &[c_uchar],
     totals: &Arc<Mutex<Vec<u64>>>,
-    socket_idx: usize
+    socket_idx: usize,
 ) {
     // Prepare batch
     for _ in 0..args.batch_size {

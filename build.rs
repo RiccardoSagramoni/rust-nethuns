@@ -9,7 +9,7 @@ fn main() {
     println!("cargo:rustc-link-search=/usr/lib/x86_64-linux-gnu/");
     
     // Tell cargo to tell rustc to link the system shared libraries.
-    println!("cargo:rustc-link-lib=static=nethuns");
+    println!("cargo:rustc-link-lib=nethuns");
     println!("cargo:rustc-link-lib=pcap");
     println!("cargo:rustc-link-lib=netmap");
     

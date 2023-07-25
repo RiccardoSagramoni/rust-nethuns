@@ -2,9 +2,8 @@
 #![allow(non_camel_case_types)]
 #![allow(non_snake_case)]
 
-include!(concat!(env!("OUT_DIR"), "/bindings.rs"));
-
 use core::ffi::c_char;
+use rust_nethuns::*;
 use std::env;
 use std::ffi::CString;
 use std::ptr;
@@ -59,8 +58,10 @@ fn generate_configuration(args: Vec<String>) -> Configuration {
     }
     
     return Configuration {
-        dev_in: CString::new(args[1].as_str()).expect("Unable to parse args[1]"),
-        dev_out: CString::new(args[2].as_str()).expect("Unable to parse args[1]"),
+        dev_in: CString::new(args[1].as_str())
+            .expect("Unable to parse args[1]"),
+        dev_out: CString::new(args[2].as_str())
+            .expect("Unable to parse args[1]"),
     };
 }
 
@@ -110,7 +111,8 @@ fn run_forward(
     mut out_opt: nethuns_socket_options,
 ) -> Result<(), ForwardError> {
     // Allocate error buffer for C functions
-    let mut errbuf: [c_char; NETHUNS_ERRBUF_SIZE as usize] = [0; NETHUNS_ERRBUF_SIZE as usize];
+    let mut errbuf: [c_char; NETHUNS_ERRBUF_SIZE as usize] =
+        [0; NETHUNS_ERRBUF_SIZE as usize];
     
     // Open input socket
     let socket_in: *mut nethuns_socket_netmap =
@@ -135,15 +137,21 @@ fn run_forward(
     }
     
     // Bind input socket
-    let result: i32 =
-        unsafe { nethuns_bind_netmap(socket_in, conf.dev_in.as_ptr(), NETHUNS_ANY_QUEUE) };
+    let result: i32 = unsafe {
+        nethuns_bind_netmap(socket_in, conf.dev_in.as_ptr(), NETHUNS_ANY_QUEUE)
+    };
     if result < 0 {
         return Err(ForwardError::NethunsException(socket_in));
     }
     
     // Bind output socket
-    let result: i32 =
-        unsafe { nethuns_bind_netmap(socket_out, conf.dev_out.as_ptr(), NETHUNS_ANY_QUEUE) };
+    let result: i32 = unsafe {
+        nethuns_bind_netmap(
+            socket_out,
+            conf.dev_out.as_ptr(),
+            NETHUNS_ANY_QUEUE,
+        )
+    };
     if result < 0 {
         return Err(ForwardError::NethunsException(socket_out));
     }
@@ -175,7 +183,12 @@ fn run_forward(
             assert!(frame.is_null() == false);
             assert!(pkthdr.is_null() == false);
             
-            while nethuns_send_netmap(socket_out, *frame, nethuns_len_netmap(*pkthdr)) != 0 {
+            while nethuns_send_netmap(
+                socket_out,
+                *frame,
+                nethuns_len_netmap(*pkthdr),
+            ) != 0
+            {
                 nethuns_flush_netmap(socket_out);
             }
         }
@@ -222,8 +235,12 @@ fn nethuns_rx_release(socket: *mut nethuns_socket_netmap, pkt_id: usize) {
     
     let socket = socket as *mut nethuns_socket_base;
     
-    let ring_slot =
-        unsafe { nethuns_ring_get_slot(&mut ((*socket).rx_ring) as *mut nethuns_ring, pkt_id - 1) };
+    let ring_slot = unsafe {
+        nethuns_ring_get_slot(
+            &mut ((*socket).rx_ring) as *mut nethuns_ring,
+            pkt_id - 1,
+        )
+    };
     
     unsafe {
         (*ring_slot).inuse = 0;
