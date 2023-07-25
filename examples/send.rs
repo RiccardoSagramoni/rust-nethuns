@@ -5,7 +5,6 @@
 include!(concat!(env!("OUT_DIR"), "/bindings.rs"));
 
 use bus::{Bus, BusReader};
-use pico_args;
 use std::error::Error;
 use std::ffi::{c_char, c_int, c_uchar, c_uint, c_ulong, CStr, CString};
 use std::os::raw::c_void;
@@ -71,8 +70,8 @@ fn main() {
     let (args, payload, mut net_opt) = configure_example();
     
     // Stats counter
-    let totals =
-        Arc::new(Mutex::new(vec![0 as u64; args.num_sockets as usize]));
+    let totals: Arc<Mutex<Vec<u64>>> =
+        Arc::new(Mutex::new(vec![0; args.num_sockets as usize]));
     
     // Define bus for SPMC communication between threads
     let mut bus: Bus<()> = Bus::new(5);
@@ -231,7 +230,7 @@ fn char_array_to_string(arr: &[c_char]) -> String {
 fn set_sigint_handler(mut bus: Bus<()>) {
     ctrlc::set_handler(move || {
         println!("Ctrl-C detected. Shutting down...");
-        let _ = bus.broadcast(());
+        bus.broadcast(());
     })
     .expect("Error setting Ctrl-C handler");
 }
@@ -288,10 +287,10 @@ fn st_execution(
     totals: Arc<Mutex<Vec<u64>>>,
 ) {
     // Starts transmission
-    if let Err(e) = st_send(&args, net_opt, &payload, rx, totals) {
+    if let Err(e) = st_send(&args, net_opt, payload, rx, totals) {
         match e {
             SendError::NethunsException(s) => {
-                if s.is_null() == false {
+                if !s.is_null() {
                     unsafe {
                         nethuns_close_netmap(s);
                     }
@@ -344,7 +343,7 @@ fn st_send(
             out_sockets
                 .get_mut(i as usize)
                 .expect("out_sockets.get_mut() failed"),
-            &payload,
+            payload,
             &mut errbuf,
         )?;
     }
@@ -353,9 +352,7 @@ fn st_send(
         // Check if Ctrl-C was pressed
         match bus_rx.try_recv() {
             Ok(_) | Err(TryRecvError::Disconnected) => break,
-            _ => {
-                ();
-            }
+            _ => {}
         }
         
         // Transmit packets from each socket
@@ -414,10 +411,10 @@ fn mt_execution(
     totals: Arc<Mutex<Vec<u64>>>,
 ) {
     // Start transmission
-    if let Err(e) = mt_send(&args, net_opt, th_idx, &payload, rx, totals) {
+    if let Err(e) = mt_send(&args, net_opt, th_idx, payload, rx, totals) {
         match e {
             SendError::NethunsException(s) => {
-                if s.is_null() == false {
+                if !s.is_null() {
                     unsafe {
                         nethuns_close_netmap(s);
                     }
@@ -519,7 +516,7 @@ fn fill_tx_ring(
     payload: &[c_uchar],
     errbuf: &mut [c_char],
 ) -> Result<(), SendError> {
-    assert!(payload.as_ptr().is_null() == false);
+    assert!(!payload.as_ptr().is_null());
     
     // Open socket
     *out_socket = unsafe { nethuns_open_netmap(net_opt, errbuf.as_mut_ptr()) };
@@ -527,7 +524,7 @@ fn fill_tx_ring(
         return Err(SendError::Exception(char_array_to_string(errbuf)));
     }
     
-    assert!(out_socket.is_null() == false);
+    assert!(!out_socket.is_null());
     
     let queue_len = if args.num_sockets > 1 {
         socket_idx
@@ -550,7 +547,7 @@ fn fill_tx_ring(
             let pkt =
                 unsafe { nethuns_get_buf_addr_netmap(*out_socket, j as u64) };
             
-            assert!(pkt.is_null() == false);
+            assert!(!pkt.is_null());
             
             // copy the packet
             unsafe {
