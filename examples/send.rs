@@ -6,12 +6,12 @@ include!(concat!(env!("OUT_DIR"), "/bindings.rs"));
 
 use bus::{Bus, BusReader};
 use pico_args;
-use std::collections::VecDeque;
 use std::error::Error;
-use std::ffi::{
-    c_char, c_int, c_long, c_uchar, c_uint, c_ulong, CStr, CString,
-};
+use std::ffi::{c_char, c_int, c_uchar, c_uint, c_ulong, CStr, CString};
 use std::os::raw::c_void;
+use std::sync::mpsc::TryRecvError;
+use std::sync::{Arc, Mutex};
+use std::time::{Duration, SystemTime};
 use std::{env, ptr, thread};
 
 const HELP_BRIEF: &str = "\
@@ -64,11 +64,6 @@ enum SendError {
     Exception(String),
 }
 
-// #[derive(Debug)]
-// struct nethuns_socket_options_wrapper {
-//     opt: nethuns_socket_options,
-// }
-
 unsafe impl Send for nethuns_socket_options {}
 
 unsafe impl Sync for nethuns_socket_options {}
@@ -76,30 +71,38 @@ unsafe impl Sync for nethuns_socket_options {}
 fn main() {
     let (args, payload, mut net_opt) = configure();
     
-    // stats counter
-    // TODO: sincronizzazione
-    let totals: Vec<c_long> = vec![0; args.num_sockets as usize];
-    
-    // Create a thread for computing statistics
-    let stats_th = thread::spawn(meter);
+    // Stats counter
+    let totals =
+        Arc::new(Mutex::new(vec![0 as u64; args.num_sockets as usize]));
     
     // Define bus for SPMC communication between threads
-    let mut bus: Bus<()> = Bus::new(5); // TODO: optimize?
+    let mut bus: Bus<()> = Bus::new(5);
+    
+    // Create a thread for computing statistics
+    let stats_th = {
+        let totals = totals.clone();
+        let rx = bus.add_rx();
+        thread::spawn(move || {
+            meter(totals, rx);
+        })
+    };
     
     if !args.multithreading {
         // case single thread (main) with generic number of sockets
         let rx = bus.add_rx();
         set_sigint_handler(bus);
-        st_execution(args, &mut net_opt, &payload, rx);
+        st_execution(args, &mut net_opt, &payload, rx, totals);
     } else {
         // case multithreading enabled (num_threads == num_sockets)
         let mut threads: Vec<thread::JoinHandle<()>> = Vec::new();
+        let args = Arc::new(args);
         
         for th_idx in 0..args.num_sockets {
             let args = args.clone();
             let rx = bus.add_rx();
+            let totals = totals.clone();
             threads.push(thread::spawn(move || {
-                mt_execution(args, &mut net_opt, th_idx, &payload, rx)
+                mt_execution(args, &mut net_opt, th_idx, &payload, rx, totals)
             }));
         }
         
@@ -111,25 +114,6 @@ fn main() {
             }
         }
     }
-    
-    // Wait for the threads to finish and close the sockets
-    // TODO
-    // for socket in out_sockets {
-    //     if args.multithreading {
-    //         if let Some(t) = threads.pop_front() {
-    //             if let Err(e) = t.join() {
-    //                 eprintln!("Error joining thread: {:?}", e);
-    //             }
-    //         }
-    //     }
-    
-    //     // TODO
-    //     // if socket.is_null() == false {
-    //     //     unsafe {
-    //     //         nethuns_close_netmap(socket);
-    //     //     }
-    //     // }
-    // }
     
     if let Err(e) = stats_th.join() {
         eprintln!("Error joining stats thread: {:?}", e);
@@ -235,8 +219,30 @@ fn set_sigint_handler(mut bus: Bus<()>) {
 }
 
 ///
-fn meter() {
-    todo!();
+fn meter(totals: Arc<Mutex<Vec<u64>>>, mut rx: BusReader<()>) {
+    let mut now = SystemTime::now();
+    let mut old_total: u64 = 0;
+    
+    loop {
+        match rx.try_recv() {
+            Ok(_) | Err(TryRecvError::Disconnected) => break,
+            _ => (),
+        }
+        
+        // Sleep for 1 second
+        let next_sys_time = now
+            .checked_add(Duration::from_secs(1))
+            .expect("SystemTime::checked_add() failed");
+        if let Ok(delay) = next_sys_time.duration_since(now) {
+            thread::sleep(delay);
+        }
+        now = next_sys_time;
+        
+        // Print number of sent packets
+        let new_total: u64 = totals.lock().expect("lock failed").iter().sum();
+        println!("pkt/sec: {}", new_total - old_total);
+        old_total = new_total;
+    }
 }
 
 ///
@@ -245,12 +251,15 @@ fn st_execution(
     netopt: &mut nethuns_socket_options,
     payload: &[u_char],
     rx: BusReader<()>,
+    totals: Arc<Mutex<Vec<u64>>>,
 ) {
     // Vector for storing socket ids
     let mut out_sockets: Vec<*mut nethuns_socket_t> =
         vec![ptr::null_mut(); args.num_sockets as usize];
     
-    if let Err(e) = st_send(&args, netopt, &mut out_sockets, &payload, rx) {
+    if let Err(e) =
+        st_send(&args, netopt, &mut out_sockets, &payload, rx, totals)
+    {
         match e {
             SendError::NethunsException(s) => {
                 if s.is_null() == false {
@@ -283,6 +292,7 @@ fn st_send(
     out_sockets: &mut Vec<*mut nethuns_socket_t>,
     payload: &[u_char],
     mut bus_rx: BusReader<()>,
+    totals: Arc<Mutex<Vec<u64>>>,
 ) -> Result<(), SendError> {
     // One packet index per socket (pos of next slot/packet to send in tx ring)
     let mut pktid: Vec<u64> = vec![0; args.num_sockets as usize];
@@ -305,30 +315,34 @@ fn st_send(
     
     loop {
         match bus_rx.try_recv() {
-            Ok(()) => break,
-            Err(_) => {
-                for i in 0..args.num_sockets as usize {
-                    if args.zerocopy {
-                        transmit_zc(
-                            args,
-                            out_sockets
-                                .get_mut(i)
-                                .expect("out_sockets.get_mut() failed"),
-                            pktid.get_mut(i).expect("pktid.get_mut() failed"),
-                            payload.len(),
-                            i,
-                        );
-                    } else {
-                        transmit_c(
-                            args,
-                            out_sockets
-                                .get_mut(i)
-                                .expect("out_sockets.get_mut() failed"),
-                            payload,
-                            i,
-                        );
-                    }
-                }
+            Ok(_) | Err(TryRecvError::Disconnected) => break,
+            _ => {
+                ();
+            }
+        }
+        
+        for i in 0..args.num_sockets as usize {
+            if args.zerocopy {
+                transmit_zc(
+                    args,
+                    out_sockets
+                        .get_mut(i)
+                        .expect("out_sockets.get_mut() failed"),
+                    pktid.get_mut(i).expect("pktid.get_mut() failed"),
+                    payload.len(),
+                    i,
+                    &totals,
+                );
+            } else {
+                transmit_c(
+                    args,
+                    out_sockets
+                        .get_mut(i)
+                        .expect("out_sockets.get_mut() failed"),
+                    payload,
+                    i,
+                    &totals,
+                );
             }
         }
     }
@@ -373,7 +387,7 @@ fn fill_tx_ring(
         
         for j in 0..size {
             // tell me where to copy the j-th packet to be transmitted
-            let pkt = unsafe { nethuns_get_buf_addr(*out_socket, j as u64) };
+            let pkt = unsafe { nethuns_get_buf_addr_netmap(*out_socket, j as u64) };
             
             assert!(pkt.is_null() == false);
             
@@ -400,20 +414,23 @@ fn transmit_zc(
     pktid: &mut u64,
     pkt_size: usize,
     th_idx: usize,
+    totals: &Arc<Mutex<Vec<u64>>>,
 ) {
     // prepare batch
-    for n in 0..args.batch_size {
+    for _ in 0..args.batch_size {
         let result =
             unsafe { nethuns_send_slot(*out_socket, *pktid, pkt_size) };
         if result <= 0 {
             break;
         }
         (*pktid) += 1;
-        // TODO totals.at(th_idx)++;
+        if let Some(t) = totals.lock().unwrap().get_mut(th_idx) {
+            *t += 1;
+        }
     }
     // send batch
     unsafe {
-        nethuns_flush(*out_socket);
+        nethuns_flush_netmap(*out_socket);
     }
 }
 
@@ -423,36 +440,46 @@ fn transmit_c(
     out_socket: &mut *mut nethuns_socket_netmap,
     payload: &[c_uchar],
     th_idx: usize,
+    totals: &Arc<Mutex<Vec<u64>>>,
 ) {
     // prepare batch
-    for n in 0..args.batch_size {
+    for _ in 0..args.batch_size {
         let result = unsafe {
-            nethuns_send(*out_socket, payload.as_ptr(), payload.len() as c_uint)
+            nethuns_send_netmap(*out_socket, payload.as_ptr(), payload.len() as c_uint)
         };
         if result <= 0 {
             break;
         }
-        // TODO totals.at(th_idx)++;
+        if let Some(t) = totals.lock().unwrap().get_mut(th_idx) {
+            *t += 1;
+        }
     }
     // send batch
     unsafe {
-        nethuns_flush(*out_socket);
+        nethuns_flush_netmap(*out_socket);
     }
 }
 
 ///
 fn mt_execution(
-    args: Args,
+    args: Arc<Args>,
     net_opt: &mut nethuns_socket_options,
     th_idx: c_int,
     payload: &[u_char],
-    mut rx: BusReader<()>,
+    rx: BusReader<()>,
+    totals: Arc<Mutex<Vec<u64>>>,
 ) {
     let mut out_socket: *mut nethuns_socket_t = ptr::null_mut();
     
-    if let Err(e) =
-        mt_send(&args, net_opt, th_idx, &mut out_socket, &payload, rx)
-    {
+    if let Err(e) = mt_send(
+        &args,
+        net_opt,
+        th_idx,
+        &mut out_socket,
+        &payload,
+        rx,
+        totals,
+    ) {
         match e {
             SendError::NethunsException(s) => {
                 if s.is_null() == false {
@@ -482,6 +509,7 @@ fn mt_send(
     out_socket: &mut *mut nethuns_socket_t,
     payload: &[u_char],
     mut rx: BusReader<()>,
+    totals: Arc<Mutex<Vec<u64>>>,
 ) -> Result<(), SendError> {
     // Error buffer
     let mut errbuf: [c_char; NETHUNS_ERRBUF_SIZE as usize] =
@@ -493,20 +521,21 @@ fn mt_send(
     
     loop {
         match rx.try_recv() {
-            Ok(()) => break,
-            Err(_) => {
-                if args.zerocopy {
-                    transmit_zc(
-                        args,
-                        out_socket,
-                        &mut pktid,
-                        payload.len(),
-                        th_idx as usize,
-                    )
-                } else {
-                    transmit_c(args, out_socket, payload, th_idx as usize)
-                }
-            }
+            Ok(_) | Err(TryRecvError::Disconnected) => break,
+            _ => (),
+        }
+        
+        if args.zerocopy {
+            transmit_zc(
+                args,
+                out_socket,
+                &mut pktid,
+                payload.len(),
+                th_idx as usize,
+                &totals,
+            )
+        } else {
+            transmit_c(args, out_socket, payload, th_idx as usize, &totals)
         }
     }
     
