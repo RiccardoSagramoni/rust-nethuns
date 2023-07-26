@@ -1,7 +1,6 @@
-use std::env;
-use std::fs;
 use std::path::PathBuf;
 use std::process::Command;
+use std::{env, fs};
 
 fn main() {
     // Tell cargo to look for shared libraries in the specified directory.
@@ -32,10 +31,13 @@ fn main() {
         .blocklist_function("qgcvt")
         .blocklist_function("qecvt_r")
         .blocklist_function("qfcvt_r")
+        // Automatically derive the Default trait whenever possible
+        .derive_default(true)
+        // Genereate wrappers for static functions
+        .wrap_static_fns(true)
         // Tell cargo to invalidate the built crate whenever any of the
         // included header files changed.
         .parse_callbacks(Box::new(bindgen::CargoCallbacks))
-        .wrap_static_fns(true)
         // Finish the builder and generate the bindings.
         .generate()
         // Unwrap the Result and panic on failure.

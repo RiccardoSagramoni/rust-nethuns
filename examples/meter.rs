@@ -1,15 +1,18 @@
-use std::{
-    env,
-    error::Error,
-    ffi::{CStr, CString},
-    ptr,
-    sync::{Arc, Mutex},
-    thread,
-};
+#![allow(non_upper_case_globals)]
+#![allow(non_camel_case_types)]
+#![allow(non_snake_case)]
+
+use std::error::Error;
+use std::ffi::{CStr, CString};
+use std::sync::mpsc::TryRecvError;
+use std::sync::{Arc, Mutex};
+use std::time::{Duration, SystemTime};
+use std::{env, ptr, thread};
 
 use bus::{Bus, BusReader};
-use libc::{c_char, c_int};
+use libc::{c_char, c_int, c_uchar, c_ulong};
 use rust_nethuns::*;
+
 
 #[derive(Debug)]
 struct Args {
@@ -20,11 +23,20 @@ struct Args {
     debug: bool,
 }
 
+
 #[derive(Debug)]
 enum MeterError {
-    NethunsException(*mut nethuns_socket_netmap),
+    NethunsException(*mut nethuns_socket_t),
     Exception(String),
 }
+
+
+#[derive(Debug)]
+struct sync_nethuns_socket_t_pointer(*mut nethuns_socket_t);
+
+unsafe impl Send for sync_nethuns_socket_t_pointer {}
+unsafe impl Sync for sync_nethuns_socket_t_pointer {}
+
 
 const HELP_BRIEF: &str = "\
 Usage:  meter [ options ]
@@ -65,12 +77,26 @@ Other options:
                                 (e.g., IP address fields of received packets).
 ";
 
+
 fn main() {
     let (args, mut net_opt) = configure_example();
     
     // Vector for storing socket ids
-    let mut out_sockets: Vec<*mut nethuns_socket_t> =
-        vec![ptr::null_mut(); args.num_sockets as usize];
+    let mut out_sockets: Vec<Arc<sync_nethuns_socket_t_pointer>> = Vec::new();
+    
+    // Setup sockets and rings
+    for i in 0..args.num_sockets {
+        let mut socket: *mut nethuns_socket_t = ptr::null_mut();
+        match setup_rx_ring(&args, &mut net_opt, i as c_int, &mut socket) {
+            Ok(_) => {
+                out_sockets
+                    .push(Arc::new(sync_nethuns_socket_t_pointer(socket)));
+            }
+            Err(e) => {
+                panic!("Error in setup_rx_ring: {:?}", e);
+            }
+        }
+    }
     
     // Stats counter
     let totals: Arc<Mutex<Vec<u64>>> =
@@ -80,24 +106,22 @@ fn main() {
     let mut bus: Bus<()> = Bus::new(5);
     
     // Create thread for computing statistics
-    let stats_th = if args.sockstats.is_some() {
-        thread::spawn(global_meter)
+    let stats_th = if let Some(sockstats) = args.sockstats {
+        let socket = out_sockets[sockstats as usize].clone();
+        let totals = totals.clone();
+        let rx = bus.add_rx();
+        thread::spawn(move || sock_meter(socket, totals, rx))
     } else {
-        thread::spawn(sock_meter)
+        let totals = totals.clone();
+        let rx = bus.add_rx();
+        thread::spawn(move || global_meter(totals, rx))
     };
-    
-    // setup sockets and rings
-    for (i, s) in out_sockets.iter_mut().enumerate() {
-        if let Err(e) = setup_rx_ring(&args, &mut net_opt, i as c_int, s) {
-            panic!("Error in setup_rx_ring: {:?}", e);
-        }
-    }
     
     if !args.multithreading {
         // case single thread (main) with generic number of sockets
         let rx = bus.add_rx();
         set_sigint_handler(bus);
-        st_execution(args, &mut net_opt, rx, totals);
+        st_execution(&args, out_sockets, rx, totals);
     } else {
         // // case multithreading enabled (num_threads == num_sockets)
         // let mut threads: Vec<thread::JoinHandle<()>> = Vec::new();
@@ -125,8 +149,8 @@ fn main() {
     if let Err(e) = stats_th.join() {
         eprintln!("Error joining stats thread: {:?}", e);
     }
-    
 }
+
 
 ///
 fn configure_example() -> (Args, nethuns_socket_options) {
@@ -169,6 +193,7 @@ fn configure_example() -> (Args, nethuns_socket_options) {
     (args, net_opt)
 }
 
+
 ///
 fn parse_args() -> Result<Args, Box<dyn Error>> {
     let mut pargs = pico_args::Arguments::from_env();
@@ -208,12 +233,14 @@ fn char_array_to_string(arr: &[c_char]) -> String {
     }
 }
 
+
 /// Set an handler for the SIGINT signal (Ctrl-C),
 /// which will notify the other threads
 /// to gracefully stop their execution.
 ///
 /// # Arguments
-/// - `bus`: Bus for SPMC (single-producer/multiple-consumers) communication between threads.
+/// - `bus`: Bus for SPMC (single-producer/multiple-consumers) communication
+///   between threads.
 fn set_sigint_handler(mut bus: Bus<()>) {
     ctrlc::set_handler(move || {
         println!("Ctrl-C detected. Shutting down...");
@@ -222,15 +249,85 @@ fn set_sigint_handler(mut bus: Bus<()>) {
     .expect("Error setting Ctrl-C handler");
 }
 
-fn global_meter() {}
-fn sock_meter() {}
+
+///
+fn global_meter(totals: Arc<Mutex<Vec<u64>>>, mut rx: BusReader<()>) {
+    let mut now = SystemTime::now();
+    let mut old_total: u64 = 0;
+    
+    loop {
+        match rx.try_recv() {
+            Ok(_) | Err(TryRecvError::Disconnected) => break,
+            _ => (),
+        }
+        
+        // Sleep for 1 second
+        let next_sys_time = now
+            .checked_add(Duration::from_secs(1))
+            .expect("SystemTime::checked_add() failed");
+        if let Ok(delay) = next_sys_time.duration_since(now) {
+            thread::sleep(delay);
+        }
+        now = next_sys_time;
+        
+        // Print number of sent packets
+        let new_total: u64 = totals.lock().expect("lock failed").iter().sum();
+        println!("pkt/sec: {}", new_total - old_total);
+        old_total = new_total;
+    }
+}
+
+
+///
+fn sock_meter(
+    socket: Arc<sync_nethuns_socket_t_pointer>,
+    totals: Arc<Mutex<Vec<u64>>>,
+    mut rx: BusReader<()>,
+) {
+    let mut now = SystemTime::now();
+    let mut old_total: u64 = 0;
+    
+    loop {
+        match rx.try_recv() {
+            Ok(_) | Err(TryRecvError::Disconnected) => break,
+            _ => (),
+        }
+        
+        // Sleep for 1 second
+        let next_sys_time = now
+            .checked_add(Duration::from_secs(1))
+            .expect("SystemTime::checked_add() failed");
+        if let Ok(delay) = next_sys_time.duration_since(now) {
+            thread::sleep(delay);
+        }
+        now = next_sys_time;
+        
+        // Print number of sent packets + stats about the requestes socket
+        let new_total: u64 = totals.lock().expect("lock failed").iter().sum();
+        print!("pkt/sec: {} ", new_total - old_total);
+        old_total = new_total;
+        
+        let mut stats = nethuns_stat::default();
+        unsafe {
+            nethuns_stats_netmap(socket.0, &mut stats);
+            println!(
+                "{{ rx: {}, tx: {}, drop: {}, ifdrop: {}, rx_inv: {}, tx_inv: {}, freeze: {} }}", 
+                stats.rx_packets, stats.tx_packets,
+                stats.rx_dropped, stats.rx_if_dropped,
+                stats.rx_invalid, stats.tx_invalid,
+                stats.freeze
+            );
+        }
+    }
+}
+
 
 ///
 fn setup_rx_ring(
     args: &Args,
     net_opt: &mut nethuns_socket_options,
     socket_idx: c_int,
-    socket: &mut *mut nethuns_socket_netmap,
+    socket: &mut *mut nethuns_socket_t,
 ) -> Result<(), MeterError> {
     // Error buffer
     let mut errbuf: [c_char; NETHUNS_ERRBUF_SIZE as usize] =
@@ -264,12 +361,120 @@ fn setup_rx_ring(
     Ok(())
 }
 
+
+///
 fn st_execution(
-    args: Args,
-    net_opt: &mut nethuns_socket_options,
-    sockets: Arc<
+    args: &Args,
+    sockets: Vec<Arc<sync_nethuns_socket_t_pointer>>,
     rx: BusReader<()>,
-    totals: Arc<Mutex<Vec<u64>>>
+    totals: Arc<Mutex<Vec<u64>>>,
 ) {
+    if let Err(e) = st_rcv(args, sockets, rx, totals) {
+        match e {
+            MeterError::NethunsException(s) => {
+                if !s.is_null() {
+                    unsafe {
+                        nethuns_close_netmap(s);
+                    }
+                }
+                eprintln!("Nethuns socket failed: {:?}", s);
+                std::process::exit(1);
+            }
+            MeterError::Exception(e) => {
+                eprintln!("Error: {:?}", e);
+                std::process::exit(1);
+            }
+        }
+    }
+}
+
+
+///
+fn st_rcv(
+    args: &Args,
+    sockets: Vec<Arc<sync_nethuns_socket_t_pointer>>,
+    mut rx: BusReader<()>,
+    mut totals: Arc<Mutex<Vec<u64>>>,
+) -> Result<(), MeterError> {
+    loop {
+        match rx.try_recv() {
+            Ok(_) | Err(TryRecvError::Disconnected) => break,
+            _ => (),
+        }
+        
+        let mut count_to_dump: c_ulong = 0;
+        for i in 0..args.num_sockets {
+            recv_pkt(
+                args,
+                i,
+                &mut count_to_dump,
+                &sockets[i as usize],
+                &mut totals,
+            )?;
+        }
+        
+        if args.debug {
+            println!("Thread: MAIN, count to dump: {count_to_dump}");
+        }
+    }
     
+    // Close sockets
+    for s in sockets {
+        unsafe {
+            nethuns_close_netmap(s.0);
+        }
+    }
+    
+    Ok(())
+}
+
+
+/// receive and process a packet
+fn recv_pkt(
+    args: &Args,
+    th_idx: c_int,
+    count_to_dump: &mut c_ulong,
+    socket: &Arc<sync_nethuns_socket_t_pointer>,
+    totals: &mut Arc<Mutex<Vec<u64>>>,
+) -> Result<(), MeterError> {
+    let mut pkthdr: *const nethuns_pkthdr_t = ptr::null_mut();
+    let mut frame: *const c_uchar = ptr::null_mut();
+    let pkt_id: u64 =
+        unsafe { nethuns_recv_netmap(socket.0, &mut pkthdr, &mut frame) };
+    
+    if pkt_id == u64::MAX {
+        return Err(MeterError::NethunsException(socket.0));
+    } else if pkt_id == 0 {
+        return Ok(());
+    }
+    
+    // Process valid packet here
+    if args.debug {
+        println!(
+            "Thread: {}, total: {}, pkt: {}",
+            th_idx,
+            totals.lock().expect("lock failed")[th_idx as usize],
+            pkt_id
+        );
+        println!("Packet IP addr: {}", print_addrs(&frame));
+    }
+    
+    totals.lock().expect("lock failed")[th_idx as usize] += 1;
+    *count_to_dump += 1;
+    if *count_to_dump == 10000000 {
+        // do something periodically
+        *count_to_dump = 0;
+        unsafe { nethuns_dump_rings_netmap(socket.0) }
+    }
+    
+    nethuns_rx_release(socket.0, pkt_id);
+    
+    Ok(())
+}
+
+
+///
+fn print_addrs(_frame: &*const c_uchar) -> String {
+    // TODO
+    todo!()
 }

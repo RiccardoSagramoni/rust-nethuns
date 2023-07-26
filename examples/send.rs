@@ -58,6 +58,7 @@ enum SendError {
     Exception(String),
 }
 
+
 fn main() {
     let (args, payload, mut net_opt) = configure_example();
     
@@ -110,13 +111,13 @@ fn main() {
     }
 }
 
-/// Configures the example for sending packets, by parsing the command line arguments
-/// and fillinf the default payload and nethuns options.
+/// Configures the example for sending packets, by parsing the command line
+/// arguments and filling the default payload and nethuns options.
 ///
 /// # Returns
 ///
-/// A tuple containing the parsed arguments, the payload and the nethuns options.
-///
+/// A tuple containing the parsed arguments, the payload and the nethuns
+/// options.
 fn configure_example() -> (Args, [c_uchar; 34], nethuns_socket_options) {
     // Parse options from command line
     let args = match parse_args() {
@@ -166,15 +167,17 @@ fn configure_example() -> (Args, [c_uchar; 34], nethuns_socket_options) {
     (args, payload, net_opt)
 }
 
-/// Parses the command-line arguments and build an instance of the `Args` struct.
+/// Parses the command-line arguments and build an instance of the `Args`
+/// struct.
 ///
 /// It uses the `pico_args` crate to handle argument parsing.
 ///
 /// # Returns
 ///
-/// - `Ok(args: Args)`: If the command-line arguments are successfully parsed, a Result with an Args instance containing the parsed options is returned.
-/// - `Err(err: Box<dyn Error>)`: If an error occurs during argument parsing or any related operations, a Result with a boxed error is returned.
-///
+/// - `Ok(args: Args)`: If the command-line arguments are successfully parsed, a
+///   Result with an Args instance containing the parsed options is returned.
+/// - `Err(err: Box<dyn Error>)`: If an error occurs during argument parsing or
+///   any related operations, a Result with a boxed error is returned.
 fn parse_args() -> Result<Args, Box<dyn Error>> {
     let mut pargs = pico_args::Arguments::from_env();
     
@@ -218,7 +221,8 @@ fn char_array_to_string(arr: &[c_char]) -> String {
 /// to gracefully stop their execution.
 ///
 /// # Arguments
-/// - `bus`: Bus for SPMC (single-producer/multiple-consumers) communication between threads.
+/// - `bus`: Bus for SPMC (single-producer/multiple-consumers) communication
+///   between threads.
 fn set_sigint_handler(mut bus: Bus<()>) {
     ctrlc::set_handler(move || {
         println!("Ctrl-C detected. Shutting down...");
@@ -232,9 +236,9 @@ fn set_sigint_handler(mut bus: Bus<()>) {
 /// # Arguments
 ///
 /// - `totals`: Vector for storing the number of sent packets from each socket.
-///             It's shared between threads.
-/// - `rx`: BusReader for SPMC (single-producer/multiple-consumers) communication between threads.
-///
+///   It's shared between threads.
+/// - `rx`: BusReader for SPMC (single-producer/multiple-consumers)
+///   communication between threads.
 fn meter(totals: Arc<Mutex<Vec<u64>>>, mut rx: BusReader<()>) {
     let mut now = SystemTime::now();
     let mut old_total: u64 = 0;
@@ -267,10 +271,12 @@ fn meter(totals: Arc<Mutex<Vec<u64>>>, mut rx: BusReader<()>) {
 /// - `args`: Parsed command-line arguments.
 /// - `net_opt`: Nethuns socket options.
 /// - `payload`: Payload for packets.
-/// - `rx`: BusReader for SPMC (single-producer/multiple-consumers) communication between threads.
+/// - `rx`: BusReader for SPMC (single-producer/multiple-consumers)
+///   communication between threads.
 /// - `totals`: Vector for storing the number of packets sent from each socket.
 ///
-/// Starts the packet transmission, handles errors and closes sockets after transmission.
+/// Starts the packet transmission, handles errors and closes sockets after
+/// transmission.
 fn st_execution(
     args: Args,
     net_opt: &mut nethuns_socket_options,
@@ -304,7 +310,8 @@ fn st_execution(
 /// - `args`: Parsed command-line arguments.
 /// - `net_opt`: Nethuns socket options.
 /// - `payload`: Payload for packets.
-/// - `rx`: BusReader for SPMC (single-producer/multiple-consumers) communication between threads.
+/// - `rx`: BusReader for SPMC (single-producer/multiple-consumers)
+///   communication between threads.
 /// - `totals`: Vector for storing the number of packets sent from each socket.
 ///
 /// # Returns
@@ -391,9 +398,9 @@ fn st_send(
 /// - `net_opt`: Nethuns socket options.
 /// - `th_idx`: Thread index.
 /// - `payload`: Payload for packets.
-/// - `rx`: BusReader for SPMC (single-producer/multiple-consumers) communication between threads.
+/// - `rx`: BusReader for SPMC (single-producer/multiple-consumers)
+///   communication between threads.
 /// - `totals`: Vector for storing the number of packets sent from each socket.
-///
 fn mt_execution(
     args: Arc<Args>,
     net_opt: &mut nethuns_socket_options,
@@ -429,13 +436,13 @@ fn mt_execution(
 /// - `net_opt`: Nethuns socket options.
 /// - `th_idx`: Thread index.
 /// - `payload`: Payload for packets.
-/// - `rx`: BusReader for SPMC (single-producer/multiple-consumers) communication between threads.
+/// - `rx`: BusReader for SPMC (single-producer/multiple-consumers)
+///   communication between threads.
 /// - `totals`: Vector for storing the number of packets sent from each socket.
 ///
 /// # Returns
 /// - `Ok(())`: If transmission is successful.
 /// - `Err(SendError)`: If an error occurs during transmission.
-///
 fn mt_send(
     args: &Args,
     net_opt: &mut nethuns_socket_options,
@@ -499,7 +506,6 @@ fn mt_send(
 /// # Returns
 /// - `Ok(())`: If transmission is successful.
 /// - `Err(SendError)`: If an error occurs during transmission.
-///
 fn fill_tx_ring(
     args: &Args,
     net_opt: &mut nethuns_socket_options,
@@ -564,7 +570,6 @@ fn fill_tx_ring(
 /// - `pkt_size`: Packet size.
 /// - `totals`: Vector for storing the number of packets sent from each socket.
 /// - `socket_idx`: Socket index.
-///
 fn transmit_zc(
     args: &Args,
     out_socket: &mut *mut nethuns_socket_netmap,
@@ -599,7 +604,6 @@ fn transmit_zc(
 /// - `payload`: Payload for packets.
 /// - `totals`: Vector for storing the number of packets sent from each socket.
 /// - `socket_idx`: Socket index.
-///
 fn transmit_c(
     args: &Args,
     out_socket: &mut *mut nethuns_socket_netmap,
