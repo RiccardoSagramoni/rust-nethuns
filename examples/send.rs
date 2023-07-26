@@ -1,7 +1,3 @@
-#![allow(non_upper_case_globals)]
-#![allow(non_camel_case_types)]
-#![allow(non_snake_case)]
-
 use bus::{Bus, BusReader};
 use rust_nethuns::*;
 use std::error::Error;
@@ -13,7 +9,7 @@ use std::time::{Duration, SystemTime};
 use std::{env, ptr, thread};
 
 const HELP_BRIEF: &str = "\
-Usage:  nethuns-send [ options ]
+Usage:  send [ options ]
 Use --help (or -h) to see full option list and a complete description
 
 Required options:
@@ -26,13 +22,13 @@ Other options:
 ";
 
 const HELP_LONG: &str = "\
-Usage:  nethuns-send [ options ]
+Usage:  send [ options ]
 
 -h, --help                      Show program usage and exit
 
 Required options:
 
--i, --interface     <ifname>    Name of the network interface that nethuns-send operates on.
+-i, --interface     <ifname>    Name of the network interface that send operates on.
 
 Other options:
 
@@ -47,7 +43,7 @@ Other options:
 -z, --zerocopy                  Enable send zero-copy. By default, classic send that requires a copy is used.
 ";
 
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 struct Args {
     interface: CString,
     batch_size: c_int,

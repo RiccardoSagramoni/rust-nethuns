@@ -8,10 +8,3 @@ include!(concat!(env!("OUT_DIR"), "/bindings.rs"));
 
 unsafe impl Send for nethuns_socket_options {}
 unsafe impl Sync for nethuns_socket_options {}
-
-fn hello_world () {
-	println!("Hello, world!");
-	unsafe {
-		nethuns_close_netmap(ptr::null_mut());
-	}
-}
