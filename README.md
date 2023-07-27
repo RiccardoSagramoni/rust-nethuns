@@ -28,3 +28,18 @@ PC2
 ```sh
 sudo pkt-gen -i vi1 -f rx
 ```
+
+
+### meter
+
+PC1
+
+```sh
+pkt-gen -i vi0 -f tx
+```
+
+PC2
+
+```sh
+./run_example.sh meter "-i vi1"
+```

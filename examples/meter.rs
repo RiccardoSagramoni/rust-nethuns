@@ -540,10 +540,8 @@ fn recv_pkt(
 }
 
 
-/// Buggy because of different pointer arithmetic in C and Rust!!!
+/// Retrieve information about IP addresses
 fn print_addrs(frame: *const c_uchar) -> Result<String, MeterError> {
-    return Ok("".to_owned());
-    
     // 802.1Q header structure.
     #[derive(Debug, Default)]
     #[repr(C)]
@@ -574,9 +572,9 @@ fn print_addrs(frame: *const c_uchar) -> Result<String, MeterError> {
     
     // access IP header
     let ip_hdr = if vlan_hdr.is_null() {
-        unsafe { vlan_hdr.add(1) as *const iphdr }
-    } else {
         unsafe { e_hdr.add(1) as *const iphdr }
+    } else {
+        unsafe { vlan_hdr.add(1) as *const iphdr }
     };
     if ip_hdr.is_null() {
         return Err(MeterError::RuntimeError(
@@ -584,21 +582,21 @@ fn print_addrs(frame: *const c_uchar) -> Result<String, MeterError> {
         ));
     }
     
-    let ipsrc = unsafe { (*ip_hdr).__bindgen_anon_1.__bindgen_anon_1.saddr };
-    let ipdst = unsafe { (*ip_hdr).__bindgen_anon_1.__bindgen_anon_1.daddr };
+    let ipsrc = unsafe { ip_hdr.read_unaligned().__bindgen_anon_1.__bindgen_anon_1.saddr };
+    let ipdst = unsafe { ip_hdr.read_unaligned().__bindgen_anon_1.__bindgen_anon_1.daddr };
     let mut ipsrc_buf: [c_char; 16] = [0; 16];
     let mut ipdst_buf: [c_char; 16] = [0; 16];
     
     unsafe {
         inet_ntop(
             AF_INET as c_int,
-            ipsrc as *const c_void,
+            &ipsrc as *const u32 as *const c_void,
             ipsrc_buf.as_mut_ptr(),
             ipsrc_buf.len() as u32,
         );
         inet_ntop(
             AF_INET as c_int,
-            ipdst as *const c_void,
+            &ipdst as *const u32 as *const c_void,
             ipdst_buf.as_mut_ptr(),
             16,
         );
