@@ -10,7 +10,7 @@ use std::time::{Duration, SystemTime};
 use std::{env, ptr, thread};
 
 use bus::{Bus, BusReader};
-use libc::{c_char, c_int, c_uchar, c_ulong};
+use libc::{c_char, c_int, c_uchar, c_ulong, c_void};
 use rust_nethuns::*;
 
 
@@ -27,7 +27,7 @@ struct Args {
 #[derive(Debug)]
 enum MeterError {
     NethunsException(*mut nethuns_socket_t),
-    Exception(String),
+    RuntimeError(String),
 }
 
 
@@ -123,27 +123,27 @@ fn main() {
         set_sigint_handler(bus);
         st_execution(&args, out_sockets, rx, totals);
     } else {
-        // // case multithreading enabled (num_threads == num_sockets)
-        // let mut threads: Vec<thread::JoinHandle<()>> = Vec::new();
-        // let args = Arc::new(args);
+        // case multithreading enabled (num_threads == num_sockets)
+        let mut threads: Vec<thread::JoinHandle<()>> = Vec::new();
+        let args = Arc::new(args);
         
-        // for th_idx in 0..args.num_sockets {
-        //     let args = args.clone();
-        //     let rx = bus.add_rx();
-        //     let totals = totals.clone();
-        //     threads.push(thread::spawn(move || {
-        //         mt_execution(args, &mut net_opt, th_idx, rx, totals)
-        //     }));
-        // }
+        for th_idx in 0..args.num_sockets {
+            let args = args.clone();
+            let socket = out_sockets.pop().expect("Error in pop");
+            let rx = bus.add_rx();
+            let totals = totals.clone();
+            threads.push(thread::spawn(move || {
+                mt_execution(&args, th_idx, socket, rx, totals)
+            }));
+        }
         
-        // set_sigint_handler(bus);
+        set_sigint_handler(bus);
         
-        // for t in threads {
-        //     if let Err(e) = t.join() {
-        //         eprintln!("Error joining thread: {:?}", e);
-        //     }
-        // }
-        todo!()
+        for t in threads {
+            if let Err(e) = t.join() {
+                eprintln!("Error joining thread: {:?}", e);
+            }
+        }
     }
     
     if let Err(e) = stats_th.join() {
@@ -335,7 +335,7 @@ fn setup_rx_ring(
     
     (*socket) = unsafe { nethuns_open_netmap(net_opt, errbuf.as_mut_ptr()) };
     if (*socket).is_null() {
-        return Err(MeterError::Exception(char_array_to_string(&errbuf)));
+        return Err(MeterError::RuntimeError(char_array_to_string(&errbuf)));
     }
     
     let queue_len = if args.num_sockets > 1 {
@@ -380,7 +380,7 @@ fn st_execution(
                 eprintln!("Nethuns socket failed: {:?}", s);
                 std::process::exit(1);
             }
-            MeterError::Exception(e) => {
+            MeterError::RuntimeError(e) => {
                 eprintln!("Error: {:?}", e);
                 std::process::exit(1);
             }
@@ -429,6 +429,73 @@ fn st_rcv(
 }
 
 
+///
+fn mt_execution(
+    args: &Args,
+    th_idx: c_int,
+    socket: Arc<sync_nethuns_socket_t_pointer>,
+    rx: BusReader<()>,
+    totals: Arc<Mutex<Vec<u64>>>
+) {
+    if let Err(e) = mt_rcv(args, th_idx, socket, rx, totals) {
+        match e {
+            MeterError::NethunsException(s) => {
+                if !s.is_null() {
+                    unsafe {
+                        nethuns_close_netmap(s);
+                    }
+                }
+                eprintln!("Nethuns socket failed: {:?}", s);
+                std::process::exit(1);
+            }
+            MeterError::RuntimeError(e) => {
+                eprintln!("Error: {:?}", e);
+                std::process::exit(1);
+            }
+        }
+    }
+}
+
+
+///
+fn mt_rcv(
+    args: &Args,
+    th_idx: c_int,
+    socket: Arc<sync_nethuns_socket_t_pointer>,
+    mut rx: BusReader<()>,
+    mut totals: Arc<Mutex<Vec<u64>>>
+) -> Result<(), MeterError> {
+    
+    loop {
+        match rx.try_recv() {
+            Ok(_) | Err(TryRecvError::Disconnected) => break,
+            _ => (),
+        }
+        
+        let mut count_to_dump: c_ulong = 0;
+        recv_pkt(
+            args,
+            th_idx,
+            &mut count_to_dump,
+            &socket,
+            &mut totals,
+        )?;
+        
+        if args.debug {
+            println!("Thread: {th_idx}, count to dump: {count_to_dump}");
+        }
+    }
+    
+    // Close sockets
+        unsafe {
+            nethuns_close_netmap(socket.0);
+        }
+    
+    Ok(())
+}
+
+
+
 /// receive and process a packet
 fn recv_pkt(
     args: &Args,
@@ -456,7 +523,7 @@ fn recv_pkt(
             totals.lock().expect("lock failed")[th_idx as usize],
             pkt_id
         );
-        println!("Packet IP addr: {}", print_addrs(&frame));
+        println!("Packet IP addr: {}", print_addrs(frame)?);
     }
     
     totals.lock().expect("lock failed")[th_idx as usize] += 1;
@@ -473,8 +540,73 @@ fn recv_pkt(
 }
 
 
-///
-fn print_addrs(_frame: &*const c_uchar) -> String {
-    // TODO
-    todo!()
+/// Buggy because of different pointer arithmetic in C and Rust!!!
+fn print_addrs(frame: *const c_uchar) -> Result<String, MeterError> {
+    return Ok("".to_owned());
+    
+    // 802.1Q header structure.
+    #[derive(Debug, Default)]
+    #[repr(C)]
+    struct vlan_ethhdr {
+        h_dest: [c_uchar; ETHER_ADDR_LEN as usize],
+        h_source: [c_uchar; ETHER_ADDR_LEN as usize],
+        h_vlan_proto: u16,
+        h_vlan_TCI: u16,
+        h_vlan_encapsulated_proto: u16,
+    }
+    
+    // access ethernet header
+    let e_hdr = frame as *const ether_header;
+    if e_hdr.is_null() {
+        return Err(MeterError::RuntimeError(
+            "Error: ETH header parsing".to_owned(),
+        ));
+    }
+    
+    // check presence of vlan header
+    let vlan_hdr = unsafe {
+        if (*e_hdr).ether_type == htons(ETHERTYPE_VLAN as u16) {
+            frame as *const vlan_ethhdr
+        } else {
+            ptr::null()
+        }
+    };
+    
+    // access IP header
+    let ip_hdr = if vlan_hdr.is_null() {
+        unsafe { vlan_hdr.add(1) as *const iphdr }
+    } else {
+        unsafe { e_hdr.add(1) as *const iphdr }
+    };
+    if ip_hdr.is_null() {
+        return Err(MeterError::RuntimeError(
+            "Error: IP header parsing".to_owned(),
+        ));
+    }
+    
+    let ipsrc = unsafe { (*ip_hdr).__bindgen_anon_1.__bindgen_anon_1.saddr };
+    let ipdst = unsafe { (*ip_hdr).__bindgen_anon_1.__bindgen_anon_1.daddr };
+    let mut ipsrc_buf: [c_char; 16] = [0; 16];
+    let mut ipdst_buf: [c_char; 16] = [0; 16];
+    
+    unsafe {
+        inet_ntop(
+            AF_INET as c_int,
+            ipsrc as *const c_void,
+            ipsrc_buf.as_mut_ptr(),
+            ipsrc_buf.len() as u32,
+        );
+        inet_ntop(
+            AF_INET as c_int,
+            ipdst as *const c_void,
+            ipdst_buf.as_mut_ptr(),
+            16,
+        );
+    }
+    
+    Ok(format!(
+        "IP, {} > {}",
+        char_array_to_string(&ipsrc_buf),
+        char_array_to_string(&ipdst_buf),
+    ))
 }
