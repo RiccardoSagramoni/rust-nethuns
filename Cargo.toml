@@ -1,17 +1,20 @@
 [package]
-name = "rust-nethuns"
+name = "nethuns"
 version = "0.1.0"
 edition = "2021"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
+cfg-if = "1.0.0"
 libc = "0.2.139"
 
 [build-dependencies]
 bindgen = { version = "0.66.1", features = ["experimental"] }
+cfg-if = "1.0.0"
 
 [dev-dependencies]
-bus = "2.4.0"
-ctrlc = "3.4.0"
-pico-args = "0.5.0"
+
+[features]
+default = ["netmap"]
+netmap = []
