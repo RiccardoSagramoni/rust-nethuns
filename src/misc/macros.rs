@@ -24,12 +24,12 @@ pub(crate) use min;
 #[cfg(test)]
 mod tests {
     #[test]
-    fn max_pair() {
+    fn test_max() {
         assert_eq!(10, super::max!(5, 10))
     }
     
     #[test]
-    fn min_pair() {
+    fn test_min() {
         assert_eq!(5, super::min!(5, 10))
     }
 }
