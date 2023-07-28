@@ -1,7 +1,7 @@
 use derive_builder::Builder;
 use derive_new::new;
 use crate::sockets::types::NethunsPkthdrType;
-use crate::base::NethunsSocketBase;
+use crate::sockets::base::NethunsSocketBase;
 
 
 #[derive(Clone, Debug, Default, PartialEq, PartialOrd)]

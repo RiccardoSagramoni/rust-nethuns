@@ -8,13 +8,17 @@ cfg_if::cfg_if! {
     if #[cfg(feature="netmap")] {
         const WRAPPER_PATH: &str = "bindgen_wrappers/netmap.h";
     } else {
-        std::compile_error!("You must specify what I/O framework to use"); // TODO better error message
+        std::compile_error!("The support for the specified I/O framework is not available yet. Check the documentation for more information.");
     }
 }
 const LINK_NAME: &str = "wrapper.h";
 
 
 fn main() {
+    // Check if have been enabled more than one feature flag
+    // for the underlying I/O framework
+    assert_io_framework_mutual_exclusivity();
+    
     // Create symlink for wrapper.h
     let _ = fs::remove_file(LINK_NAME);
     symlink(WRAPPER_PATH, LINK_NAME)
@@ -58,6 +62,43 @@ fn main() {
     
     // Destroy the symlink
     fs::remove_file(LINK_NAME).expect("Failed to remove wrapper.h symlink");
+}
+
+
+/// Check the feature flags for the underlying I/O frameworks.
+///
+/// # Panics
+/// If none or more than one feature flag have been enabled for the underlying I/O framework.
+fn assert_io_framework_mutual_exclusivity() {
+    let mut found: u8 = 0;
+    
+    cfg_if::cfg_if! {
+        if #[cfg(feature="netmap")] {
+            found += 1;
+        }
+    };
+    cfg_if::cfg_if! {
+        if #[cfg(feature="libpcap")] {
+            found += 1;
+        }
+    };
+    cfg_if::cfg_if! {
+        if #[cfg(feature="xdp")] {
+            found += 1;
+        }
+    };
+    cfg_if::cfg_if! {
+        if #[cfg(feature="tpacket_v3")] {
+            found += 1;
+        }
+    };
+    
+    if found == 0 {
+        panic!("Error: no IO framework found");
+    }
+    if found > 1 {
+        panic!("Error: more than one IO framework found");
+    }
 }
 
 

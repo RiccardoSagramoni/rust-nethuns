@@ -21,3 +21,6 @@ cfg-if = "1.0.0"
 [features]
 default = ["netmap"]
 netmap = []
+libpcap = []
+xdp = []
+tpacket_v3 = []
