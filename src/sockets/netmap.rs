@@ -1,73 +1,95 @@
 use std::ptr;
 
-use derivative::Derivative;
-use derive_builder::Builder;
+use c_netmap_wrapper::{netmap_ring, nmport_d};
 
 use crate::types::{NethunsSocketMode, NethunsSocketOptions};
 
-use c_netmap_wrapper::{netmap_ring, nmport_d};
-
 use super::base::NethunsSocketBase;
 use super::errors::NethunsOpenError;
-use super::ring;
+use super::ring::NethunsRing;
 
 
-#[derive(Builder, Debug, Derivative)]
-#[builder(pattern = "owned", default)]
-#[derivative(Default)]
+#[derive(Debug)]
 pub struct NethunsSocket {
-    pub base: NethunsSocketBase,
-    pub p: nmport_d, // TODO destructor
-    pub some_ring: netmap_ring, // TODO destructor
-    
-    #[derivative(Default(value = "ptr::null()"))]
-    pub free_ring: *const u32, // TODO check usage to wrap unsafe behavior
-    
-    pub free_mask: u64,
-    pub free_head: u64,
-    pub free_tail: u64,
-    pub tx: bool,
-    pub rx: bool,
+    base: NethunsSocketBase,
+    p: nmport_d,            // TODO destructor
+    some_ring: netmap_ring, // TODO destructor
+    free_ring: *const u32,  // TODO check usage to wrap unsafe behavior
+    free_mask: u64,
+    free_head: u64,
+    free_tail: u64,
+    tx: bool,
+    rx: bool,
 }
 
 
-///
-pub fn nethuns_open(
-    opt: &NethunsSocketOptions,
-) -> Result<NethunsSocket, NethunsOpenError> {
-    // TODO define a better error type
+impl NethunsSocket {
+    /// Create a new NethunsSocket
+    fn try_new(
+        opt: NethunsSocketOptions,
+    ) -> Result<NethunsSocket, NethunsOpenError> {
+        let rx = opt.mode == NethunsSocketMode::RxTx
+            || opt.mode == NethunsSocketMode::RxOnly;
+        let tx = opt.mode == NethunsSocketMode::RxTx
+            || opt.mode == NethunsSocketMode::TxOnly;
+        
+        if !rx && !tx {
+            return Err(NethunsOpenError::InvalidOptions(
+                "please select at least one between rx and tx".to_owned(),
+            ));
+        }
+        
+        let mut base = NethunsSocketBase::default();
+        
+        if rx {
+            base.rx_ring = Some(NethunsRing::new(
+                (opt.numblocks * opt.numpackets) as usize,
+                opt.packetsize as usize,
+            ));
+        }
+        
+        if tx {
+            base.tx_ring = Some(NethunsRing::new(
+                (opt.numblocks * opt.numpackets) as usize,
+                opt.packetsize as usize,
+            ));
+        }
+        
+        // set a single consumer by default
+        base.opt = opt;
+        
+        Ok(NethunsSocket {
+            base,
+            p: nmport_d::default(),
+            some_ring: netmap_ring::default(),
+            free_ring: ptr::null(),
+            free_mask: 0,
+            free_head: 0,
+            free_tail: 0,
+            tx,
+            rx,
+        })
+    }
+}
+
+
+impl Drop for NethunsSocket {
     
-    let mut s = NethunsSocket::default();
-    
-    s.rx = opt.mode == NethunsSocketMode::RxTx
-        || opt.mode == NethunsSocketMode::RxOnly;
-    s.tx = opt.mode == NethunsSocketMode::RxTx
-        || opt.mode == NethunsSocketMode::TxOnly;
-    
-    if !s.rx && !s.tx {
-        return Err(NethunsOpenError::InvalidOptions(
-            "please select at least one between rx and tx".to_owned(),
-        ));
+    fn drop(&mut self) {
+        if self.base.opt.promisc {
+            //__nethuns_clear_if_promisc(s, b->devname);
+            todo!();
+        }
+        
+        let nifp = &self.p.nifp;
+        
+        if self.tx {
+            if let Some(ring) = self.base.tx_ring {
+                for i in 0..ring.size {
+                    // TODO HERE
+                }
+            }
+        }
     }
     
-    if s.rx {
-        ring::nethuns_make_ring(
-            (opt.numblocks * opt.numpackets) as usize,
-            opt.packetsize as usize,
-            &mut s.base.rx_ring,
-        );
-    }
-    
-    if s.tx {
-        ring::nethuns_make_ring(
-            (opt.numblocks * opt.numpackets) as usize,
-            opt.packetsize as usize,
-            &mut s.base.tx_ring,
-        );
-    }
-    
-    // set a single consumer by default
-    s.base.opt = opt.clone(); // TODO clone or ref & ?
-    
-    Ok(s)
 }
