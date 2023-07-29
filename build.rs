@@ -40,8 +40,13 @@ fn main() {
         // The input header we would like to generate
         // bindings for.
         .header(LINK_NAME)
-        // Automatically derive the Default trait whenever possible
+        // Automatically derive useful traits whenever possible
+        .derive_debug(true)
         .derive_default(true)
+        .derive_eq(true)
+        .derive_ord(true)
+        .derive_partialeq(true)
+        .derive_partialord(true)
         // Genereate wrappers for static functions
         .wrap_static_fns(true)
         // Tell cargo to invalidate the built crate whenever any of the
