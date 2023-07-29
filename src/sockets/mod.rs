@@ -1,5 +1,4 @@
 pub mod base;
-mod bindings;
 pub mod errors;
 pub mod ring;
 pub mod types;

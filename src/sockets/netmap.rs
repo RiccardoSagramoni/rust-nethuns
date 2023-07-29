@@ -1,4 +1,3 @@
-use std::error::Error;
 use std::ptr;
 
 use derivative::Derivative;
@@ -6,7 +5,7 @@ use derive_builder::Builder;
 
 use crate::types::{NethunsSocketMode, NethunsSocketOptions};
 
-use super::bindings::{netmap_ring, nmport_d};
+use c_netmap_wrapper::{netmap_ring, nmport_d};
 
 use super::base::NethunsSocketBase;
 use super::errors::NethunsOpenError;

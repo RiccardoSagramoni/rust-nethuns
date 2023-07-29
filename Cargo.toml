@@ -5,7 +5,9 @@ edition = "2021"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
+
 [dependencies]
+c_netmap_wrapper = { version = "0.1.0", path = "./lib/netmap", optional = true }
 cfg-if = "1.0.0"
 derivative = "2.2.0"
 derive-new = "0.5.9"
@@ -14,15 +16,18 @@ is_trait = "0.1.4"
 libc = "0.2.139"
 thiserror = "1.0.44"
 
+
 [build-dependencies]
 bindgen = { version = "0.66.1", features = ["experimental"] }
 cfg-if = "1.0.0"
 
+
 [dev-dependencies]
+
 
 [features]
 default = ["netmap"]
-netmap = []
+netmap = ["dep:c_netmap_wrapper"]
 libpcap = []
 xdp = []
 tpacket_v3 = []
