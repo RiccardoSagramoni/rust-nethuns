@@ -1,44 +1,34 @@
 use std::ffi::CString;
 
-use derive_builder::Builder;
 use libc::c_void;
 
-use crate::types::NethunsSocketOptions;
+use crate::api::Pkthdr;
+use crate::types::{NethunsSocketOptions, NethunsQueue};
 
+use super::ring::NethunsRing;
 use super::types::NethunsPkthdrType;
 
 
-// TODO
 #[derive(Clone, Debug, Default, PartialEq, PartialOrd)]
-pub struct NethunsRingSlot();
-
-
-#[derive(Clone, Builder, Debug, Default, PartialEq, PartialOrd)]
-#[builder(pattern = "owned", default)]
-pub struct NethunsRing {
-    pub size: usize,
-    pub pktsize: usize,
+pub struct NethunsRingSlot {
+    pub pkthdr: Pkthdr,
+    pub id: u64,
+    pub inuse: i32, // TODO bool?
+    pub len: i32,
     
-    pub head: u64,
-    pub tail: u64,
-    
-    pub mask: usize,
-    pub shift: usize,
-    
-    pub ring: NethunsRingSlot,
+    pub packet: Option<String>, // TODO check best type
 }
 
 
-#[derive(Clone, Builder, Debug, Default, PartialEq, PartialOrd)]
-#[builder(pattern = "owned", default)]
+#[derive(Debug, Default, PartialEq, PartialOrd)]
 pub struct NethunsSocketBase {
     pub errbuf: String, // TODO is it necessary? Check usage
     
     pub opt: NethunsSocketOptions,
-    pub tx_ring: NethunsRing,
-    pub rx_ring: NethunsRing,
+    pub tx_ring: Option<NethunsRing>,
+    pub rx_ring: Option<NethunsRing>,
     pub devname: CString,
-    pub queue: i32,
+    pub queue: NethunsQueue,
     pub ifindex: i32,
     
     pub filter: Option<fn(*const c_void, &NethunsPkthdrType, &[u8]) -> i32>, /* TODO what type for this closure? */

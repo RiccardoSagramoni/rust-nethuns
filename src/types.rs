@@ -1,7 +1,7 @@
+use crate::sockets::base::NethunsSocketBase;
+use crate::sockets::types::NethunsPkthdrType;
 use derive_builder::Builder;
 use derive_new::new;
-use crate::sockets::types::NethunsPkthdrType;
-use crate::sockets::base::NethunsSocketBase;
 
 
 #[derive(Clone, Debug, Default, PartialEq, PartialOrd)]
@@ -62,7 +62,7 @@ pub struct NethunsStat {
 }
 
 
-#[derive(Clone, Builder, Debug, Default, new, PartialEq, PartialOrd)]
+#[derive(Builder, Debug, Default, new, PartialEq, PartialOrd)]
 #[builder(pattern = "owned", default)]
 pub struct NethunsPacket {
     pub payload: Vec<u8>,
@@ -77,6 +77,14 @@ pub struct NethunsPacket {
 pub struct NethunsTimeval {
     tv_sec: u32,
     tv_usec: u32,
+}
+
+
+#[derive(Clone, Copy, Debug, Default, PartialEq, PartialOrd)]
+pub enum NethunsQueue {
+    Some(u32),
+    #[default]
+    Any,
 }
 
 
