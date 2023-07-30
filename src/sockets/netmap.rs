@@ -1,5 +1,5 @@
 mod pkthdr;
 pub use pkthdr::*;
 
-mod socket;
-pub use socket::*;
+mod nethuns_socket;
+pub use nethuns_socket::*;
