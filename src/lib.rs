@@ -4,7 +4,8 @@ mod sockets;
 mod types;
 
 
-// TODO: define public API
+pub use sockets::NethunsSocket;
+pub use sockets::NethunsSocketFactory;
 
 #[cfg(test)]
 mod tests {}

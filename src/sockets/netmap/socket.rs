@@ -8,11 +8,12 @@ use crate::api::nethuns_dev_queue_name;
 use crate::sockets::base::NethunsSocketBase;
 use crate::sockets::errors::{NethunsBindError, NethunsOpenError};
 use crate::sockets::ring::NethunsRing;
+use crate::sockets::NethunsSocket;
 use crate::types::{NethunsQueue, NethunsSocketMode, NethunsSocketOptions};
 
 
 #[derive(Debug)]
-pub struct NethunsSocket {
+pub struct NethunsSocketNetmap {
     base: NethunsSocketBase,
     p: Option<NmPortDescriptor>,
     some_ring: netmap_ring, // TODO destructor
@@ -25,11 +26,11 @@ pub struct NethunsSocket {
 }
 
 
-impl NethunsSocket {
+impl NethunsSocket for NethunsSocketNetmap {
     /// Create a new NethunsSocket
     fn try_new(
         opt: NethunsSocketOptions,
-    ) -> Result<NethunsSocket, NethunsOpenError> {
+    ) -> Result<Box<dyn NethunsSocket>, NethunsOpenError> {
         let rx = opt.mode == NethunsSocketMode::RxTx
             || opt.mode == NethunsSocketMode::RxOnly;
         let tx = opt.mode == NethunsSocketMode::RxTx
@@ -60,7 +61,7 @@ impl NethunsSocket {
         // set a single consumer by default
         base.opt = opt;
         
-        Ok(NethunsSocket {
+        Ok(Box::new(NethunsSocketNetmap {
             base,
             p: None,
             some_ring: netmap_ring::default(),
@@ -70,12 +71,12 @@ impl NethunsSocket {
             free_tail: 0,
             tx,
             rx,
-        })
+        }))
     }
     
     
-    /// TODO better error type + queue u32?
-    pub fn bind(
+    /// TODO better error type
+    fn bind(
         &mut self,
         dev: &str,
         queue: NethunsQueue,
@@ -170,7 +171,7 @@ impl NethunsSocket {
 }
 
 
-impl Drop for NethunsSocket {
+impl Drop for NethunsSocketNetmap {
     fn drop(&mut self) {
         todo!();
         

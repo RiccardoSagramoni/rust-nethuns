@@ -11,7 +11,7 @@ use super::types::NethunsPkthdrType;
 
 #[derive(Clone, Debug, Default, PartialEq, PartialOrd)]
 pub struct NethunsRingSlot {
-    pub pkthdr: Pkthdr,
+    pub pkthdr: Pkthdr, // TODO trait + factory?
     pub id: u64,
     pub inuse: i32, // TODO bool?
     pub len: i32,
