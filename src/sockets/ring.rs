@@ -11,16 +11,17 @@ pub struct NethunsRing {
     pub head: u64,
     pub tail: u64,
     
-    pub mask: usize,
-    pub shift: usize,
+    pub mask: usize, // TODO unnecessary?
+    pub shift: usize, // TODO unnecessary?
     
-    pub ring_slot: Vec<NethunsRingSlot>,
+    pub ring: Vec<NethunsRingSlot>,
 }
 
 
 impl NethunsRing {
 	
 	/// Equivalent to nethuns_make_ring
+	#[inline(always)]
 	pub fn new (nslots: usize, pktsize: usize) -> NethunsRing {
 		let ns = nethuns_lpow2(nslots);
 		let ss = nethuns_lpow2(mem::size_of::<NethunsRingSlot>() + pktsize);
@@ -30,15 +31,15 @@ impl NethunsRing {
 			pktsize,
 			head: 0,
 			tail: 0,
-			ring_slot: vec![NethunsRingSlot::default(); ns * ss],
+			ring: vec![NethunsRingSlot::default(); ns],
 			mask: ns - 1,
 			shift: ss.trailing_zeros() as usize
 		}
 	}
 	
 	#[inline(always)]
-	pub fn get_slot(n: usize) {
-		
+	pub fn get_slot(self: &NethunsRing, n: usize) -> &NethunsRingSlot{
+		return &self.ring[n % self.ring.len()];
 	}
 	
 }
