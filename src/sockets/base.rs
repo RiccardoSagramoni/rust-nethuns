@@ -2,9 +2,9 @@ use std::ffi::CString;
 
 use libc::c_void;
 
-use crate::api::Pkthdr;
 use crate::types::{NethunsSocketOptions, NethunsQueue};
 
+use super::Pkthdr;
 use super::ring::NethunsRing;
 use super::types::NethunsPkthdrType;
 

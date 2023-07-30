@@ -1,13 +1,12 @@
-use std::ffi::{CStr, CString};
+use std::ffi::CString;
 use std::ptr;
 
 use c_netmap_wrapper::bindings::netmap_ring;
-use c_netmap_wrapper::macros::netmap_buf;
 use c_netmap_wrapper::nmport::NmPortDescriptor;
 
-use crate::api::errors::{NethunsBindError, NethunsOpenError};
 use crate::api::nethuns_dev_queue_name;
 use crate::sockets::base::NethunsSocketBase;
+use crate::sockets::errors::{NethunsBindError, NethunsOpenError};
 use crate::sockets::ring::NethunsRing;
 use crate::types::{NethunsQueue, NethunsSocketMode, NethunsSocketOptions};
 
@@ -148,10 +147,7 @@ impl NethunsSocket {
         nm_port_d.open_desc().or_else(|e| {
             Err(NethunsBindError::FrameworkError(format!(
                 "NmPortDescriptor.open_desc(): couldn't open dev {} ({})",
-                nethuns_dev_queue_name(
-                    Some(&dev),
-                    queue
-                ),
+                nethuns_dev_queue_name(Some(&dev), queue),
                 e
             )))
         })?;
@@ -162,7 +158,7 @@ impl NethunsSocket {
                 nethuns_dev_queue_name(Some(dev), queue),
                 extra_bufs,
                 nm_port_d.d.reg.nr_extra_bufs
-            )))
+            )));
         }
         
         // TODO
@@ -195,8 +191,8 @@ impl Drop for NethunsSocket {
         //             let slot = ring.get_slot(i);
         //             let idx = slot.pkthdr.buf_idx;
         //             let next =
-        //                 netmap_buf(&self.some_ring, idx as usize) as *const u32;
-        //             unsafe {
+        //                 netmap_buf(&self.some_ring, idx as usize) as *const
+        // u32;             unsafe {
         //                 // *next = (*nifp).
         //             }
         //         }
