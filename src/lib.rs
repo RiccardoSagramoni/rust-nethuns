@@ -1,4 +1,5 @@
 mod api;
+mod global;
 mod misc;
 mod nethuns;
 mod sockets;
