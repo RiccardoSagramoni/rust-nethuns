@@ -13,7 +13,10 @@ pub fn netmap_offset<T>(ptr: *const netmap_if, offset: usize) -> *mut T {
 
 /// Equivalent to NETMAP_TXRING
 #[inline(always)]
-pub fn netmap_txring(nifp: *mut netmap_if, index: usize) -> *mut netmap_ring {
+pub unsafe fn netmap_txring(
+    nifp: *mut netmap_if,
+    index: usize,
+) -> *mut netmap_ring {
     assert!(!nifp.is_null());
     
     let offset = unsafe {
@@ -28,7 +31,10 @@ pub fn netmap_txring(nifp: *mut netmap_if, index: usize) -> *mut netmap_ring {
 
 /// Equivalent to NETMAP_RXRING
 #[inline(always)]
-pub fn netmap_rxring(nifp: *mut netmap_if, index: usize) -> *mut netmap_ring {
+pub unsafe fn netmap_rxring(
+    nifp: *mut netmap_if,
+    index: usize,
+) -> *mut netmap_ring {
     assert!(!nifp.is_null());
     
     let offset = unsafe {
@@ -51,6 +57,6 @@ pub fn netmap_buf(ring: &netmap_ring, index: usize) -> *const u8 {
         (index * ring.nr_buf_size as usize) + ring.buf_ofs as usize;
     
     unsafe {
-        return (ring as *const netmap_ring as *const u8).add(byte_index);
+        (ring as *const netmap_ring as *const u8).add(byte_index)
     }
 }

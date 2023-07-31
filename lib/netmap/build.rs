@@ -30,13 +30,16 @@ fn main() {
         .derive_ord(true)
         .derive_partialeq(true)
         .derive_partialord(true)
-        // Genereate wrappers for static functions
+        // Generate wrappers for static functions
         .wrap_static_fns(true)
         // Tell cargo to invalidate the built crate whenever any of the
         // included header files changed.
         .parse_callbacks(Box::new(bindgen::CargoCallbacks))
         // Allow only netmap headers to be included in the binding
         .allowlist_file("[^\\s]*netmap[^\\s]*")
+		// Generate documentation comments for bindings
+		.generate_comments(true)
+        .clang_args(["-fretain-comments-from-system-headers", "-fparse-all-comments"])
         // Finish the builder and generate the bindings.
         .generate()
         // Unwrap the Result and panic on failure.

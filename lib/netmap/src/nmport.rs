@@ -17,13 +17,12 @@ impl NmPortDescriptor {
             return Err(format!(
                 "nmport_prepare(portspec = {:?}) failed",
                 portspec
-            )
-            .to_owned());
+            ));
         }
         
-        return Ok(Self {
+        Ok(Self {
             d: unsafe { Box::from_raw(d) },
-        });
+        })
     }
     
 
@@ -31,10 +30,10 @@ impl NmPortDescriptor {
     pub fn open_desc(&mut self) -> Result<(), String> {
         match unsafe { nmport_open_desc(&mut *self.d as *mut nmport_d) } {
             -1 => {
-                return Err(format!("{}", errno::errno()));
+                Err(format!("{}", errno::errno()))
             }
             0 => {
-                return Ok(());
+                Ok(())
             }
             ret => {
                 panic!("nmport_open_desc returned unexpected value {ret}");
