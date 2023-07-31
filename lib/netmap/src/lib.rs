@@ -3,7 +3,4 @@ pub mod bindings;
 
 pub mod macros;
 pub mod nmport;
-
-fn main() {
-    let _ = bindings::nmport_d::default();
-}
+pub mod ring;

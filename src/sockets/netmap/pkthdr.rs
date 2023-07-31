@@ -8,10 +8,10 @@ use std::cmp::Ordering;
 pub struct Pkthdr {
     #[derivative(Default(value = "timeval { tv_sec: 0, tv_usec: 0 }"))]
     #[derivative(PartialOrd(compare_with = "partial_ord_timeval"))]
-    ts: timeval,
-    len: u32,
-    caplen: u32,
-    buf_idx: u32,
+    pub ts: timeval,
+    pub len: u32,
+    pub caplen: u32,
+    pub buf_idx: u32,
 }
 
 

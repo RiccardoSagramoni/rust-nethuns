@@ -1,4 +1,4 @@
-use std::{ffi::CString, ops::Deref};
+use std::ffi::CString;
 
 use crate::bindings::{nmport_d, nmport_open_desc, nmport_prepare};
 
@@ -11,7 +11,7 @@ impl NmPortDescriptor {
     /// Create a port descriptor, but do not open it.
     ///
     /// Equivalent to `nmport_prepare(portspec.as_ptr())`
-    pub fn prepare(portspec: CString) -> Result<NmPortDescriptor, String> {
+    pub fn prepare(portspec: CString) -> Result<Self, String> {
         let d = unsafe { nmport_prepare(portspec.as_ptr()) };
         if d.is_null() {
             return Err(format!(
@@ -21,7 +21,7 @@ impl NmPortDescriptor {
             .to_owned());
         }
         
-        return Ok(NmPortDescriptor {
+        return Ok(Self {
             d: unsafe { Box::from_raw(d) },
         });
     }
