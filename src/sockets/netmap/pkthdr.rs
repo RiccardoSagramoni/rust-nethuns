@@ -18,14 +18,14 @@ pub struct Pkthdr {
 /// Implement custom ordering of libc::timeval
 fn partial_ord_timeval(t1: &timeval, t2: &timeval) -> Option<Ordering> {
     if t1.tv_sec < t2.tv_sec {
-        return Some(Ordering::Less);
+        Some(Ordering::Less)
     } else if t1.tv_sec > t2.tv_sec {
-        return Some(Ordering::Greater);
+        Some(Ordering::Greater)
     } else if t1.tv_usec < t2.tv_usec {
-        return Some(Ordering::Less);
+        Some(Ordering::Less)
     } else if t1.tv_usec > t2.tv_usec {
-        return Some(Ordering::Greater);
+        Some(Ordering::Greater)
     } else {
-        return Some(Ordering::Equal);
+        Some(Ordering::Equal)
     }
 }

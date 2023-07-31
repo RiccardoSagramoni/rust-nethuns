@@ -3,7 +3,7 @@ use crate::types::NethunsQueue;
 
 #[inline(always)]
 pub fn nethuns_dev_queue_name(dev: Option<&str>, queue: NethunsQueue) -> String {
-    return match dev {
+    match dev {
         None => "unspec".to_owned(),
         Some(dev) => match queue {
             NethunsQueue::Some(idx) => {
@@ -11,5 +11,5 @@ pub fn nethuns_dev_queue_name(dev: Option<&str>, queue: NethunsQueue) -> String 
             }
             NethunsQueue::Any => dev.to_owned(),
         },
-    };
+    }
 }

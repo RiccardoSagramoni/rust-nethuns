@@ -24,9 +24,9 @@ pub struct NethunsSocketNetmap {
     free_mask: u64,
     free_head: u64,
     free_tail: u64,
-    tx: bool,
-    rx: bool,
 }
+// fields rx and tx removed because redundant with base.rx_ring.is_some() and
+// base.tx_ring.is_some()
 
 
 impl NethunsSocket for NethunsSocketNetmap {
@@ -72,8 +72,6 @@ impl NethunsSocket for NethunsSocketNetmap {
             free_mask: 0,
             free_head: 0,
             free_tail: 0,
-            tx,
-            rx,
         }))
     }
     
@@ -84,9 +82,9 @@ impl NethunsSocket for NethunsSocketNetmap {
         dev: &str,
         queue: NethunsQueue,
     ) -> Result<(), NethunsBindError> {
-        let flags = if !self.tx {
+        let flags = if !self.tx() {
             "/R".to_owned()
-        } else if !self.rx {
+        } else if !self.rx() {
             "/T".to_owned()
         } else {
             panic!("NethunsSocket should be either rx or tx");
@@ -107,25 +105,25 @@ impl NethunsSocket for NethunsSocketNetmap {
                 format!("{prefix}{dev}{flags}")
             }
         })
-        .or_else(|e| {
-            Err(NethunsBindError::IllegalArgument(format!(
+        .map_err(|e| {
+            NethunsBindError::IllegalArgument(format!(
                 "Unable to build the device name as CString: {e}"
-            )))
+            ))
         })?;
         
         // Prepare the port descriptor
-        let mut nm_port_d = NmPortDescriptor::prepare(nm_dev).or_else(|e| {
-            Err(NethunsBindError::FrameworkError(format!(
+        let mut nm_port_d = NmPortDescriptor::prepare(nm_dev).map_err(|e| {
+            NethunsBindError::FrameworkError(format!(
                 "could not open dev {} ({e})",
                 nethuns_dev_queue_name(Some(dev), queue)
-            )))
+            ))
         })?;
         
         // Get device name
-        let c_dev = CString::new(dev.to_owned()).or_else(|e| {
-            Err(NethunsBindError::IllegalArgument(format!(
+        let c_dev = CString::new(dev.to_owned()).map_err(|e| {
+            NethunsBindError::IllegalArgument(format!(
                 "Unable to convert `dev` ({dev}) to CString: {e}"
-            )))
+            ))
         })?;
         
         // Configure NethunsSocketBase structure
@@ -143,17 +141,17 @@ impl NethunsSocket for NethunsSocketNetmap {
             Some(r) => r.size,
             None => 0,
         } as u32;
-        let extra_bufs =
-            (self.tx as u32) * rx_ring_size + (self.rx as u32) * tx_ring_size;
+        let extra_bufs = (if self.tx() { rx_ring_size } else { 0_u32 })
+            + (if self.rx() { tx_ring_size } else { 0_u32 });
         nm_port_d.d.reg.nr_extra_bufs = extra_bufs;
         
         // open initialized port descriptor
-        nm_port_d.open_desc().or_else(|e| {
-            Err(NethunsBindError::FrameworkError(format!(
+        nm_port_d.open_desc().map_err(|e| {
+            NethunsBindError::FrameworkError(format!(
                 "NmPortDescriptor.open_desc(): couldn't open dev {} ({})",
-                nethuns_dev_queue_name(Some(&dev), queue),
+                nethuns_dev_queue_name(Some(dev), queue),
                 e
-            )))
+            ))
         })?;
         
         if nm_port_d.d.reg.nr_extra_bufs != extra_bufs {
@@ -167,7 +165,7 @@ impl NethunsSocket for NethunsSocketNetmap {
         
         let some_ring = NetmapRing::from(netmap_rxring(
             nm_port_d.d.nifp,
-            if self.rx {
+            if self.rx() {
                 nm_port_d.d.first_rx_ring as usize
             } else {
                 nm_port_d.d.first_tx_ring as usize
@@ -186,7 +184,7 @@ impl NethunsSocket for NethunsSocketNetmap {
         if let Some(tx_ring) = &mut self.base.tx_ring {
             for i in 0..tx_ring.size {
                 let slot = tx_ring.get_slot(i);
-                (*slot).pkthdr.buf_idx = scan;
+                slot.pkthdr.buf_idx = scan;
                 scan = unsafe {
                     let ptr = netmap_buf(&some_ring.r, i) as *const u32;
                     assert!(!ptr.is_null());
@@ -195,7 +193,7 @@ impl NethunsSocket for NethunsSocketNetmap {
             }
         }
         
-        if self.rx {
+        if self.rx() {
             while scan != 0 {
                 self.free_ring[(self.free_tail & self.free_mask) as usize] =
                     scan;
@@ -215,10 +213,10 @@ impl NethunsSocket for NethunsSocketNetmap {
         self.base.devname = c_dev;
         
         if self.base.opt.promisc {
-            __nethuns_set_if_promisc(self, &self.base.devname).or_else(|e| {
-                Err(NethunsBindError::NethunsError(format!(
+            __nethuns_set_if_promisc(self, &self.base.devname).map_err(|e| {
+                NethunsBindError::NethunsError(format!(
                     "couldn't set promisc mode: {e}"
-                )))
+                ))
             })?
         }
         
@@ -260,5 +258,15 @@ impl Drop for NethunsSocketNetmap {
         //         }
         //     }
         // }
+    }
+}
+
+impl NethunsSocketNetmap {
+    fn tx(&self) -> bool {
+        self.base.tx_ring.is_some()
+    }
+    
+    fn rx(&self) -> bool {
+        self.base.rx_ring.is_some()
     }
 }
