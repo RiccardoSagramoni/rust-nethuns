@@ -31,7 +31,8 @@ impl NethunsRing {
 			pktsize,
 			head: 0,
 			tail: 0,
-			ring: vec![NethunsRingSlot::default(); ns],
+            // FIXME non credo che la dimensione sia corretta -> sentire Lettieri
+			ring: vec![NethunsRingSlot::default(); ns], 
 			mask: ns - 1,
 			shift: ss.trailing_zeros() as usize
 		}

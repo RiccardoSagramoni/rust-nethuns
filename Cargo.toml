@@ -28,9 +28,8 @@ cfg-if = "1.0.0"
 
 
 [features]
-default = ["common", "netmap"]
-netmap = ["common", "dep:c_netmap_wrapper"]
-libpcap = ["common"]
-xdp = ["common"]
-tpacket_v3 = ["common"]
-common = ["libc/extra_traits", "rustix/net"]
+default = ["netmap", "libc/extra_traits", "rustix/net"] # FIXME remove netmap from default features
+netmap = ["dep:c_netmap_wrapper"]
+libpcap = []
+xdp = []
+tpacket_v3 = []

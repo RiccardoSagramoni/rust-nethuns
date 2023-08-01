@@ -1,5 +1,4 @@
-pub mod bindings;
-// pub use bindings::*; // TODO remove after implementing safe wrapper
+mod bindings;
 
 pub mod macros;
 pub mod nmport;

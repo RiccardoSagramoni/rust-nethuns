@@ -87,7 +87,7 @@ impl NethunsSocket for NethunsSocketNetmap {
         } else if !self.rx() {
             "/T".to_owned()
         } else {
-            panic!("NethunsSocket should be either rx or tx");
+            "".to_owned()
         };
         
         let prefix = if dev.starts_with("vale") {
@@ -193,7 +193,7 @@ impl NethunsSocket for NethunsSocketNetmap {
                 let slot = tx_ring.get_slot(i);
                 slot.pkthdr.buf_idx = scan;
                 scan = unsafe {
-                    let ptr = netmap_buf(&some_ring.r, i) as *const u32;
+                    let ptr = netmap_buf(some_ring.r.as_ref(), i) as *const u32;
                     assert!(!ptr.is_null());
                     *ptr
                 }
@@ -206,8 +206,8 @@ impl NethunsSocket for NethunsSocketNetmap {
                     scan;
                 self.free_tail += 1;
                 scan = unsafe {
-                    let ptr =
-                        netmap_buf(&some_ring.r, scan as usize) as *const u32;
+                    let ptr = netmap_buf(some_ring.r.as_ref(), scan as usize)
+                        as *const u32;
                     assert!(!ptr.is_null());
                     *ptr
                 };

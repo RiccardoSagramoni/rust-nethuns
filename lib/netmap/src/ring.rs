@@ -5,7 +5,7 @@ use crate::bindings::netmap_ring;
 /// Implements transmit and receive rings, with read/write pointers,
 /// metadata and an array of slots describing the buffers.
 ///
-/// ```
+/// ```C
 /// struct netmap_ring { /* (one per ring) */
 ///     ...
 ///     const uint32_t num_slots;   /* slots in each ring            */

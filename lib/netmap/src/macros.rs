@@ -3,12 +3,16 @@
 use crate::bindings::{netmap_if, netmap_ring};
 
 /// Equivalent to __NETMAP_OFFSET
-#[inline(always)]
-pub fn netmap_offset<T>(ptr: *const netmap_if, offset: usize) -> *mut T {
-    let mut ptr = ptr as *const char;
-    unsafe { ptr = ptr.add(offset) }
-    ptr as *const libc::c_void as *mut T
+/// ((type)(void *)((char *)(ptr) + (offset)))
+macro_rules! __netmap_offset {
+    ($type: ident, $ptr: expr, $off: expr) => {
+        unsafe {
+            ($ptr as *const libc::c_char).add($off as usize)
+                as *const libc::c_void as *mut $type
+        }
+    };
 }
+pub(crate) use __netmap_offset;
 
 
 /// Equivalent to NETMAP_TXRING
@@ -23,9 +27,9 @@ pub unsafe fn netmap_txring(
         let ring_ofs_ptr = (*nifp).ring_ofs.as_ptr();
         assert!(!ring_ofs_ptr.is_null());
         let ring_ofs_ptr = ring_ofs_ptr.add(index);
-        *ring_ofs_ptr as usize
+        *ring_ofs_ptr
     };
-    netmap_offset::<netmap_ring>(nifp, offset)
+    __netmap_offset!(netmap_ring, nifp, offset)
 }
 
 
@@ -40,23 +44,45 @@ pub unsafe fn netmap_rxring(
     let offset = unsafe {
         let ring_ofs_ptr = (*nifp).ring_ofs.as_ptr();
         assert!(!ring_ofs_ptr.is_null());
-        let index = index
-            + (*nifp).ni_tx_rings as usize
-            + (*nifp).ni_host_tx_rings as usize;
-        let ring_ofs_ptr = ring_ofs_ptr.add(index);
-        *ring_ofs_ptr as usize
+        let ring_ofs_ptr = ring_ofs_ptr
+            .add(index)
+            .add((*nifp).ni_tx_rings as usize)
+            .add((*nifp).ni_host_tx_rings as usize);
+        *ring_ofs_ptr
     };
-    netmap_offset::<netmap_ring>(nifp, offset)
+    __netmap_offset!(netmap_ring, nifp, offset)
 }
 
 
 /// Equivalent to C macro NETMAP_BUF(ring, index)
 #[inline(always)]
-pub fn netmap_buf(ring: &netmap_ring, index: usize) -> *const u8 {
-    let byte_index =
-        (index * ring.nr_buf_size as usize) + ring.buf_ofs as usize;
-    
+pub fn netmap_buf(ring: &netmap_ring, index: usize) -> *const libc::c_char {
     unsafe {
-        (ring as *const netmap_ring as *const u8).add(byte_index)
+        (ring as *const netmap_ring as *const libc::c_char)
+            .add(ring.buf_ofs as usize)
+            .add(index * ring.nr_buf_size as usize)
+    }
+}
+
+
+#[cfg(test)]
+mod test {
+    use std::mem::size_of;
+    
+    #[test]
+    fn test_netmap_offset() {
+        let x = 0;
+        let x_ptr = &x as *const i32 as *mut i32;
+        
+        assert_eq!(__netmap_offset!(i32, x_ptr, 0), x_ptr);
+        
+        assert_eq!(__netmap_offset!(i32, x_ptr, size_of::<i32>()), unsafe {
+            x_ptr.add(1)
+        });
+        
+        assert_eq!(
+            __netmap_offset!(i32, x_ptr, 10 * size_of::<i32>()),
+            unsafe { x_ptr.add(10) }
+        );
     }
 }

@@ -25,16 +25,12 @@ impl NmPortDescriptor {
         })
     }
     
-
+    
     /// open an initialized port descriptor
     pub fn open_desc(&mut self) -> Result<(), String> {
-        match unsafe { nmport_open_desc(&mut *self.d as *mut nmport_d) } {
-            -1 => {
-                Err(format!("{}", errno::errno()))
-            }
-            0 => {
-                Ok(())
-            }
+        match unsafe { nmport_open_desc(self.d.as_mut()) } {
+            -1 => Err(format!("{}", errno::errno())),
+            0 => Ok(()),
             ret => {
                 panic!("nmport_open_desc returned unexpected value {ret}");
             }
@@ -42,8 +38,8 @@ impl NmPortDescriptor {
     }
 }
 
-impl Drop for NmPortDescriptor {
-    fn drop(&mut self) {
-        todo!(); // TODO NmPortDescriptor drop()
-    }
-}
+// impl Drop for NmPortDescriptor {
+//     fn drop(&mut self) {
+//         todo!(); // TODO NmPortDescriptor drop()
+//     }
+// }
