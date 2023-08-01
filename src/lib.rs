@@ -1,10 +1,9 @@
 mod api;
+mod global;
 mod misc;
+mod nethuns;
 mod sockets;
-mod types;
+pub mod types;
 
 
-// TODO: define public API
-
-#[cfg(test)]
-mod tests {}
+pub use sockets::{NethunsSocket, NethunsSocketFactory};

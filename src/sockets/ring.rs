@@ -38,8 +38,9 @@ impl NethunsRing {
 	}
 	
 	#[inline(always)]
-	pub fn get_slot(self: &NethunsRing, n: usize) -> &NethunsRingSlot{
-		return &self.ring[n % self.ring.len()];
+	pub fn get_slot(self: &mut NethunsRing, n: usize) -> &mut NethunsRingSlot{
+		let len = self.ring.len();
+		&mut self.ring[n % len]
 	}
 	
 }
