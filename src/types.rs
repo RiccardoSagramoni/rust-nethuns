@@ -3,7 +3,7 @@ use crate::sockets::types::NethunsPkthdrType;
 use derive_builder::Builder;
 
 
-#[derive(Clone, Debug, Default, PartialEq, PartialOrd)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, PartialOrd)]
 pub enum NethunsCaptureDir {
     #[default]
     In,
@@ -12,7 +12,7 @@ pub enum NethunsCaptureDir {
 }
 
 
-#[derive(Clone, Debug, Default, PartialEq, PartialOrd)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, PartialOrd)]
 pub enum NethunsCaptureMode {
     #[default]
     Default,
@@ -22,7 +22,7 @@ pub enum NethunsCaptureMode {
 }
 
 
-#[derive(Clone, Debug, Default, PartialEq, PartialOrd)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, PartialOrd)]
 pub enum NethunsSocketMode {
     #[default]
     RxTx,
@@ -31,7 +31,7 @@ pub enum NethunsSocketMode {
 }
 
 
-#[derive(Clone, Builder, Debug, Default, PartialEq, PartialOrd)]
+#[derive(Clone, Copy, Builder, Debug, Default, PartialEq, PartialOrd)]
 #[builder(pattern = "owned", default)]
 pub struct NethunsSocketOptions {
     pub numblocks: u32,
@@ -48,7 +48,7 @@ pub struct NethunsSocketOptions {
 }
 
 
-#[derive(Clone, Builder, Debug, Default, PartialEq, PartialOrd)]
+#[derive(Clone, Copy, Builder, Debug, Default, PartialEq, PartialOrd)]
 #[builder(pattern = "owned", default)]
 pub struct NethunsStat {
     pub rx_packets: u64,

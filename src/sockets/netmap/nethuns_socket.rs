@@ -223,7 +223,7 @@ impl NethunsSocket for NethunsSocketNetmap {
         
         if self.base.opt.promisc {
             // Set the interface in promisc mode
-            __nethuns_set_if_promisc(self, &self.base.devname).map_err(|e| {
+            __nethuns_set_if_promisc(&self.base.devname).map_err(|e| {
                 NethunsBindError::NethunsError(format!(
                     "couldn't set promisc mode: {e}"
                 ))
