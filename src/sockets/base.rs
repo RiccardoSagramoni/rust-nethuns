@@ -1,5 +1,6 @@
 use std::ffi::CString;
 
+use c_netmap_wrapper::bindings::__IncompleteArrayField;
 use libc::c_void;
 
 use crate::types::{NethunsSocketOptions, NethunsQueue};
@@ -9,17 +10,19 @@ use super::ring::NethunsRing;
 use super::types::NethunsPkthdrType;
 
 
-#[derive(Clone, Debug, Default, PartialEq, PartialOrd)]
+#[repr(C)]
+#[derive(Debug, Default)]
 pub struct NethunsRingSlot {
-    pub pkthdr: Pkthdr, // TODO trait + factory?
+    pub pkthdr: Pkthdr,
     pub id: u64,
-    pub inuse: i32, // TODO bool?
+    pub inuse: libc::c_int,
     pub len: i32,
     
-    pub packet: Option<String>, // TODO check best type
+    pub packet: __IncompleteArrayField<libc::c_uchar>,
 }
 
 
+#[repr(C)]
 #[derive(Debug, Default, PartialEq, PartialOrd)]
 pub struct NethunsSocketBase {
     pub errbuf: String, // TODO is it necessary? Check usage
@@ -29,7 +32,7 @@ pub struct NethunsSocketBase {
     pub rx_ring: Option<NethunsRing>,
     pub devname: CString,
     pub queue: NethunsQueue,
-    pub ifindex: i32,
+    pub ifindex: libc::c_int,
     
     pub filter: Option<fn(*const c_void, &NethunsPkthdrType, &[u8]) -> i32>, /* TODO what type for this closure? */
     pub filter_ctx: (), // TODO: void* ??????

@@ -42,13 +42,13 @@ pub unsafe fn netmap_rxring(
     assert!(!nifp.is_null());
     
     let offset = unsafe {
-        let ring_ofs_ptr = (*nifp).ring_ofs.as_ptr();
-        assert!(!ring_ofs_ptr.is_null());
-        let ring_ofs_ptr = ring_ofs_ptr
+        let ptr = (*nifp)
+            .ring_ofs
+            .as_ptr()
             .add(index)
             .add((*nifp).ni_tx_rings as usize)
             .add((*nifp).ni_host_tx_rings as usize);
-        *ring_ofs_ptr
+        *ptr
     };
     __netmap_offset!(netmap_ring, nifp, offset)
 }
@@ -58,7 +58,7 @@ pub unsafe fn netmap_rxring(
 #[inline(always)]
 pub fn netmap_buf(ring: &netmap_ring, index: usize) -> *const libc::c_char {
     unsafe {
-        (ring as *const netmap_ring as *const libc::c_char)
+        (ring as *const _ as *const libc::c_char)
             .add(ring.buf_ofs as usize)
             .add(index * ring.nr_buf_size as usize)
     }
