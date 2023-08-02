@@ -10,6 +10,7 @@ use crate::global::{NethunsNetInfo, NETHUNS_GLOBAL};
 
 ///
 pub fn __nethuns_set_if_promisc(devname: &CString) -> Result<(), String> {
+    // Get the active flag word of the device.
     let mut flags =
         nethuns_ioctl_if(devname, SocketConfigurationFlag::SIOCGIFFLAGS, 0)
             .map_err(|e| {
@@ -96,15 +97,15 @@ fn nethuns_ioctl_if(
     let ret = unsafe {
         libc::ioctl(
             socket.as_raw_fd(),
-            what as u64,
-            &ifr as *const libc::ifreq as *const libc::c_void,
+            what.as_(),
+            &ifr,
         )
     };
+    
     if ret < 0 {
-        // FIXME nethuns_perror(nethuns_socket(s)->errbuf, "ioctl");
         return Err(format!(
-            "[nethuns_ioctl_if] ioctl({:?}, {:?}, {:?}) failed",
-            socket, what, ifr
+            "[nethuns_ioctl_if] ioctl({:?}, {:?}, {:?}) failed with errno {}",
+            socket, what, ifr, errno::errno()
         ));
     }
     
@@ -128,5 +129,18 @@ impl AsPrimitive<u64> for SocketConfigurationFlag {
             Self::SIOCGIFFLAGS => libc::SIOCGIFFLAGS,
             Self::SIOCSIFFLAGS => libc::SIOCSIFFLAGS,
         }
+    }
+}
+
+
+#[cfg(test)]
+mod test {
+    use super::SocketConfigurationFlag;
+    use num_traits::AsPrimitive;
+    
+    #[test]
+    fn test_socket_configuration_flag() {
+        assert_eq!(SocketConfigurationFlag::SIOCGIFFLAGS.as_(), libc::SIOCGIFFLAGS);
+        assert_eq!(SocketConfigurationFlag::SIOCSIFFLAGS.as_(), libc::SIOCSIFFLAGS);
     }
 }

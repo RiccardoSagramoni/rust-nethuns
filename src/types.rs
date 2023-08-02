@@ -1,5 +1,6 @@
 use crate::sockets::base::NethunsSocketBase;
 use crate::sockets::types::NethunsPkthdrType;
+use derivative::Derivative;
 use derive_builder::Builder;
 
 
@@ -31,7 +32,8 @@ pub enum NethunsSocketMode {
 }
 
 
-#[derive(Clone, Copy, Builder, Debug, Default, PartialEq, PartialOrd)]
+#[derive(Builder, Debug, Derivative, PartialEq, PartialOrd)]
+#[derivative(Default)]
 #[builder(pattern = "owned", default)]
 pub struct NethunsSocketOptions {
     pub numblocks: u32,
@@ -44,7 +46,21 @@ pub struct NethunsSocketOptions {
     pub promisc: bool,
     pub rxhash: bool,
     pub tx_qdisc_bypass: bool,
-    // TODO xdp-only fields
+    
+    // FIXME safe wrappers?
+    #[derivative(Default(value = "std::ptr::null()"))]
+    pub xdp_prog: *const libc::c_char, // xdp only
+    
+    #[derivative(Default(value = "std::ptr::null()"))]
+    pub xdp_prog_sec: *const libc::c_char, // xdp only
+    
+    #[derivative(Default(value = "std::ptr::null()"))]
+    pub xsk_map_name: *const libc::c_char, // xdp only
+    
+    pub reuse_maps: bool, // xdp only
+    
+    #[derivative(Default(value = "std::ptr::null()"))]
+    pub pin_dir: *const libc::c_char, // xdp only
 }
 
 

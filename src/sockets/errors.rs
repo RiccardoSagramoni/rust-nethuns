@@ -2,8 +2,10 @@ use thiserror::Error;
 
 #[derive(Error, Debug)]
 pub enum NethunsOpenError {
-	#[error("[open] invalid options: {0}")]
-	InvalidOptions(String)
+	#[error("[try_new] invalid options: {0}")]
+	InvalidOptions(String),
+    #[error("[try_new] allocation error: {0}")]
+    AllocationError(String)
 }
 
 #[derive(Error, Debug)]

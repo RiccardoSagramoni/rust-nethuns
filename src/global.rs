@@ -13,4 +13,4 @@ pub struct NethunsNetInfo {
 }
 
 pub static NETHUNS_GLOBAL: Mutex<Lazy<HashMap<CString, NethunsNetInfo>>> =
-    Mutex::new(Lazy::new(|| HashMap::new()));
+    Mutex::new(Lazy::new(HashMap::new));
