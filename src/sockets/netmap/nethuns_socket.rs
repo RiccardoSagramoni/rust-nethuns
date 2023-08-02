@@ -1,6 +1,6 @@
+use c_netmap_wrapper::bindings::netmap_ring;
 use std::ffi::CString;
 use std::{thread, time};
-use c_netmap_wrapper::bindings::netmap_ring;
 
 use c_netmap_wrapper::macros::{netmap_buf, netmap_rxring};
 use c_netmap_wrapper::nmport::NmPortDescriptor;
@@ -38,15 +38,15 @@ impl NethunsSocket for NethunsSocketNetmap {
             || opt.mode == NethunsSocketMode::RxOnly;
         let tx = opt.mode == NethunsSocketMode::RxTx
             || opt.mode == NethunsSocketMode::TxOnly;
-        
+
         if !rx && !tx {
             return Err(NethunsOpenError::InvalidOptions(
                 "please select at least one between rx and tx".to_owned(),
             ));
         }
-        
+
         let mut base = NethunsSocketBase::default();
-        
+
         if rx {
             base.rx_ring = Some(
                 NethunsRing::try_new(
@@ -56,7 +56,7 @@ impl NethunsSocket for NethunsSocketNetmap {
                 .map_err(|e| NethunsOpenError::AllocationError(e))?,
             );
         }
-        
+
         if tx {
             base.tx_ring = Some(
                 NethunsRing::try_new(
@@ -66,10 +66,10 @@ impl NethunsSocket for NethunsSocketNetmap {
                 .map_err(|e| NethunsOpenError::AllocationError(e))?,
             );
         }
-        
+
         // set a single consumer by default
         base.opt = opt;
-        
+
         Ok(Box::new(Self {
             base,
             p: None,
@@ -80,8 +80,8 @@ impl NethunsSocket for NethunsSocketNetmap {
             free_tail: 0,
         }))
     }
-    
-    
+
+
     /// TODO better error type
     fn bind(
         &mut self,
@@ -96,13 +96,13 @@ impl NethunsSocket for NethunsSocketNetmap {
         } else {
             "".to_owned()
         };
-        
+
         let prefix = if dev.starts_with("vale") {
             "".to_owned()
         } else {
             "netmap:".to_owned()
         };
-        
+
         // Build the device name
         let nm_dev = CString::new(match queue {
             NethunsQueue::Some(idx) => {
@@ -125,19 +125,19 @@ impl NethunsSocket for NethunsSocketNetmap {
                 nethuns_dev_queue_name(Some(dev), queue)
             ))
         })?;
-        
+
         // Convert the device name to a C string
         let c_dev = CString::new(dev.to_owned()).map_err(|e| {
             NethunsBindError::IllegalArgument(format!(
                 "Unable to convert `dev` ({dev}) to CString: {e}"
             ))
         })?;
-        
+
         // Configure NethunsSocketBase structure
         self.base.queue = queue;
         self.base.ifindex =
             unsafe { libc::if_nametoindex(c_dev.as_ptr()) } as libc::c_int;
-        
+
         // Configure the Netmap port descriptor
         // with the number of required extra buffers
         let rx_ring_size = match &self.base.rx_ring {
@@ -151,7 +151,7 @@ impl NethunsSocket for NethunsSocketNetmap {
         let extra_bufs = (if self.tx() { rx_ring_size } else { 0_u32 })
             + (if self.rx() { tx_ring_size } else { 0_u32 });
         nm_port_d.reg.nr_extra_bufs = extra_bufs;
-        
+
         // Open the initialized netmap port descriptor
         nm_port_d.open_desc().map_err(|e| {
             NethunsBindError::FrameworkError(format!(
@@ -160,7 +160,7 @@ impl NethunsSocket for NethunsSocketNetmap {
                 e
             ))
         })?;
-        
+
         // Check if the number of extra buffers is correct
         if nm_port_d.reg.nr_extra_bufs != extra_bufs {
             return Err(NethunsBindError::FrameworkError(format!(
@@ -170,30 +170,30 @@ impl NethunsSocket for NethunsSocketNetmap {
                 nm_port_d.reg.nr_extra_bufs
             )));
         }
-        
+
         // Initialize some_ring
-        let x = unsafe {netmap_rxring(
-            nm_port_d.nifp,
-            if self.rx() {
-                nm_port_d.first_rx_ring as usize
-            } else {
-                nm_port_d.first_tx_ring as usize
-            },
-        )};
-        let y = unsafe { (x as *mut libc::c_char).add(0x5000) as *mut netmap_ring };
-        dbg!(0);
         let some_ring = NetmapRing::try_new(unsafe {
-            x
+            netmap_rxring(
+                nm_port_d.nifp,
+                if self.rx() {
+                    nm_port_d.first_rx_ring as usize
+                } else {
+                    nm_port_d.first_tx_ring as usize
+                },
+            )
         })
-        .unwrap();
+        .map_err(|e| {
+            NethunsBindError::NethunsError(format!(
+                "failed to initialize some_ring: {e}"
+            ))
+        })?;
         
         // Initialize free_ring and free_mask
-        let extra_bufs =
-            nethuns_lpow2(nm_port_d.reg.nr_extra_bufs as usize);
+        let extra_bufs = nethuns_lpow2(nm_port_d.reg.nr_extra_bufs as usize);
         self.free_ring = vec![0; extra_bufs];
         self.free_mask = (extra_bufs - 1) as u64;
-        
-        
+
+
         // Retrieve the ring slots generated by the kernel
         let mut scan = unsafe { (*nm_port_d.nifp).ni_bufs_head };
         // Case 1: TX
@@ -226,10 +226,10 @@ impl NethunsSocket for NethunsSocketNetmap {
         unsafe {
             (*nm_port_d.nifp).ni_bufs_head = 0;
         }
-        
+
         // Register the device name into the socket descriptor
         self.base.devname = c_dev;
-        
+
         if self.base.opt.promisc {
             // Set the interface in promisc mode
             __nethuns_set_if_promisc(&self.base.devname).map_err(|e| {
@@ -238,11 +238,11 @@ impl NethunsSocket for NethunsSocketNetmap {
                 ))
             })?
         }
-        
+
         // Move the generated fields into the NethunsSocketNetmap object
         self.p = Some(nm_port_d);
         self.some_ring = Some(some_ring);
-        
+
         thread::sleep(time::Duration::from_secs(2));
         Ok(())
     }
@@ -252,18 +252,18 @@ impl NethunsSocket for NethunsSocketNetmap {
 impl Drop for NethunsSocketNetmap {
     fn drop(&mut self) {
         todo!();
-        
+
         // if self.base.opt.promisc {
         //     //__nethuns_clear_if_promisc(s, b->devname);
         //     todo!();
         // }
-        
+
         // if let None = &self.p {
         //     return; // TODO
         // }
-        
+
         // let nifp = &self.p.as_ref().unwrap().d.nifp;
-        
+
         // if self.tx {
         //     if let Some(ring) = &self.base.tx_ring {
         //         for i in 0..ring.size {
@@ -284,7 +284,7 @@ impl NethunsSocketNetmap {
     fn tx(&self) -> bool {
         self.base.tx_ring.is_some()
     }
-    
+
     fn rx(&self) -> bool {
         self.base.rx_ring.is_some()
     }

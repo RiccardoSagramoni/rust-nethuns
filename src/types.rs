@@ -3,7 +3,7 @@ use crate::sockets::types::NethunsPkthdrType;
 use derivative::Derivative;
 use derive_builder::Builder;
 
-#[repr(C)]
+
 #[derive(Clone, Copy, Debug, Default, PartialEq, PartialOrd)]
 pub enum NethunsCaptureDir {
     #[default]
@@ -12,7 +12,7 @@ pub enum NethunsCaptureDir {
     InOut,
 }
 
-#[repr(C)]
+
 #[derive(Clone, Copy, Debug, Default, PartialEq, PartialOrd)]
 pub enum NethunsCaptureMode {
     #[default]
@@ -22,7 +22,7 @@ pub enum NethunsCaptureMode {
     ZeroCopy,
 }
 
-#[repr(C)]
+
 #[derive(Clone, Copy, Debug, Default, PartialEq, PartialOrd)]
 pub enum NethunsSocketMode {
     #[default]
@@ -32,31 +32,37 @@ pub enum NethunsSocketMode {
 }
 
 
-#[repr(C)]
-#[derive(Clone, Copy, Builder, Debug, Derivative, PartialEq, PartialOrd)]
+#[derive(Builder, Debug, Derivative, PartialEq, PartialOrd)]
 #[derivative(Default)]
 #[builder(pattern = "owned", default)]
 pub struct NethunsSocketOptions {
-    pub numblocks: libc::c_uint,
-    pub numpackets: libc::c_uint,
-    pub packetsize: libc::c_uint,
-    pub timeout_ms: libc::c_uint,
+    pub numblocks: u32,
+    pub numpackets: u32,
+    pub packetsize: u32,
+    pub timeout_ms: u32,
     pub dir: NethunsCaptureDir,
     pub capture: NethunsCaptureMode,
     pub mode: NethunsSocketMode,
     pub promisc: bool,
     pub rxhash: bool,
     pub tx_qdisc_bypass: bool,
-    #[derivative(Default(value="std::ptr::null()"))]
-    pub xdp_prog: *const libc::c_char,
-    #[derivative(Default(value="std::ptr::null()"))]
-    pub xdp_prog_sec: *const libc::c_char,
-    #[derivative(Default(value="std::ptr::null()"))]
-    pub xsk_map_name: *const libc::c_char,
-    pub reuse_maps: bool,
-    #[derivative(Default(value="std::ptr::null()"))]
-    pub pin_dir: *const libc::c_char,
+    
+    // FIXME safe wrappers?
+    #[derivative(Default(value = "std::ptr::null()"))]
+    pub xdp_prog: *const libc::c_char, // xdp only
+    
+    #[derivative(Default(value = "std::ptr::null()"))]
+    pub xdp_prog_sec: *const libc::c_char, // xdp only
+    
+    #[derivative(Default(value = "std::ptr::null()"))]
+    pub xsk_map_name: *const libc::c_char, // xdp only
+    
+    pub reuse_maps: bool, // xdp only
+    
+    #[derivative(Default(value = "std::ptr::null()"))]
+    pub pin_dir: *const libc::c_char, // xdp only
 }
+
 
 #[derive(Clone, Copy, Builder, Debug, Default, PartialEq, PartialOrd)]
 #[builder(pattern = "owned", default)]
