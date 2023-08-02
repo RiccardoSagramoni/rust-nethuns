@@ -47,6 +47,8 @@ impl NethunsRing {
     /// Equivalent to nethuns_get_slot
     #[inline(always)]
     pub fn get_slot(self: &mut NethunsRing, n: usize) -> &mut NethunsRingSlot {
+        assert!(!self.ring.is_null());
+        
         unsafe {
             &mut *((self.ring as *const libc::c_char)
                 .add((n & self.mask) << self.shift)

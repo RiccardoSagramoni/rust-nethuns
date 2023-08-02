@@ -9,7 +9,7 @@ use super::Pkthdr;
 use super::ring::NethunsRing;
 
 
-#[repr(C)] // FIXME necessary?
+#[repr(C)] // ! IMPORTANT: managed by C code in kernel
 #[derive(Debug, Default)]
 pub struct NethunsRingSlot {
     pub pkthdr: Pkthdr, // FIXME is it ok?
