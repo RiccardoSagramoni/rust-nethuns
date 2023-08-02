@@ -69,6 +69,49 @@ pub fn __nethuns_set_if_promisc(devname: &CString) -> Result<(), String> {
 
 
 ///
+pub fn __nethuns_clear_if_promisc(devname: &CString) -> Result<(), String> {
+    // Get the active flag word of the device.
+    let mut flags =
+        nethuns_ioctl_if(devname, SocketConfigurationFlag::SIOCGIFFLAGS, 0)
+            .map_err(|e| {
+                format!(
+                    "[__nethuns_set_if_promisc] nethuns_ioctl_if failed: {e}"
+                )
+            })?;
+    
+    
+    if let Ok(mut mutex_guard) = NETHUNS_GLOBAL.lock() {
+        let mut do_clear = false;
+        
+        if let Some(info) = mutex_guard.get_mut(devname) {
+            info.promisc_refcnt -= 1;
+            if info.promisc_refcnt <= 0 {
+                do_clear = true;
+            }
+        }
+        
+        dbg!(do_clear);
+            
+        if do_clear {
+            flags &= !(libc::IFF_PROMISC as u32);
+            if let Err(e) = nethuns_ioctl_if(
+                devname,
+                SocketConfigurationFlag::SIOCSIFFLAGS,
+                flags,
+            ) {
+                return Err(format!(
+                    "[__nethuns_clear_if_promisc] nethuns_ioctl_if failed: {e}"
+                ));
+            }
+            eprintln!("device {:?} promisc mode unset", devname);
+        }
+    };
+    
+    Ok(())
+}
+
+
+///
 fn nethuns_ioctl_if(
     devname: &CStr,
     what: SocketConfigurationFlag,
@@ -94,18 +137,15 @@ fn nethuns_ioctl_if(
         ifr.ifr_ifru.ifru_flags = flags as i16;
     }
     
-    let ret = unsafe {
-        libc::ioctl(
-            socket.as_raw_fd(),
-            what.as_(),
-            &ifr,
-        )
-    };
+    let ret = unsafe { libc::ioctl(socket.as_raw_fd(), what.as_(), &ifr) };
     
     if ret < 0 {
         return Err(format!(
             "[nethuns_ioctl_if] ioctl({:?}, {:?}, {:?}) failed with errno {}",
-            socket, what, ifr, errno::errno()
+            socket,
+            what,
+            ifr,
+            errno::errno()
         ));
     }
     
@@ -140,7 +180,13 @@ mod test {
     
     #[test]
     fn test_socket_configuration_flag() {
-        assert_eq!(SocketConfigurationFlag::SIOCGIFFLAGS.as_(), libc::SIOCGIFFLAGS);
-        assert_eq!(SocketConfigurationFlag::SIOCSIFFLAGS.as_(), libc::SIOCSIFFLAGS);
+        assert_eq!(
+            SocketConfigurationFlag::SIOCGIFFLAGS.as_(),
+            libc::SIOCGIFFLAGS
+        );
+        assert_eq!(
+            SocketConfigurationFlag::SIOCSIFFLAGS.as_(),
+            libc::SIOCSIFFLAGS
+        );
     }
 }

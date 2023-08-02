@@ -26,6 +26,7 @@ impl NmPortDescriptor {
     
     /// open an initialized port descriptor
     pub fn open_desc(&mut self) -> Result<(), String> {
+        assert!(!self.nmport_d.is_null());
         match unsafe { nmport_open_desc(self.nmport_d) } {
             -1 => Err(format!("{}", errno::errno())),
             0 => Ok(()),

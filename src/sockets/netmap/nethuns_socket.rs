@@ -6,7 +6,7 @@ use c_netmap_wrapper::nmport::NmPortDescriptor;
 use c_netmap_wrapper::ring::NetmapRing;
 
 use crate::api::nethuns_dev_queue_name;
-use crate::nethuns::__nethuns_set_if_promisc;
+use crate::nethuns::{__nethuns_clear_if_promisc, __nethuns_set_if_promisc};
 use crate::sockets::base::NethunsSocketBase;
 use crate::sockets::errors::{NethunsBindError, NethunsOpenError};
 use crate::sockets::ring::{nethuns_lpow2, NethunsRing};
@@ -65,7 +65,7 @@ impl NethunsSocket for NethunsSocketNetmap {
                 .map_err(NethunsOpenError::AllocationError)?,
             );
         }
-
+        
         // set a single consumer by default
         base.opt = opt;
 
@@ -172,6 +172,7 @@ impl NethunsSocket for NethunsSocketNetmap {
 
         // Initialize some_ring
         let some_ring = NetmapRing::try_new(unsafe {
+            assert!(!nm_port_d.nifp.is_null());
             netmap_rxring(
                 nm_port_d.nifp,
                 if self.rx() {
@@ -186,7 +187,7 @@ impl NethunsSocket for NethunsSocketNetmap {
                 "failed to initialize some_ring: {e}"
             ))
         })?;
-        
+
         // Initialize free_ring and free_mask
         let extra_bufs = nethuns_lpow2(nm_port_d.reg.nr_extra_bufs as usize);
         self.free_ring = vec![0; extra_bufs];
@@ -250,32 +251,48 @@ impl NethunsSocket for NethunsSocketNetmap {
 
 impl Drop for NethunsSocketNetmap {
     fn drop(&mut self) {
-        todo!();
+        // FIXME check if return here is correct/safe
+        let nmport_d = match &mut self.p {
+            Some(p) => p,
+            None => return,
+        };
+        let some_ring = match &mut self.some_ring {
+            Some(r) => r,
+            None => return,
+        };
 
-        // if self.base.opt.promisc {
-        //     //__nethuns_clear_if_promisc(s, b->devname);
-        //     todo!();
-        // }
+        // Clear promisc mode of interface if previously set
+        if self.base.opt.promisc {
+            if let Err(e) = __nethuns_clear_if_promisc(&self.base.devname) {
+                eprintln!("[NethunsSocketNetmap::Drop] couldn't clear promisc mode: {e}");
+            }
+        }
 
-        // if let None = &self.p {
-        //     return; // TODO
-        // }
+        if let Some(ring) = &self.base.tx_ring {
+            for i in 0..ring.size {
+                let slot = ring.get_slot(i);
+                let idx = slot.pkthdr.buf_idx;
+                let next = netmap_buf(some_ring, idx as usize) as *mut u32;
+                assert!(!next.is_null());
+                unsafe {
+                    *next = (*nmport_d.nifp).ni_bufs_head;
+                    (*nmport_d.nifp).ni_bufs_head = idx;
+                };
+            }
+        }
 
-        // let nifp = &self.p.as_ref().unwrap().d.nifp;
+        while self.free_head != self.free_tail {
+            let idx =
+                self.free_ring[(self.free_head & self.free_mask) as usize];
+            let next = netmap_buf(some_ring, idx as usize) as *mut u32;
+            assert!(!next.is_null());
+                unsafe {
+                    *next = (*nmport_d.nifp).ni_bufs_head;
+                    (*nmport_d.nifp).ni_bufs_head = idx;
+                };
 
-        // if self.tx {
-        //     if let Some(ring) = &self.base.tx_ring {
-        //         for i in 0..ring.size {
-        //             let slot = ring.get_slot(i);
-        //             let idx = slot.pkthdr.buf_idx;
-        //             let next =
-        //                 netmap_buf(&self.some_ring, idx as usize) as *const
-        // u32;             unsafe {
-        //                 // *next = (*nifp).
-        //             }
-        //         }
-        //     }
-        // }
+            self.free_head += 1;
+        }
     }
 }
 
