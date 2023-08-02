@@ -7,6 +7,7 @@ use self::errors::{NethunsBindError, NethunsOpenError};
 pub mod base;
 pub mod errors;
 pub mod ring;
+pub mod ring_slot;
 pub mod types;
 
 

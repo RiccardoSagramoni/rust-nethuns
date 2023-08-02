@@ -1,10 +1,10 @@
 use std::mem;
 
-use crate::sockets::base::NethunsRingSlot;
+use super::ring_slot::NethunsRingSlot;
 
 
 #[repr(C)]
-#[derive(Debug, PartialEq, PartialOrd)] // TODO impl Drop trait
+#[derive(Debug, PartialEq, PartialOrd)]
 pub struct NethunsRing {
     pub size: usize,
     pub pktsize: usize,
@@ -12,8 +12,8 @@ pub struct NethunsRing {
     pub head: u64,
     pub tail: u64,
     
-    pub mask: usize,  // TODO unnecessary?
-    pub shift: usize, // TODO unnecessary?
+    pub mask: usize,
+    pub shift: usize,
     
     pub ring: *mut NethunsRingSlot,
 }
@@ -22,7 +22,10 @@ pub struct NethunsRing {
 impl NethunsRing {
     /// Equivalent to nethuns_make_ring
     #[inline(always)]
-    pub fn try_new(nslots: usize, pktsize: usize) -> Result<NethunsRing, String> {
+    pub fn try_new(
+        nslots: usize,
+        pktsize: usize,
+    ) -> Result<NethunsRing, String> {
         let ns = nethuns_lpow2(nslots);
         let ss = nethuns_lpow2(mem::size_of::<NethunsRingSlot>() + pktsize);
         
@@ -30,7 +33,9 @@ impl NethunsRing {
             unsafe { libc::calloc(1, ns * ss) as *mut NethunsRingSlot };
         
         if ring_ptr.is_null() {
-            return Err("[NethunsRing::try_new] failed to allocate ring".to_owned());
+            return Err(
+                "[NethunsRing::try_new] failed to allocate ring".to_owned()
+            );
         }
         
         Ok(NethunsRing {
@@ -46,7 +51,7 @@ impl NethunsRing {
     
     /// Equivalent to nethuns_get_slot
     #[inline(always)]
-    pub fn get_slot(self: &mut NethunsRing, n: usize) -> &mut NethunsRingSlot {
+    pub fn get_slot(self: &NethunsRing, n: usize) -> &mut NethunsRingSlot {
         assert!(!self.ring.is_null());
         
         unsafe {
@@ -56,6 +61,7 @@ impl NethunsRing {
         }
     }
 }
+
 
 impl Drop for NethunsRing {
     fn drop(&mut self) {
@@ -75,7 +81,7 @@ impl Drop for NethunsRing {
 #[inline(always)]
 pub fn nethuns_lpow2(x: usize) -> usize {
     if x == 0 {
-        0 // TODO is it ok?
+        0 // FIXME is it ok?
     } else if (x & (x - 1)) == 0 {
         x
     } else {

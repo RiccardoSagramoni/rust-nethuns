@@ -69,6 +69,12 @@ pub fn __nethuns_set_if_promisc(devname: &CString) -> Result<(), String> {
 
 
 ///
+pub fn __nethuns_clear_if_promisc(devname: &CString) -> Result<(), String> {
+    todo!();
+}
+
+
+///
 fn nethuns_ioctl_if(
     devname: &CStr,
     what: SocketConfigurationFlag,
@@ -94,18 +100,15 @@ fn nethuns_ioctl_if(
         ifr.ifr_ifru.ifru_flags = flags as i16;
     }
     
-    let ret = unsafe {
-        libc::ioctl(
-            socket.as_raw_fd(),
-            what.as_(),
-            &ifr,
-        )
-    };
+    let ret = unsafe { libc::ioctl(socket.as_raw_fd(), what.as_(), &ifr) };
     
     if ret < 0 {
         return Err(format!(
             "[nethuns_ioctl_if] ioctl({:?}, {:?}, {:?}) failed with errno {}",
-            socket, what, ifr, errno::errno()
+            socket,
+            what,
+            ifr,
+            errno::errno()
         ));
     }
     
@@ -140,7 +143,13 @@ mod test {
     
     #[test]
     fn test_socket_configuration_flag() {
-        assert_eq!(SocketConfigurationFlag::SIOCGIFFLAGS.as_(), libc::SIOCGIFFLAGS);
-        assert_eq!(SocketConfigurationFlag::SIOCSIFFLAGS.as_(), libc::SIOCSIFFLAGS);
+        assert_eq!(
+            SocketConfigurationFlag::SIOCGIFFLAGS.as_(),
+            libc::SIOCGIFFLAGS
+        );
+        assert_eq!(
+            SocketConfigurationFlag::SIOCSIFFLAGS.as_(),
+            libc::SIOCSIFFLAGS
+        );
     }
 }
