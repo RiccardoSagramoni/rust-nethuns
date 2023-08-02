@@ -1,0 +1,18 @@
+[package]
+name = "c_netmap_wrapper"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+errno = "0.3.1"
+libc = "0.2.147"
+thiserror = "1.0.44"
+
+[build-dependencies]
+bindgen = { version = "0.66.1", features = ["experimental"] }
+cfg-if = "1.0.0"
+regex = "1.7.0"
+
+[dev-dependencies]
