@@ -1,4 +1,3 @@
-use c_netmap_wrapper::bindings::netmap_ring;
 use std::ffi::CString;
 use std::{thread, time};
 
@@ -19,7 +18,7 @@ use crate::types::{NethunsQueue, NethunsSocketMode, NethunsSocketOptions};
 pub struct NethunsSocketNetmap {
     base: NethunsSocketBase,
     p: Option<NmPortDescriptor>,
-    some_ring: Option<NetmapRing>, // ? chiedere a Lettieri
+    some_ring: Option<NetmapRing>, // ? chiedere a Lettieri a che cosa serve
     free_ring: Vec<u32>,
     free_mask: u64,
     free_head: u64,
@@ -53,7 +52,7 @@ impl NethunsSocket for NethunsSocketNetmap {
                     (opt.numblocks * opt.numpackets) as usize,
                     opt.packetsize as usize,
                 )
-                .map_err(|e| NethunsOpenError::AllocationError(e))?,
+                .map_err(NethunsOpenError::AllocationError)?,
             );
         }
 
@@ -63,7 +62,7 @@ impl NethunsSocket for NethunsSocketNetmap {
                     (opt.numblocks * opt.numpackets) as usize,
                     opt.packetsize as usize,
                 )
-                .map_err(|e| NethunsOpenError::AllocationError(e))?,
+                .map_err(NethunsOpenError::AllocationError)?,
             );
         }
 
