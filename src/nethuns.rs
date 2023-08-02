@@ -74,12 +74,11 @@ fn nethuns_ioctl_if(
     what: SocketConfigurationFlag,
     flags: u32,
 ) -> Result<u32, String> {
-    // let socket =
-    //     net::socket(net::AddressFamily::INET, net::SocketType::DGRAM, None)
-    //         .map_err(|e| {
-    //             format!("[nethuns_ioctl_if] could not open socket: {e}")
-    //         })?;
-    let socket = unsafe { libc::socket(libc::AF_INET, libc::SOCK_DGRAM, 0) };
+    let socket =
+        net::socket(net::AddressFamily::INET, net::SocketType::DGRAM, None)
+            .map_err(|e| {
+                format!("[nethuns_ioctl_if] could not open socket: {e}")
+            })?;
     
     let mut ifr: libc::ifreq = unsafe { mem::zeroed() };
     devname
@@ -92,35 +91,21 @@ fn nethuns_ioctl_if(
         });
     
     if what == SocketConfigurationFlag::SIOCSIFFLAGS {
-        panic!("CIAO");
         ifr.ifr_ifru.ifru_flags = flags as i16;
     }
-
-    let x = &ifr as *const libc::ifreq as usize;
-
-    // let ret = unsafe {
-    //     libc::ioctl(
-    //         socket,
-    //         what as u64,
-    //         &ifr as *const libc::ifreq,
-    //     )
-    // };
     
-    // let ret = unsafe { ioctls::siocgifflags(socket) };
+    let ret = unsafe {
+        libc::ioctl(
+            socket.as_raw_fd(),
+            what.as_(),
+            &ifr,
+        )
+    };
     
-    let ret = unsafe { ioctl_rs::ioctl(socket, ioctl_rs::SIOCGIFFLAGS, &ifr) };
-    
-    unsafe { libc::close(socket) };
-
     if ret < 0 {
-        // FIXME nethuns_perror(nethuns_socket(s)->errbuf, "ioctl");
-        eprintln!("{}", errno::errno());
-
-        std::process::exit(1);
-
         return Err(format!(
-            "[nethuns_ioctl_if] ioctl({:?}, {:?}, {:?}) failed",
-            socket, what, ifr
+            "[nethuns_ioctl_if] ioctl({:?}, {:?}, {:?}) failed with errno {}",
+            socket, what, ifr, errno::errno()
         ));
     }
     
@@ -144,5 +129,18 @@ impl AsPrimitive<u64> for SocketConfigurationFlag {
             Self::SIOCGIFFLAGS => libc::SIOCGIFFLAGS,
             Self::SIOCSIFFLAGS => libc::SIOCSIFFLAGS,
         }
+    }
+}
+
+
+#[cfg(test)]
+mod test {
+    use super::SocketConfigurationFlag;
+    use num_traits::AsPrimitive;
+    
+    #[test]
+    fn test_socket_configuration_flag() {
+        assert_eq!(SocketConfigurationFlag::SIOCGIFFLAGS.as_(), libc::SIOCGIFFLAGS);
+        assert_eq!(SocketConfigurationFlag::SIOCSIFFLAGS.as_(), libc::SIOCSIFFLAGS);
     }
 }
