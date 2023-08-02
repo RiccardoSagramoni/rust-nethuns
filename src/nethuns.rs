@@ -10,6 +10,7 @@ use crate::global::{NethunsNetInfo, NETHUNS_GLOBAL};
 
 ///
 pub fn __nethuns_set_if_promisc(devname: &CString) -> Result<(), String> {
+    // Get the active flag word of the device.
     let mut flags =
         nethuns_ioctl_if(devname, SocketConfigurationFlag::SIOCGIFFLAGS, 0)
             .map_err(|e| {
@@ -73,11 +74,12 @@ fn nethuns_ioctl_if(
     what: SocketConfigurationFlag,
     flags: u32,
 ) -> Result<u32, String> {
-    let socket =
-        net::socket(net::AddressFamily::INET, net::SocketType::DGRAM, None)
-            .map_err(|e| {
-                format!("[nethuns_ioctl_if] could not open socket: {e}")
-            })?;
+    // let socket =
+    //     net::socket(net::AddressFamily::INET, net::SocketType::DGRAM, None)
+    //         .map_err(|e| {
+    //             format!("[nethuns_ioctl_if] could not open socket: {e}")
+    //         })?;
+    let socket = unsafe { libc::socket(libc::AF_INET, libc::SOCK_DGRAM, 0) };
     
     let mut ifr: libc::ifreq = unsafe { mem::zeroed() };
     devname
@@ -90,18 +92,32 @@ fn nethuns_ioctl_if(
         });
     
     if what == SocketConfigurationFlag::SIOCSIFFLAGS {
+        panic!("CIAO");
         ifr.ifr_ifru.ifru_flags = flags as i16;
     }
+
+    let x = &ifr as *const libc::ifreq as usize;
+
+    // let ret = unsafe {
+    //     libc::ioctl(
+    //         socket,
+    //         what as u64,
+    //         &ifr as *const libc::ifreq,
+    //     )
+    // };
     
-    let ret = unsafe {
-        libc::ioctl(
-            socket.as_raw_fd(),
-            what as u64,
-            &ifr as *const libc::ifreq as *const libc::c_void,
-        )
-    };
+    // let ret = unsafe { ioctls::siocgifflags(socket) };
+    
+    let ret = unsafe { ioctl_rs::ioctl(socket, ioctl_rs::SIOCGIFFLAGS, &ifr) };
+    
+    unsafe { libc::close(socket) };
+
     if ret < 0 {
         // FIXME nethuns_perror(nethuns_socket(s)->errbuf, "ioctl");
+        eprintln!("{}", errno::errno());
+
+        std::process::exit(1);
+
         return Err(format!(
             "[nethuns_ioctl_if] ioctl({:?}, {:?}, {:?}) failed",
             socket, what, ifr

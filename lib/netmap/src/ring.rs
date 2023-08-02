@@ -1,3 +1,5 @@
+use std::ops::{Deref, DerefMut};
+
 use crate::bindings::netmap_ring;
 
 /// Safe wrapper for `netmap_ring` structure from the C library.
@@ -21,16 +23,34 @@ use crate::bindings::netmap_ring;
 ///     struct netmap_slot slot[0]; /* array of slots                */
 ///     }
 /// ```
-#[derive(Debug, Default)]
+#[derive(Debug)]
 pub struct NetmapRing {
-    pub r: Box<netmap_ring>,
+    pub r: *mut netmap_ring,
 }
 
 impl NetmapRing {
-    pub unsafe fn from_raw(ptr: *mut netmap_ring) -> Self {
-        assert!(!ptr.is_null());
-        Self {
-            r: unsafe { Box::from_raw(ptr) },
+    pub fn try_new(ptr: *mut netmap_ring) -> Result<Self, ()> {
+        if ptr.is_null() {
+            return Err(());
         }
+        Ok(Self {
+            r: ptr,
+        })
+    }
+}
+
+impl Deref for NetmapRing {
+    type Target = netmap_ring;
+    
+    fn deref(&self) -> &Self::Target {
+        assert!(!self.r.is_null());
+        unsafe { &*self.r }
+    }
+}
+
+impl DerefMut for NetmapRing {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        assert!(!self.r.is_null());
+        unsafe { &mut *self.r }
     }
 }

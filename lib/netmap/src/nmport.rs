@@ -1,10 +1,10 @@
-use std::ffi::CString;
+use std::{ffi::CString, ops::{DerefMut, Deref}};
 
-use crate::bindings::{nmport_d, nmport_open_desc, nmport_prepare};
+use crate::bindings::{nmport_d, nmport_open_desc, nmport_prepare, nmport_close};
 
-#[derive(Debug, Default, PartialEq, PartialOrd)]
+#[derive(Debug)]
 pub struct NmPortDescriptor {
-    pub d: Box<nmport_d>,
+    pub d: *mut nmport_d,
 }
 
 impl NmPortDescriptor {
@@ -20,15 +20,13 @@ impl NmPortDescriptor {
             ));
         }
         
-        Ok(Self {
-            d: unsafe { Box::from_raw(d) },
-        })
+        Ok(Self { d })
     }
     
     
     /// open an initialized port descriptor
     pub fn open_desc(&mut self) -> Result<(), String> {
-        match unsafe { nmport_open_desc(self.d.as_mut()) } {
+        match unsafe { nmport_open_desc(self.d) } {
             -1 => Err(format!("{}", errno::errno())),
             0 => Ok(()),
             ret => {
@@ -38,8 +36,26 @@ impl NmPortDescriptor {
     }
 }
 
-// impl Drop for NmPortDescriptor {
-//     fn drop(&mut self) {
-//         todo!(); // TODO NmPortDescriptor drop()
-//     }
-// }
+impl Deref for NmPortDescriptor {
+    type Target = nmport_d;
+    
+    fn deref(&self) -> &Self::Target {
+        assert!(!self.d.is_null());
+        unsafe { &*self.d }
+    }
+}
+
+impl DerefMut for NmPortDescriptor {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        assert!(!self.d.is_null());
+        unsafe { &mut *self.d }
+    }
+}
+
+impl Drop for NmPortDescriptor {
+    fn drop(&mut self) {
+        if !self.d.is_null() {
+            unsafe { nmport_close(self.d) };
+        }
+    }
+}
