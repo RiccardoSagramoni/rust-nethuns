@@ -1,15 +1,13 @@
-// TODO check safety of raw pointers
-
-use std::mem;
 use crate::bindings::{netmap_if, netmap_ring};
+
 
 /// Equivalent to __NETMAP_OFFSET
 /// ((type)(void *)((char *)(ptr) + (offset)))
 macro_rules! __netmap_offset {
     ($type: ident, $ptr: expr, $off: expr) => {
         unsafe {
-            ($ptr as *const libc::c_char).add($off as usize)
-                as *const _ as *mut $type
+            ($ptr as *const libc::c_char).add($off as usize) as *const _
+                as *mut $type
         }
     };
 }
@@ -43,16 +41,11 @@ pub unsafe fn netmap_rxring(
     assert!(!nifp.is_null());
     
     let offset = unsafe {
-        let x = &(*nifp).ring_ofs;
-        let p = x.as_ptr();
-
-        let ptr = p
+        let ptr = (*nifp).ring_ofs
+            .as_ptr()
             .add(index)
             .add((*nifp).ni_tx_rings as usize)
             .add((*nifp).ni_host_tx_rings as usize);
-
-        let w = (p as *const libc::c_char as usize) + 2 * mem::size_of::<isize>();
-
         *ptr
     };
     __netmap_offset!(netmap_ring, nifp, offset)

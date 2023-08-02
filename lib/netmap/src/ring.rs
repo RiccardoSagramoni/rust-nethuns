@@ -25,16 +25,16 @@ use crate::bindings::netmap_ring;
 /// ```
 #[derive(Debug)]
 pub struct NetmapRing {
-    pub r: *mut netmap_ring,
+    netmap_ring: *mut netmap_ring,
 }
 
 impl NetmapRing {
-    pub fn try_new(ptr: *mut netmap_ring) -> Result<Self, ()> {
+    pub fn try_new(ptr: *mut netmap_ring) -> Result<Self, String> {
         if ptr.is_null() {
-            return Err(());
+            return Err("[NetmapRing::try_new()] ptr is null".to_owned());
         }
         Ok(Self {
-            r: ptr,
+            netmap_ring: ptr,
         })
     }
 }
@@ -43,14 +43,14 @@ impl Deref for NetmapRing {
     type Target = netmap_ring;
     
     fn deref(&self) -> &Self::Target {
-        assert!(!self.r.is_null());
-        unsafe { &*self.r }
+        assert!(!self.netmap_ring.is_null());
+        unsafe { &*self.netmap_ring }
     }
 }
 
 impl DerefMut for NetmapRing {
     fn deref_mut(&mut self) -> &mut Self::Target {
-        assert!(!self.r.is_null());
-        unsafe { &mut *self.r }
+        assert!(!self.netmap_ring.is_null());
+        unsafe { &mut *self.netmap_ring }
     }
 }

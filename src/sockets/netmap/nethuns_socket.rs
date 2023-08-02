@@ -189,7 +189,7 @@ impl NethunsSocket for NethunsSocketNetmap {
         
         // Initialize free_ring and free_mask
         let extra_bufs =
-            nethuns_lpow2(unsafe { (*nm_port_d.d).reg.nr_extra_bufs as usize }); // fixme
+            nethuns_lpow2(nm_port_d.reg.nr_extra_bufs as usize);
         self.free_ring = vec![0; extra_bufs];
         self.free_mask = (extra_bufs - 1) as u64;
         

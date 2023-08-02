@@ -4,7 +4,7 @@ use crate::bindings::{nmport_d, nmport_open_desc, nmport_prepare, nmport_close};
 
 #[derive(Debug)]
 pub struct NmPortDescriptor {
-    pub d: *mut nmport_d,
+    nmport_d: *mut nmport_d,
 }
 
 impl NmPortDescriptor {
@@ -20,13 +20,13 @@ impl NmPortDescriptor {
             ));
         }
         
-        Ok(Self { d })
+        Ok(Self { nmport_d: d })
     }
     
     
     /// open an initialized port descriptor
     pub fn open_desc(&mut self) -> Result<(), String> {
-        match unsafe { nmport_open_desc(self.d) } {
+        match unsafe { nmport_open_desc(self.nmport_d) } {
             -1 => Err(format!("{}", errno::errno())),
             0 => Ok(()),
             ret => {
@@ -40,22 +40,22 @@ impl Deref for NmPortDescriptor {
     type Target = nmport_d;
     
     fn deref(&self) -> &Self::Target {
-        assert!(!self.d.is_null());
-        unsafe { &*self.d }
+        assert!(!self.nmport_d.is_null());
+        unsafe { &*self.nmport_d }
     }
 }
 
 impl DerefMut for NmPortDescriptor {
     fn deref_mut(&mut self) -> &mut Self::Target {
-        assert!(!self.d.is_null());
-        unsafe { &mut *self.d }
+        assert!(!self.nmport_d.is_null());
+        unsafe { &mut *self.nmport_d }
     }
 }
 
 impl Drop for NmPortDescriptor {
     fn drop(&mut self) {
-        if !self.d.is_null() {
-            unsafe { nmport_close(self.d) };
+        if !self.nmport_d.is_null() {
+            unsafe { nmport_close(self.nmport_d) };
         }
     }
 }
