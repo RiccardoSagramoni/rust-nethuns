@@ -16,5 +16,5 @@ fn main() {
         ..Default::default()
     };
     let mut socket = NethunsSocketFactory::try_new_nethuns_socket(opt).unwrap();
-    socket.bind("vi1", NethunsQueue::Any).unwrap();
+    socket.bind("vi0", NethunsQueue::Any).unwrap();
 }

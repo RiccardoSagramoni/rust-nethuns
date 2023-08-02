@@ -70,7 +70,44 @@ pub fn __nethuns_set_if_promisc(devname: &CString) -> Result<(), String> {
 
 ///
 pub fn __nethuns_clear_if_promisc(devname: &CString) -> Result<(), String> {
-    todo!();
+    // Get the active flag word of the device.
+    let mut flags =
+        nethuns_ioctl_if(devname, SocketConfigurationFlag::SIOCGIFFLAGS, 0)
+            .map_err(|e| {
+                format!(
+                    "[__nethuns_set_if_promisc] nethuns_ioctl_if failed: {e}"
+                )
+            })?;
+    
+    
+    if let Ok(mut mutex_guard) = NETHUNS_GLOBAL.lock() {
+        let mut do_clear = false;
+        
+        if let Some(info) = mutex_guard.get_mut(devname) {
+            info.promisc_refcnt -= 1;
+            if info.promisc_refcnt <= 0 {
+                do_clear = true;
+            }
+        }
+        
+        dbg!(do_clear);
+            
+        if do_clear {
+            flags &= !(libc::IFF_PROMISC as u32);
+            if let Err(e) = nethuns_ioctl_if(
+                devname,
+                SocketConfigurationFlag::SIOCSIFFLAGS,
+                flags,
+            ) {
+                return Err(format!(
+                    "[__nethuns_clear_if_promisc] nethuns_ioctl_if failed: {e}"
+                ));
+            }
+            eprintln!("device {:?} promisc mode unset", devname);
+        }
+    };
+    
+    Ok(())
 }
 
 
