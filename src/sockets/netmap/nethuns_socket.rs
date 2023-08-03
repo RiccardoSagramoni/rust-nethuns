@@ -18,7 +18,7 @@ use crate::types::{NethunsQueue, NethunsSocketMode, NethunsSocketOptions};
 pub struct NethunsSocketNetmap {
     base: NethunsSocketBase,
     p: Option<NmPortDescriptor>,
-    some_ring: Option<NetmapRing>, // ? chiedere a Lettieri a che cosa serve
+    some_ring: Option<NetmapRing>, // ? chiedere a Lettieri a che cosa serve some_ring
     free_ring: Vec<u32>,
     free_mask: u64,
     free_head: u64,
@@ -55,7 +55,7 @@ impl NethunsSocket for NethunsSocketNetmap {
                 .map_err(NethunsOpenError::AllocationError)?,
             );
         }
-
+        
         if tx {
             base.tx_ring = Some(
                 NethunsRing::try_new(
@@ -246,6 +246,30 @@ impl NethunsSocket for NethunsSocketNetmap {
         thread::sleep(time::Duration::from_secs(2));
         Ok(())
     }
+    
+    
+    ///
+    fn recv(&self) -> Result<(), String> { // FIXME return tuple with pkthds, payload and pkt id
+        
+        let caplen = self.base.opt.packetsize;
+        
+        let rx_ring = match &self.base.rx_ring {
+            Some(r) => r,
+            None => todo!(), // TODO error (socket not in send mode)
+        };
+        
+        let slot = rx_ring.get_slot(rx_ring.head as usize);
+        // slot.inuse.fetch_add(val, order);
+        
+        todo!()
+    }
+    
+    
+    ///
+    fn get_socket_base(&mut self) -> &mut NethunsSocketBase {
+        &mut self.base
+    }
+    
 }
 
 
@@ -295,6 +319,7 @@ impl Drop for NethunsSocketNetmap {
         }
     }
 }
+
 
 impl NethunsSocketNetmap {
     fn tx(&self) -> bool {
