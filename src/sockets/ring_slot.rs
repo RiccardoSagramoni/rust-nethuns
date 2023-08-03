@@ -1,14 +1,16 @@
+use std::sync::atomic::AtomicBool;
+
 use super::Pkthdr;
 
 #[derive(Debug, Default)]
 pub struct NethunsRingSlot {
     pub pkthdr: Pkthdr, // FIXME is it ok?
     pub id: u64,
+    pub inuse: AtomicBool,
     pub len: i32,
     
     pub packet: Vec<libc::c_uchar>,
 }
-// field inuse removed: use Mutex or RxLock instead
 
 
 impl NethunsRingSlot {

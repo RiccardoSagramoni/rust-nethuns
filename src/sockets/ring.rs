@@ -1,5 +1,7 @@
 use std::mem;
-use std::sync::Mutex;
+use std::sync::{atomic, Arc, Mutex};
+
+use crate::NethunsSocket;
 
 use super::ring_slot::NethunsRingSlot;
 
@@ -13,7 +15,7 @@ pub struct NethunsRing {
     pub head: u64,
     pub tail: u64,
     
-    ring: Vec<Mutex<NethunsRingSlot>>,
+    ring: Vec<NethunsRingSlot>,
 }
 
 
@@ -26,9 +28,7 @@ impl NethunsRing {
     ) -> Result<NethunsRing, String> {
         let mut rings = Vec::with_capacity(nslots);
         for i in 0..nslots {
-            rings.push(Mutex::new(NethunsRingSlot::default_with_packet_size(
-                pktsize,
-            )));
+            rings.push(NethunsRingSlot::default_with_packet_size(pktsize));
         }
         
         Ok(NethunsRing {
@@ -40,31 +40,49 @@ impl NethunsRing {
         })
     }
     
+    
     /// Equivalent to nethuns_get_slot
     #[inline(always)]
-    pub fn get_slot(
-        self: &NethunsRing,
-        n: usize,
-    ) -> &Mutex<NethunsRingSlot> {
+    pub fn get_slot(self: &NethunsRing, n: usize) -> &NethunsRingSlot {
         let n = n % self.ring.len();
         &(self.ring[n])
     }
+    
     
     /// Equivalent to nethuns_get_slot
     #[inline(always)]
     pub fn get_slot_mut(
         self: &mut NethunsRing,
         n: usize,
-    ) -> &mut Mutex<NethunsRingSlot> {
+    ) -> &mut NethunsRingSlot {
         let n = n % self.ring.len();
         &mut (self.ring[n])
+    }
+    
+    
+    ///
+    #[inline(always)]
+    pub fn free_slots(&mut self, socket: &mut impl NethunsSocket) {
+        while self.tail != self.head
+            && !self
+                .get_slot(self.tail as usize)
+                .inuse
+                .load(atomic::Ordering::Acquire)
+        {
+            socket.nethuns_blocks_free(
+                self.get_slot(self.tail as usize),
+                self.get_slot(self.tail as usize).id,
+            );
+            self.tail += 1;
+        }
     }
 }
 
 
 /// Compute the closest power of 2 larger or equal than x
 #[inline(always)]
-pub fn nethuns_lpow2(x: usize) -> usize { // TODO move to another module?
+pub fn nethuns_lpow2(x: usize) -> usize {
+    // TODO move to another module?
     if x == 0 {
         0 // FIXME is it ok?
     } else if (x & (x - 1)) == 0 {

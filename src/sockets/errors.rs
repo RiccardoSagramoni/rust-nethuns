@@ -23,13 +23,15 @@ pub enum NethunsBindError {
 #[derive(Clone, Debug, Error)]
 pub enum NethunsRecvError {
     #[error("[recv] you must execute bind(...) before using the socket")]
-    SocketNonBinded,
+    NonBinded,
     #[error("[recv] socket not in RX mode")]
-    SocketNotRx,
-    #[error("[recv] unable to acquire lock: {0}")]
-    LockAcquisitionError(String),
+    NotRx,
+    #[error("[recv] socket in use by another thread")]
+    InUse,
     #[error("[recv] no packets have been received")]
     NoPacketsAvailable,
+    #[error("[recv] filtered")] // TODO improve
+    Filtered,
     #[error("[bind] unexpected error: {0}")]
     NethunsError(String),
 }
