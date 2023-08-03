@@ -16,9 +16,10 @@ use crate::sockets::errors::{
     NethunsBindError, NethunsOpenError, NethunsRecvError,
 };
 use crate::sockets::netmap::ring::non_empty_rx_ring;
-use crate::sockets::ring::{nethuns_lpow2, NethunsRing};
+use crate::sockets::ring::{
+    nethuns_lpow2, nethuns_ring_free_slots, NethunsRing,
+};
 use crate::sockets::NethunsSocket;
-use crate::sockets::ring_slot::NethunsRingSlot;
 use crate::types::{NethunsQueue, NethunsSocketMode, NethunsSocketOptions};
 
 use super::Pkthdr;
@@ -271,22 +272,19 @@ impl NethunsSocket for NethunsSocketNetmap {
         };
         
         let caplen = self.base.opt.packetsize;
-        let mut slot = rx_ring.get_slot_mut(rx_ring.head as usize);
-        if slot.inuse.load(atomic::Ordering::Acquire) {
+        if rx_ring.get_slot_mut(rx_ring.head as usize).inuse.load(atomic::Ordering::Acquire) {
             return Err(NethunsRecvError::InUse);
         }
         
         if self.free_head == self.free_tail {
             // $$ unlikely
-            // nethuns_ring_free_slots
-            todo!();
+            nethuns_ring_free_slots!(self, rx_ring, nethuns_blocks_free);
             if self.free_head == self.free_tail {
-                // return Err(??): check docs
-                todo!();
+                return Err(NethunsRecvError::NethunsError("".to_owned())); // TODO better error
             }
         }
         
-        let mut ring = match non_empty_rx_ring(nmport_d) {
+        let mut netmap_ring = match non_empty_rx_ring(nmport_d) {
             Ok(r) => r,
             Err(_) => {
                 unsafe { libc::ioctl(nmport_d.fd, NIOCRXSYNC) };
@@ -294,14 +292,15 @@ impl NethunsSocket for NethunsSocketNetmap {
             }
         };
         
-        let i = ring.cur;
-        let mut cur_netmap_slot = ring
+        let i = netmap_ring.cur;
+        let mut cur_netmap_slot = netmap_ring
             .get_slot(i as usize)
             .map_err(|e| NethunsRecvError::NethunsError(e))?;
         let idx = cur_netmap_slot.buf_idx;
-        let pkt = netmap_buf(&ring, idx as usize) as *const u8;
+        let pkt = netmap_buf(&netmap_ring, idx as usize) as *const u8;
         
-        slot.pkthdr.ts = ring.ts;
+        let slot = rx_ring.get_slot_mut(rx_ring.head as usize);
+        slot.pkthdr.ts = netmap_ring.ts;
         slot.pkthdr.caplen = cur_netmap_slot.len as u32;
         slot.pkthdr.len = cur_netmap_slot.len as u32;
         
@@ -310,8 +309,8 @@ impl NethunsSocket for NethunsSocketNetmap {
         self.free_head += 1;
         cur_netmap_slot.flags |= NS_BUF_CHANGED as u16;
         
-        ring.cur = ring.nm_ring_next(i);
-        ring.head = ring.nm_ring_next(i);
+        netmap_ring.cur = netmap_ring.nm_ring_next(i);
+        netmap_ring.head = netmap_ring.nm_ring_next(i);
         
         if match &self.base.filter {
             None => true,
@@ -329,22 +328,15 @@ impl NethunsSocket for NethunsSocketNetmap {
             return Ok((head, pkthdr, pkt));
         }
         
-        // rx_ring.free_slots(self);
-        
+        nethuns_ring_free_slots!(self, rx_ring, nethuns_blocks_free);
         Err(NethunsRecvError::Filtered)
     }
     
     
     ///
+    #[inline(always)]
     fn get_socket_base(&mut self) -> &mut NethunsSocketBase {
         &mut self.base
-    }
-    
-    ///
-    fn nethuns_blocks_free(&mut self, slot: &NethunsRingSlot, _: u64) -> i32 {
-        self.free_ring[(self.free_tail & self.free_mask) as usize] = slot.pkthdr.buf_idx;
-        self.free_tail += 1;
-        return 0;
     }
 }
 
@@ -397,11 +389,23 @@ impl Drop for NethunsSocketNetmap {
 
 
 impl NethunsSocketNetmap {
+    #[inline(always)]
     fn tx(&self) -> bool {
         self.base.tx_ring.is_some()
     }
     
+    #[inline(always)]
     fn rx(&self) -> bool {
         self.base.rx_ring.is_some()
     }
 }
+
+
+macro_rules! nethuns_blocks_free {
+    ($s: expr, $slot: expr) => {
+        $s.free_ring[($s.free_tail & $s.free_mask) as usize] =
+            $slot.pkthdr.buf_idx;
+        $s.free_tail += 1;
+    };
+}
+pub(self) use nethuns_blocks_free;

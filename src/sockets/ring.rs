@@ -58,25 +58,20 @@ impl NethunsRing {
         let n = n % self.ring.len();
         &mut (self.ring[n])
     }
-    
-    
-    ///
-    #[inline(always)]
-    pub fn free_slots(&mut self, socket: &mut impl NethunsSocket) {
-        while self.tail != self.head
-            && !self
-                .get_slot(self.tail as usize)
-                .inuse
-                .load(atomic::Ordering::Acquire)
-        {
-            socket.nethuns_blocks_free(
-                self.get_slot(self.tail as usize),
-                self.get_slot(self.tail as usize).id,
-            );
-            self.tail += 1;
-        }
-    }
+
 }
+
+
+///
+macro_rules! nethuns_ring_free_slots {
+    ($s: expr, $ring: expr, $blocks_free: ident) => {
+        while $ring.tail != $ring.head && !$ring.get_slot($ring.tail as usize).inuse.load(atomic::Ordering::Acquire) {
+            $blocks_free!($s, $ring.get_slot($ring.tail as usize));
+            $ring.tail += 1;
+        }
+    };
+}
+pub(crate) use nethuns_ring_free_slots;
 
 
 /// Compute the closest power of 2 larger or equal than x

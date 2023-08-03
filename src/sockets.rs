@@ -46,7 +46,6 @@ pub trait NethunsSocket: Debug {
     
     //
     fn get_socket_base(&mut self) -> &mut NethunsSocketBase;
-    fn nethuns_blocks_free(&mut self, slot: &NethunsRingSlot, blockid: u64) -> i32;
 }
 
 
