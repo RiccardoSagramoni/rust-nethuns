@@ -8,7 +8,7 @@ use super::ring::NethunsRing;
 
 
 #[repr(C)] // FIXME: necessary?
-#[derive(Debug, Derivative, PartialEq, PartialOrd)]
+#[derive(Debug, Derivative)]
 #[derivative(Default)]
 pub struct NethunsSocketBase {
     #[derivative(Default(value = "[0; 512]"))]

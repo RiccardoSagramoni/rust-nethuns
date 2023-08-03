@@ -41,7 +41,7 @@ pub trait NethunsSocket: Debug {
         queue: NethunsQueue,
     ) -> Result<(), NethunsBindError>;
     
-    fn recv(&self) -> Result<(), String>; // FIXME better error type
+    fn recv(&mut self) -> Result<(), String>; // FIXME better error type
     
     fn get_socket_base(&mut self) -> &mut NethunsSocketBase;
 }

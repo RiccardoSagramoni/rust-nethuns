@@ -18,7 +18,8 @@ use crate::types::{NethunsQueue, NethunsSocketMode, NethunsSocketOptions};
 pub struct NethunsSocketNetmap {
     base: NethunsSocketBase,
     p: Option<NmPortDescriptor>,
-    some_ring: Option<NetmapRing>, // ? chiedere a Lettieri a che cosa serve some_ring
+    some_ring: Option<NetmapRing>, /* ? chiedere a Lettieri a che cosa serve
+                                    * some_ring */
     free_ring: Vec<u32>,
     free_mask: u64,
     free_head: u64,
@@ -55,7 +56,7 @@ impl NethunsSocket for NethunsSocketNetmap {
                 .map_err(NethunsOpenError::AllocationError)?,
             );
         }
-        
+
         if tx {
             base.tx_ring = Some(
                 NethunsRing::try_new(
@@ -65,7 +66,7 @@ impl NethunsSocket for NethunsSocketNetmap {
                 .map_err(NethunsOpenError::AllocationError)?,
             );
         }
-        
+
         // set a single consumer by default
         base.opt = opt;
 
@@ -200,7 +201,7 @@ impl NethunsSocket for NethunsSocketNetmap {
         if let Some(tx_ring) = &mut self.base.tx_ring {
             for i in 0..tx_ring.size {
                 let slot = tx_ring.get_slot(i);
-                slot.pkthdr.buf_idx = scan;
+                slot.lock().expect("failed to lock").pkthdr.buf_idx = scan;
                 scan = unsafe {
                     let ptr =
                         netmap_buf(&some_ring, scan as usize) as *const u32;
@@ -246,13 +247,14 @@ impl NethunsSocket for NethunsSocketNetmap {
         thread::sleep(time::Duration::from_secs(2));
         Ok(())
     }
-    
-    
+
+
     ///
-    fn recv(&self) -> Result<(), String> { // FIXME return tuple with pkthds, payload and pkt id
-        
+    fn recv(&mut self) -> Result<(), String> {
+        // FIXME return tuple with pkthds, payload and pkt id
+
         let caplen = self.base.opt.packetsize;
-        
+
         let rx_ring = match &self.base.rx_ring {
             Some(r) => r,
             None => todo!(), // TODO error (socket not in send mode)
@@ -263,13 +265,12 @@ impl NethunsSocket for NethunsSocketNetmap {
         
         todo!()
     }
-    
-    
+
+
     ///
     fn get_socket_base(&mut self) -> &mut NethunsSocketBase {
         &mut self.base
     }
-    
 }
 
 
@@ -291,11 +292,11 @@ impl Drop for NethunsSocketNetmap {
                 eprintln!("[NethunsSocketNetmap::Drop] couldn't clear promisc mode: {e}");
             }
         }
-
+        
         if let Some(ring) = &self.base.tx_ring {
             for i in 0..ring.size {
                 let slot = ring.get_slot(i);
-                let idx = slot.pkthdr.buf_idx;
+                let idx = slot.lock().expect("failed to lock").pkthdr.buf_idx;
                 let next = netmap_buf(some_ring, idx as usize) as *mut u32;
                 assert!(!next.is_null());
                 unsafe {
@@ -310,10 +311,10 @@ impl Drop for NethunsSocketNetmap {
                 self.free_ring[(self.free_head & self.free_mask) as usize];
             let next = netmap_buf(some_ring, idx as usize) as *mut u32;
             assert!(!next.is_null());
-                unsafe {
-                    *next = (*nmport_d.nifp).ni_bufs_head;
-                    (*nmport_d.nifp).ni_bufs_head = idx;
-                };
+            unsafe {
+                *next = (*nmport_d.nifp).ni_bufs_head;
+                (*nmport_d.nifp).ni_bufs_head = idx;
+            };
 
             self.free_head += 1;
         }

@@ -1,10 +1,11 @@
 use std::mem;
+use std::sync::Mutex;
 
 use super::ring_slot::NethunsRingSlot;
 
 
 #[repr(C)]
-#[derive(Debug, PartialEq, PartialOrd)]
+#[derive(Debug)]
 pub struct NethunsRing {
     pub size: usize,
     pub pktsize: usize,
@@ -12,10 +13,7 @@ pub struct NethunsRing {
     pub head: u64,
     pub tail: u64,
     
-    pub mask: usize,
-    pub shift: usize,
-    
-    pub ring: *mut NethunsRingSlot,
+    ring: Vec<Mutex<NethunsRingSlot>>,
 }
 
 
@@ -26,16 +24,11 @@ impl NethunsRing {
         nslots: usize,
         pktsize: usize,
     ) -> Result<NethunsRing, String> {
-        let ns = nethuns_lpow2(nslots);
-        let ss = nethuns_lpow2(mem::size_of::<NethunsRingSlot>() + pktsize);
-        
-        let ring_ptr =
-            unsafe { libc::calloc(1, ns * ss) as *mut NethunsRingSlot };
-        
-        if ring_ptr.is_null() {
-            return Err(
-                "[NethunsRing::try_new] failed to allocate ring".to_owned()
-            );
+        let mut rings = Vec::with_capacity(nslots);
+        for i in 0..nslots {
+            rings.push(Mutex::new(NethunsRingSlot::default_with_packet_size(
+                pktsize,
+            )));
         }
         
         Ok(NethunsRing {
@@ -43,43 +36,35 @@ impl NethunsRing {
             pktsize,
             head: 0,
             tail: 0,
-            ring: ring_ptr,
-            mask: ns - 1,
-            shift: ss.trailing_zeros() as usize,
+            ring: rings,
         })
     }
     
     /// Equivalent to nethuns_get_slot
     #[inline(always)]
-    pub fn get_slot(self: &NethunsRing, n: usize) -> &mut NethunsRingSlot {
-        assert!(!self.ring.is_null());
-        
-        unsafe {
-            &mut *((self.ring as *const libc::c_char)
-                .add((n & self.mask) << self.shift)
-                as *mut NethunsRingSlot)
-        }
+    pub fn get_slot(
+        self: &NethunsRing,
+        n: usize,
+    ) -> &Mutex<NethunsRingSlot> {
+        let n = n % self.ring.len();
+        &(self.ring[n])
     }
-}
-
-
-impl Drop for NethunsRing {
-    fn drop(&mut self) {
-        unsafe {
-            libc::free(self.ring as *mut libc::c_void);
-            libc::memset(
-                self as *mut NethunsRing as *mut libc::c_void,
-                0,
-                mem::size_of::<NethunsRing>(),
-            ); // ? necessary?
-        }
+    
+    /// Equivalent to nethuns_get_slot
+    #[inline(always)]
+    pub fn get_slot_mut(
+        self: &mut NethunsRing,
+        n: usize,
+    ) -> &mut Mutex<NethunsRingSlot> {
+        let n = n % self.ring.len();
+        &mut (self.ring[n])
     }
 }
 
 
 /// Compute the closest power of 2 larger or equal than x
 #[inline(always)]
-pub fn nethuns_lpow2(x: usize) -> usize {
+pub fn nethuns_lpow2(x: usize) -> usize { // TODO move to another module?
     if x == 0 {
         0 // FIXME is it ok?
     } else if (x & (x - 1)) == 0 {
