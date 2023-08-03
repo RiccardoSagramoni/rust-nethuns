@@ -2,7 +2,7 @@ use core::fmt::Debug;
 
 use crate::types::{NethunsQueue, NethunsSocketOptions};
 
-use self::{errors::{NethunsBindError, NethunsOpenError}, base::NethunsSocketBase};
+use self::{errors::{NethunsBindError, NethunsOpenError, NethunsRecvError}, base::NethunsSocketBase};
 
 pub mod base;
 pub mod errors;
@@ -41,7 +41,7 @@ pub trait NethunsSocket: Debug {
         queue: NethunsQueue,
     ) -> Result<(), NethunsBindError>;
     
-    fn recv(&mut self) -> Result<(), String>; // FIXME better error type
+    fn recv(&mut self) -> Result<(), NethunsRecvError>; // FIXME better error type
     
     fn get_socket_base(&mut self) -> &mut NethunsSocketBase;
 }

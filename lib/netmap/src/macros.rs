@@ -1,4 +1,6 @@
-use crate::bindings::{netmap_if, netmap_ring};
+use std::ops::Deref;
+
+use crate::{bindings::{netmap_if, netmap_ring}, ring::NetmapRing};
 
 
 /// Equivalent to __NETMAP_OFFSET
@@ -54,9 +56,9 @@ pub unsafe fn netmap_rxring(
 
 /// Equivalent to C macro NETMAP_BUF(ring, index)
 #[inline(always)]
-pub fn netmap_buf(ring: &netmap_ring, index: usize) -> *const libc::c_char {
+pub fn netmap_buf(ring: &NetmapRing, index: usize) -> *const libc::c_char {
     unsafe {
-        (ring as *const _ as *const libc::c_char)
+        (ring.deref() as *const netmap_ring as *const libc::c_char)
             .add(ring.buf_ofs as usize)
             .add(index * ring.nr_buf_size as usize)
     }
