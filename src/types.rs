@@ -77,7 +77,7 @@ pub struct NethunsStat {
 }
 
 
-#[derive(Builder, Debug, Default, PartialEq, PartialOrd)]
+#[derive(Builder, Debug, Default)]
 #[builder(pattern = "owned", default)]
 pub struct NethunsPacket {
     pub payload: Vec<u8>,

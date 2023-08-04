@@ -1,6 +1,7 @@
 use std::ops::{Deref, DerefMut};
 
-use crate::bindings::netmap_ring;
+use crate::bindings::{netmap_ring, netmap_slot, nm_ring_next};
+use crate::slot::NetmapSlot;
 
 /// Safe wrapper for `netmap_ring` structure from the C library.
 ///
@@ -33,9 +34,14 @@ impl NetmapRing {
         if ptr.is_null() {
             return Err("[NetmapRing::try_new()] ptr is null".to_owned());
         }
-        Ok(Self {
-            netmap_ring: ptr,
-        })
+        Ok(Self { netmap_ring: ptr })
+    }
+    
+    pub fn nm_ring_next(&self, i: u32) -> u32 {
+        assert!(!self.netmap_ring.is_null());
+        unsafe {
+            nm_ring_next(self.netmap_ring, i)
+        }
     }
 }
 
@@ -52,5 +58,12 @@ impl DerefMut for NetmapRing {
     fn deref_mut(&mut self) -> &mut Self::Target {
         assert!(!self.netmap_ring.is_null());
         unsafe { &mut *self.netmap_ring }
+    }
+}
+
+impl NetmapRing {
+    pub fn get_slot(&self, index: usize) -> Result<NetmapSlot, String> {
+        let slot_array = std::ptr::addr_of!(self.slot) as *mut netmap_slot;
+        NetmapSlot::try_new(unsafe { slot_array.add(index) })
     }
 }
