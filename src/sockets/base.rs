@@ -1,4 +1,7 @@
+use std::cell::RefCell;
 use std::ffi::CString;
+use std::rc::Weak;
+use std::sync::atomic;
 
 use derivative::Derivative;
 
@@ -6,6 +9,7 @@ use crate::types::{NethunsQueue, NethunsSocketOptions};
 
 use super::ring::NethunsRing;
 use super::Pkthdr;
+use super::ring_slot::NethunsRingSlot;
 
 type NethunsFilter = dyn Fn(&Pkthdr, *const u8) -> i32; // FIXME safe wrapper?
 
@@ -25,6 +29,28 @@ pub struct NethunsSocketBase {
     
     #[derivative(Debug = "ignore")]
     pub filter: Option<Box<NethunsFilter>>,
+}
+
+
+///
+#[derive(Debug, derive_new::new)]
+pub struct RecvPacket {
+    // (u64, Pkthdr, *const u8)
+    pub id: u64,
+    pub pkthdr: Pkthdr,
+    pub payload: *const u8, // FIXME safe wrapper?
+    slot: Weak<RefCell<NethunsRingSlot>>,
+}
+
+impl Drop for RecvPacket {
+    fn drop(&mut self) {
+        // Release the slot
+        if let Some(rc) = self.slot.upgrade() {
+            rc.borrow_mut()
+                .inuse
+                .store(false, atomic::Ordering::Release);
+        }
+    }
 }
 
 

@@ -1,6 +1,5 @@
-use std::cell::RefCell;
 use std::ffi::CString;
-use std::rc::{Rc, Weak};
+use std::rc::Rc;
 use std::sync::atomic;
 use std::{thread, time};
 
@@ -13,7 +12,7 @@ use c_netmap_wrapper::ring::NetmapRing;
 use crate::api::nethuns_dev_queue_name;
 use crate::misc::macros::min;
 use crate::nethuns::{__nethuns_clear_if_promisc, __nethuns_set_if_promisc};
-use crate::sockets::base::NethunsSocketBase;
+use crate::sockets::base::{NethunsSocketBase, RecvPacket};
 use crate::sockets::errors::{
     NethunsBindError, NethunsOpenError, NethunsRecvError,
 };
@@ -21,11 +20,8 @@ use crate::sockets::netmap::ring::non_empty_rx_ring;
 use crate::sockets::ring::{
     nethuns_lpow2, nethuns_ring_free_slots, NethunsRing,
 };
-use crate::sockets::ring_slot::NethunsRingSlot;
 use crate::sockets::NethunsSocket;
 use crate::types::{NethunsQueue, NethunsSocketMode, NethunsSocketOptions};
-
-use super::Pkthdr;
 
 
 #[derive(Debug)]
@@ -416,25 +412,3 @@ macro_rules! nethuns_blocks_free {
     };
 }
 pub(self) use nethuns_blocks_free;
-
-
-///
-#[derive(Debug, derive_new::new)]
-pub struct RecvPacket {
-    // (u64, Pkthdr, *const u8)
-    pub id: u64,
-    pub pkthdr: Pkthdr,
-    pub payload: *const u8, // FIXME safe wrapper?
-    slot: Weak<RefCell<NethunsRingSlot>>,
-}
-
-impl Drop for RecvPacket {
-    fn drop(&mut self) {
-        // Release the slot
-        if let Some(rc) = self.slot.upgrade() {
-            rc.borrow_mut()
-                .inuse
-                .store(false, atomic::Ordering::Release);
-        }
-    }
-}
