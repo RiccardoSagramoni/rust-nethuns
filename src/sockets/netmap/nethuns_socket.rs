@@ -325,7 +325,7 @@ impl NethunsSocket for NethunsSocketNetmap {
             
             return Ok(RecvPacket::new(
                 rx_ring.head,
-                slot.pkthdr,
+                Box::new(slot.pkthdr),
                 pkt,
                 Rc::downgrade(&rc_slot),
             ));

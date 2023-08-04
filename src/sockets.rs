@@ -67,3 +67,29 @@ impl NethunsSocketFactory {
         }
     }
 }
+
+
+pub trait PkthdrTrait: Debug {
+    
+}
+
+
+#[cfg(test)]
+mod test {
+    use is_trait::is_trait;
+
+    use crate::{NethunsSocket, PkthdrTrait};
+    
+    #[test]
+    fn test_traits() {
+        cfg_if::cfg_if! {
+            if #[cfg(feature="netmap")] {
+                assert!(is_trait!(super::NethunsSocketNetmap, NethunsSocket));
+                assert!(is_trait!(super::Pkthdr, PkthdrTrait));
+            }
+            else {
+                std::compile_error!("The support for the specified I/O framework is not available yet. Check the documentation for more information.");
+            }
+        }
+    }
+}

@@ -8,10 +8,10 @@ use derivative::Derivative;
 use crate::types::{NethunsQueue, NethunsSocketOptions};
 
 use super::ring::NethunsRing;
-use super::Pkthdr;
+use super::PkthdrTrait;
 use super::ring_slot::NethunsRingSlot;
 
-type NethunsFilter = dyn Fn(&Pkthdr, *const u8) -> i32; // FIXME safe wrapper?
+type NethunsFilter = dyn Fn(&dyn PkthdrTrait, *const u8) -> i32; // FIXME safe wrapper for *const u8?
 
 #[repr(C)] // FIXME: necessary?
 #[derive(Derivative)]
@@ -37,7 +37,7 @@ pub struct NethunsSocketBase {
 pub struct RecvPacket {
     // (u64, Pkthdr, *const u8)
     pub id: u64,
-    pub pkthdr: Pkthdr,
+    pub pkthdr: Box<dyn PkthdrTrait>,
     pub payload: *const u8, // FIXME safe wrapper?
     slot: Weak<RefCell<NethunsRingSlot>>,
 }

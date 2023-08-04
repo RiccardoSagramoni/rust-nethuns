@@ -1,4 +1,4 @@
 blank_lines_upper_bound = 2
 imports_granularity = "Module"
 max_width = 80
-wrap_comments = true
+wrap_comments = false

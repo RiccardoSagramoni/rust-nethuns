@@ -1,5 +1,5 @@
 use nethuns::types::{NethunsCaptureDir, NethunsCaptureMode, NethunsQueue, NethunsSocketMode, NethunsSocketOptions};
-use nethuns::NethunsSocketFactory;
+use nethuns::{NethunsSocketFactory, RecvPacket};
 
 fn main() {
     let opt = NethunsSocketOptions {
@@ -17,4 +17,18 @@ fn main() {
     };
     let mut socket = NethunsSocketFactory::try_new_nethuns_socket(opt).unwrap();
     socket.bind("vi0", NethunsQueue::Any).unwrap();
+    
+    for _ in 0..5000 {
+        match socket.recv() {
+            Ok(p) => {
+                dump_packet(p)
+            }
+            Err(e) => {
+                eprintln!("[ERROR]: {}", e);
+            }
+        }
+    }
 }
+
+
+fn dump_packet(pkt: RecvPacket) {}
