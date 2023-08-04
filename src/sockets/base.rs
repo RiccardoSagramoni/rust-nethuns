@@ -7,7 +7,7 @@ use crate::types::{NethunsQueue, NethunsSocketOptions};
 use super::ring::NethunsRing;
 use super::Pkthdr;
 
-type NethunsFilter = dyn Fn(&Pkthdr, *const u8)->i32; // FIXME safe wrapper?
+type NethunsFilter = dyn Fn(&Pkthdr, *const u8) -> i32; // FIXME safe wrapper?
 
 #[repr(C)] // FIXME: necessary?
 #[derive(Derivative)]

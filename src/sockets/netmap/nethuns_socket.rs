@@ -301,7 +301,7 @@ impl NethunsSocket for NethunsSocketNetmap {
         let i = netmap_ring.cur;
         let mut cur_netmap_slot = netmap_ring
             .get_slot(i as usize)
-            .map_err(|e| NethunsRecvError::NethunsError(e))?;
+            .map_err(NethunsRecvError::NethunsError)?;
         let idx = cur_netmap_slot.buf_idx;
         let pkt = netmap_buf(&netmap_ring, idx as usize) as *const u8;
         
@@ -325,13 +325,11 @@ impl NethunsSocket for NethunsSocketNetmap {
             
             slot.inuse.store(true, atomic::Ordering::Release);
             
-            let pkthdr = slot.pkthdr.clone();
-            
             rx_ring.head += 1;
             
             return Ok(RecvPacket::new(
                 rx_ring.head,
-                pkthdr,
+                slot.pkthdr,
                 pkt,
                 Rc::downgrade(&rc_slot),
             ));

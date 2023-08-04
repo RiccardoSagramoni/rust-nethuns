@@ -6,13 +6,16 @@ use crate::sockets::errors::NethunsRecvError;
 
 
 /// Search for a RX ring which contains packet to be received
-pub fn non_empty_rx_ring(d: &mut NmPortDescriptor) -> Result<NetmapRing, NethunsRecvError> {
+pub fn non_empty_rx_ring(
+    d: &mut NmPortDescriptor,
+) -> Result<NetmapRing, NethunsRecvError> {
     let mut ri = d.cur_rx_ring;
     
     loop {
         // Compute current ring to use
         let ring =
-            NetmapRing::try_new(unsafe { netmap_rxring(d.nifp, ri as usize) }).map_err(|e| NethunsRecvError::NethunsError(e))?;
+            NetmapRing::try_new(unsafe { netmap_rxring(d.nifp, ri as usize) })
+                .map_err(NethunsRecvError::NethunsError)?;
         
         // Check if the ring contains some received packets
         if ring.cur != ring.tail {

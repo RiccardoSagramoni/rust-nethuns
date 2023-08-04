@@ -1,5 +1,5 @@
 use crate::sockets::base::NethunsSocketBase;
-use crate::sockets::types::NethunsPkthdrType;
+use crate::sockets::Pkthdr;
 use derivative::Derivative;
 use derive_builder::Builder;
 
@@ -81,7 +81,7 @@ pub struct NethunsStat {
 #[builder(pattern = "owned", default)]
 pub struct NethunsPacket {
     pub payload: Vec<u8>,
-    pub pkthdr: NethunsPkthdrType,
+    pub pkthdr: Pkthdr,
     pub sock: NethunsSocketBase,
     pub id: u64,
 }

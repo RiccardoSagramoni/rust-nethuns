@@ -7,7 +7,7 @@ use once_cell::sync::Lazy;
 
 #[derive(Clone, Copy, Debug, Default)]
 pub struct NethunsNetInfo {
-    pub promisc_refcnt: u32,
+    pub promisc_refcnt: i32,
     pub xdp_prog_refcnt: u32,
     pub xdp_prog_id: u32,
 }

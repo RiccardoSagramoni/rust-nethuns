@@ -18,6 +18,6 @@ impl NethunsRingSlot {
         NethunsRingSlot {
             packet: vec![0; pktsize],
             ..Default::default()
-         }
+        }
     }
 }

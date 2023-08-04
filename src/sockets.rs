@@ -1,14 +1,16 @@
-use core::fmt::Debug;
-
-use crate::types::{NethunsQueue, NethunsSocketOptions};
-
-use self::{errors::{NethunsBindError, NethunsOpenError, NethunsRecvError}, base::NethunsSocketBase, netmap::RecvPacket};
-
 pub mod base;
 pub mod errors;
 pub mod ring;
 pub mod ring_slot;
-pub mod types;
+
+
+use core::fmt::Debug;
+
+use crate::types::{NethunsQueue, NethunsSocketOptions};
+
+use self::base::NethunsSocketBase;
+use self::errors::{NethunsBindError, NethunsOpenError, NethunsRecvError};
+use self::netmap::RecvPacket;
 
 
 // Import the structs defined for the required I/O framework
