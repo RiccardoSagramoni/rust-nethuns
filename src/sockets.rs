@@ -2,7 +2,7 @@ use core::fmt::Debug;
 
 use crate::types::{NethunsQueue, NethunsSocketOptions};
 
-use self::{errors::{NethunsBindError, NethunsOpenError, NethunsRecvError}, base::NethunsSocketBase, ring_slot::NethunsRingSlot};
+use self::{errors::{NethunsBindError, NethunsOpenError, NethunsRecvError}, base::NethunsSocketBase, netmap::RecvPacket};
 
 pub mod base;
 pub mod errors;
@@ -41,7 +41,7 @@ pub trait NethunsSocket: Debug {
         queue: NethunsQueue,
     ) -> Result<(), NethunsBindError>;
     
-    fn recv(&mut self) -> Result<(u64, Pkthdr, *const u8), NethunsRecvError>;
+    fn recv(&mut self) -> Result<RecvPacket, NethunsRecvError>;
     
     
     //

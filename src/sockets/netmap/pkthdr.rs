@@ -1,7 +1,7 @@
 use c_netmap_wrapper::bindings::timeval;
 
 #[repr(C)]
-#[derive(Clone, Debug, Default, PartialEq)]
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
 pub struct Pkthdr {
     pub ts: timeval,
     pub len: u32,

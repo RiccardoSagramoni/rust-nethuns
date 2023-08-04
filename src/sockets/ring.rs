@@ -1,7 +1,8 @@
 use std::mem;
-use std::sync::{atomic, Arc, Mutex};
+use std::rc::Rc;
+use std::sync::RwLock;
 
-use crate::NethunsSocket;
+
 
 use super::ring_slot::NethunsRingSlot;
 
@@ -15,7 +16,7 @@ pub struct NethunsRing {
     pub head: u64,
     pub tail: u64,
     
-    ring: Vec<NethunsRingSlot>,
+    rings: Vec<Rc<RwLock<NethunsRingSlot>>>,
 }
 
 
@@ -27,8 +28,8 @@ impl NethunsRing {
         pktsize: usize,
     ) -> Result<NethunsRing, String> {
         let mut rings = Vec::with_capacity(nslots);
-        for i in 0..nslots {
-            rings.push(NethunsRingSlot::default_with_packet_size(pktsize));
+        for _i in 0..nslots {
+            rings.push(Rc::new(RwLock::new(NethunsRingSlot::default_with_packet_size(pktsize))));
         }
         
         Ok(NethunsRing {
@@ -36,27 +37,16 @@ impl NethunsRing {
             pktsize,
             head: 0,
             tail: 0,
-            ring: rings,
+            rings,
         })
     }
     
     
     /// Equivalent to nethuns_get_slot
     #[inline(always)]
-    pub fn get_slot(self: &NethunsRing, n: usize) -> &NethunsRingSlot {
-        let n = n % self.ring.len();
-        &(self.ring[n])
-    }
-    
-    
-    /// Equivalent to nethuns_get_slot
-    #[inline(always)]
-    pub fn get_slot_mut(
-        self: &mut NethunsRing,
-        n: usize,
-    ) -> &mut NethunsRingSlot {
-        let n = n % self.ring.len();
-        &mut (self.ring[n])
+    pub fn get_slot(self: &NethunsRing, n: usize) -> Rc<RwLock<NethunsRingSlot>> {
+        let n = n % self.rings.len();
+        self.rings[n].clone()
     }
 
 }
@@ -64,9 +54,9 @@ impl NethunsRing {
 
 ///
 macro_rules! nethuns_ring_free_slots {
-    ($s: expr, $ring: expr, $blocks_free: ident) => {
-        while $ring.tail != $ring.head && !$ring.get_slot($ring.tail as usize).inuse.load(atomic::Ordering::Acquire) {
-            $blocks_free!($s, $ring.get_slot($ring.tail as usize));
+    ($s: expr, $ring: expr, $slot: expr, $blocks_free: ident) => {
+        while $ring.tail != $ring.head && !$slot.inuse.load(atomic::Ordering::Acquire) {
+            $blocks_free!($s, $slot);
             $ring.tail += 1;
         }
     };
