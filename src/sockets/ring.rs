@@ -1,8 +1,6 @@
+use std::cell::RefCell;
 use std::mem;
 use std::rc::Rc;
-use std::sync::RwLock;
-
-
 
 use super::ring_slot::NethunsRingSlot;
 
@@ -16,7 +14,7 @@ pub struct NethunsRing {
     pub head: u64,
     pub tail: u64,
     
-    rings: Vec<Rc<RwLock<NethunsRingSlot>>>,
+    rings: Vec<Rc<RefCell<NethunsRingSlot>>>,
 }
 
 
@@ -29,7 +27,9 @@ impl NethunsRing {
     ) -> Result<NethunsRing, String> {
         let mut rings = Vec::with_capacity(nslots);
         for _i in 0..nslots {
-            rings.push(Rc::new(RwLock::new(NethunsRingSlot::default_with_packet_size(pktsize))));
+            rings.push(Rc::new(RefCell::new(
+                NethunsRingSlot::default_with_packet_size(pktsize),
+            )));
         }
         
         Ok(NethunsRing {
@@ -44,18 +44,22 @@ impl NethunsRing {
     
     /// Equivalent to nethuns_get_slot
     #[inline(always)]
-    pub fn get_slot(self: &NethunsRing, n: usize) -> Rc<RwLock<NethunsRingSlot>> {
+    pub fn get_slot(
+        self: &NethunsRing,
+        n: usize,
+    ) -> Rc<RefCell<NethunsRingSlot>> {
         let n = n % self.rings.len();
         self.rings[n].clone()
     }
-
 }
 
 
 ///
 macro_rules! nethuns_ring_free_slots {
     ($s: expr, $ring: expr, $slot: expr, $blocks_free: ident) => {
-        while $ring.tail != $ring.head && !$slot.inuse.load(atomic::Ordering::Acquire) {
+        while $ring.tail != $ring.head
+            && !$slot.inuse.load(atomic::Ordering::Acquire)
+        {
             $blocks_free!($s, $slot);
             $ring.tail += 1;
         }
