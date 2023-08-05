@@ -4,7 +4,7 @@ use std::rc::Weak;
 use std::sync::atomic;
 
 use derivative::Derivative;
-use etherparse::SlicedPacket;
+use etherparse::{SlicedPacket, PacketHeaders};
 
 use crate::types::{NethunsQueue, NethunsSocketOptions};
 
@@ -33,11 +33,12 @@ pub struct NethunsSocketBase {
 
 
 ///
-#[derive(Debug, derive_new::new)]
+#[derive(Debug)]
 pub struct RecvPacket<'a> {
     pub id: u64,
     pub pkthdr: Box<dyn PkthdrTrait>,
-    pub payload: &'a [u8],
+    pub packet: PacketHeaders<'a>,
+    
     slot: Weak<RefCell<NethunsRingSlot>>,
 }
 
@@ -49,6 +50,22 @@ impl Drop for RecvPacket<'_> {
                 .inuse
                 .store(false, atomic::Ordering::Release);
         }
+    }
+}
+
+impl RecvPacket<'_> {
+    pub fn try_new(
+        id: u64,
+        pkthdr: Box<dyn PkthdrTrait>,
+        pkt: &'_ [u8],
+        slot: Weak<RefCell<NethunsRingSlot>>,
+    ) -> Result<RecvPacket<'_>, etherparse::ReadError> {
+        Ok(RecvPacket {
+            id,
+            pkthdr,
+            packet: PacketHeaders::from_ethernet_slice(pkt)?,
+            slot,
+        })
     }
 }
 

@@ -1,4 +1,2 @@
-// TODO for types, check usage against netmap framework
-const NETHUNS_ERRBUF_SIZE: u64 = 512;
-
-// TODO continue
+pub const NETHUNS_ETH_P_8021Q: u16 = 0x8100;
+pub const NETHUNS_ETH_P_8021AD: u16 = 0x88A8;

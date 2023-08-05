@@ -22,7 +22,7 @@ pub enum NethunsBindError {
     NethunsError(String),
 }
 
-#[derive(Clone, Debug, Error)]
+#[derive(Debug, Error)]
 pub enum NethunsRecvError {
     #[error("[recv] you must execute bind(...) before using the socket")]
     NonBinded,
@@ -32,10 +32,12 @@ pub enum NethunsRecvError {
     InUse,
     #[error("[recv] no packets have been received")]
     NoPacketsAvailable,
-    #[error("[recv] filtered")] // TODO improve
-    Filtered,
     #[error("[recv] lock acquisition error: {0}")]
     LockError(String),
+    #[error("[recv] unable to deserialize Ethernet packet: {0}")]
+    PacketInWrongFormat(#[from] etherparse::ReadError),
+    #[error("[recv] filtered")] // TODO improve
+    PacketFiltered,
     #[error("[recv] unexpected error: {0}")]
     NethunsError(String),
 }

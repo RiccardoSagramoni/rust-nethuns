@@ -324,16 +324,16 @@ impl NethunsSocket for NethunsSocketNetmap {
             
             rx_ring.head += 1;
             
-            return Ok(RecvPacket::new(
+            return Ok(RecvPacket::try_new(
                 rx_ring.head,
                 Box::new(slot.pkthdr),
                 pkt,
                 Rc::downgrade(&rc_slot),
-            ));
+            )?);
         }
         
         nethuns_ring_free_slots!(self, rx_ring, slot, nethuns_blocks_free);
-        Err(NethunsRecvError::Filtered)
+        Err(NethunsRecvError::PacketFiltered)
     }
     
     
