@@ -4,14 +4,15 @@ use std::rc::Weak;
 use std::sync::atomic;
 
 use derivative::Derivative;
+use etherparse::SlicedPacket;
 
 use crate::types::{NethunsQueue, NethunsSocketOptions};
 
 use super::ring::NethunsRing;
-use super::PkthdrTrait;
 use super::ring_slot::NethunsRingSlot;
+use super::PkthdrTrait;
 
-type NethunsFilter = dyn Fn(&dyn PkthdrTrait, *const u8) -> i32; // FIXME safe wrapper for *const u8?
+type NethunsFilter = dyn Fn(&dyn PkthdrTrait, &[u8]) -> i32;
 
 
 #[derive(Derivative)]
@@ -33,15 +34,14 @@ pub struct NethunsSocketBase {
 
 ///
 #[derive(Debug, derive_new::new)]
-pub struct RecvPacket {
-    // (u64, Pkthdr, *const u8)
+pub struct RecvPacket<'a> {
     pub id: u64,
     pub pkthdr: Box<dyn PkthdrTrait>,
-    pub payload: *const u8, // FIXME safe wrapper?
+    pub payload: &'a [u8],
     slot: Weak<RefCell<NethunsRingSlot>>,
 }
 
-impl Drop for RecvPacket {
+impl Drop for RecvPacket<'_> {
     fn drop(&mut self) {
         // Release the slot
         if let Some(rc) = self.slot.upgrade() {

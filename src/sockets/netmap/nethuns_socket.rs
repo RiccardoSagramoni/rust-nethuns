@@ -6,6 +6,7 @@ use std::{thread, time};
 use c_netmap_wrapper::bindings::NS_BUF_CHANGED;
 use c_netmap_wrapper::constants::NIOCRXSYNC;
 use c_netmap_wrapper::macros::{netmap_buf, netmap_rxring};
+use c_netmap_wrapper::netmap_buf_pkt;
 use c_netmap_wrapper::nmport::NmPortDescriptor;
 use c_netmap_wrapper::ring::NetmapRing;
 
@@ -299,7 +300,7 @@ impl NethunsSocket for NethunsSocketNetmap {
             .get_slot(i as usize)
             .map_err(NethunsRecvError::NethunsError)?;
         let idx = cur_netmap_slot.buf_idx;
-        let pkt = netmap_buf(&netmap_ring, idx as usize) as *const u8;
+        let pkt = netmap_buf_pkt!(netmap_ring, idx);
         
         slot.pkthdr.ts = netmap_ring.ts;
         slot.pkthdr.caplen = cur_netmap_slot.len as u32;
