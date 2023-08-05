@@ -5,7 +5,6 @@ use std::rc::Rc;
 use super::ring_slot::NethunsRingSlot;
 
 
-#[repr(C)]
 #[derive(Debug)]
 pub struct NethunsRing {
     pub size: usize,

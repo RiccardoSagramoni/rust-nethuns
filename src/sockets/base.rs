@@ -13,13 +13,10 @@ use super::ring_slot::NethunsRingSlot;
 
 type NethunsFilter = dyn Fn(&dyn PkthdrTrait, *const u8) -> i32; // FIXME safe wrapper for *const u8?
 
-#[repr(C)] // FIXME: necessary?
+
 #[derive(Derivative)]
 #[derivative(Debug, Default)]
 pub struct NethunsSocketBase {
-    #[derivative(Default(value = "[0; 512]"))]
-    pub errbuf: [libc::c_char; 512], // FIXME: unused
-    
     pub opt: NethunsSocketOptions,
     pub tx_ring: Option<NethunsRing>,
     pub rx_ring: Option<NethunsRing>,
@@ -30,6 +27,8 @@ pub struct NethunsSocketBase {
     #[derivative(Debug = "ignore")]
     pub filter: Option<Box<NethunsFilter>>,
 }
+// errbuf removed => use Result as return type
+// filter_ctx removed => use closures with move semantics
 
 
 ///

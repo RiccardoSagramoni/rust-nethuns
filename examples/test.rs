@@ -1,4 +1,7 @@
-use nethuns::types::{NethunsCaptureDir, NethunsCaptureMode, NethunsQueue, NethunsSocketMode, NethunsSocketOptions};
+use nethuns::types::{
+    NethunsCaptureDir, NethunsCaptureMode, NethunsQueue, NethunsSocketMode,
+    NethunsSocketOptions,
+};
 use nethuns::{NethunsSocketFactory, RecvPacket};
 
 fn main() {
@@ -20,9 +23,7 @@ fn main() {
     
     for _ in 0..5000 {
         match socket.recv() {
-            Ok(p) => {
-                dump_packet(p)
-            }
+            Ok(p) => dump_packet(&p),
             Err(e) => {
                 eprintln!("[ERROR]: {}", e);
             }
@@ -31,4 +32,14 @@ fn main() {
 }
 
 
-fn dump_packet(pkt: RecvPacket) {}
+fn dump_packet(pkt: &RecvPacket) {
+    // print!("{}:{} snap:{} len:{} offload{{ tci:{:X} tpid:{:X}}} packet{{ tci:{:X} pid:{:X}}} => [tci:{:X} tpid:{:X} vid:{}] rxhash:0x{:X}| ", 
+    // pkt.pkthdr.tstamp_sec(), 
+    // pkt.pkthdr.tstamp_nsec(), 
+    // pkt.pkthdr.snaplen(), 
+    // pkt.pkthdr.len(), 
+    // pkt.pkthdr.offvlan_tci(), 
+    // pkt.pkthdr.offvlan_tpid(), 
+    // todo!(), todo!(), todo!(), todo!(), todo!(), 
+    // pkt.pkthdr.rxhash());
+}
