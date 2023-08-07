@@ -1,10 +1,10 @@
-use std::mem;
+use std::cell::RefCell;
+use std::rc::Rc;
 
-use crate::sockets::base::NethunsRingSlot;
+use super::ring_slot::NethunsRingSlot;
 
 
-#[repr(C)]
-#[derive(Debug, PartialEq, PartialOrd)] // TODO impl Drop trait
+#[derive(Debug)]
 pub struct NethunsRing {
     pub size: usize,
     pub pktsize: usize,
@@ -12,25 +12,22 @@ pub struct NethunsRing {
     pub head: u64,
     pub tail: u64,
     
-    pub mask: usize,  // TODO unnecessary?
-    pub shift: usize, // TODO unnecessary?
-    
-    pub ring: *mut NethunsRingSlot,
+    rings: Vec<Rc<RefCell<NethunsRingSlot>>>,
 }
 
 
 impl NethunsRing {
     /// Equivalent to nethuns_make_ring
     #[inline(always)]
-    pub fn try_new(nslots: usize, pktsize: usize) -> Result<NethunsRing, String> {
-        let ns = nethuns_lpow2(nslots);
-        let ss = nethuns_lpow2(mem::size_of::<NethunsRingSlot>() + pktsize);
-        
-        let ring_ptr =
-            unsafe { libc::calloc(1, ns * ss) as *mut NethunsRingSlot };
-        
-        if ring_ptr.is_null() {
-            return Err("[NethunsRing::try_new] failed to allocate ring".to_owned());
+    pub fn try_new(
+        nslots: usize,
+        pktsize: usize,
+    ) -> Result<NethunsRing, String> {
+        let mut rings = Vec::with_capacity(nslots);
+        for _i in 0..nslots {
+            rings.push(Rc::new(RefCell::new(
+                NethunsRingSlot::default_with_packet_size(pktsize),
+            )));
         }
         
         Ok(NethunsRing {
@@ -38,57 +35,32 @@ impl NethunsRing {
             pktsize,
             head: 0,
             tail: 0,
-            ring: ring_ptr,
-            mask: ns - 1,
-            shift: ss.trailing_zeros() as usize,
+            rings,
         })
     }
     
+    
     /// Equivalent to nethuns_get_slot
     #[inline(always)]
-    pub fn get_slot(self: &mut NethunsRing, n: usize) -> &mut NethunsRingSlot {
-        unsafe {
-            &mut *((self.ring as *const libc::c_char)
-                .add((n & self.mask) << self.shift)
-                as *mut NethunsRingSlot)
+    pub fn get_slot(
+        self: &NethunsRing,
+        n: usize,
+    ) -> Rc<RefCell<NethunsRingSlot>> {
+        let n = n % self.rings.len();
+        self.rings[n].clone()
+    }
+}
+
+
+/// TODO
+macro_rules! nethuns_ring_free_slots {
+    ($s: expr, $ring: expr, $slot: expr, $blocks_free_macro: ident) => {
+        while $ring.tail != $ring.head
+            && !$slot.inuse.load(atomic::Ordering::Acquire)
+        {
+            $blocks_free_macro!($s, $slot);
+            $ring.tail += 1;
         }
-    }
+    };
 }
-
-impl Drop for NethunsRing {
-    fn drop(&mut self) {
-        unsafe {
-            libc::free(self.ring as *mut libc::c_void);
-            libc::memset(
-                self as *mut NethunsRing as *mut libc::c_void,
-                0,
-                mem::size_of::<NethunsRing>(),
-            ); // ? necessary?
-        }
-    }
-}
-
-
-/// Compute the closest power of 2 larger or equal than x
-#[inline(always)]
-pub fn nethuns_lpow2(x: usize) -> usize {
-    if x == 0 {
-        0 // TODO is it ok?
-    } else if (x & (x - 1)) == 0 {
-        x
-    } else {
-        1 << (mem::size_of::<usize>() * 8 - x.leading_zeros() as usize)
-    }
-}
-
-
-#[cfg(test)]
-mod tests {
-    #[test]
-    fn lpow2() {
-        assert_eq!(super::nethuns_lpow2(0), 0);
-        assert_eq!(super::nethuns_lpow2(1), 1);
-        assert_eq!(super::nethuns_lpow2(2), 2);
-        assert_eq!(super::nethuns_lpow2(30), 32);
-    }
-}
+pub(crate) use nethuns_ring_free_slots;

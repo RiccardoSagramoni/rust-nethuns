@@ -2,6 +2,7 @@ use std::{ffi::CString, ops::{DerefMut, Deref}};
 
 use crate::bindings::{nmport_d, nmport_open_desc, nmport_prepare, nmport_close};
 
+/// Safe wrapper for nmport_d. It describes a netmap port.
 #[derive(Debug)]
 pub struct NmPortDescriptor {
     nmport_d: *mut nmport_d,
@@ -24,8 +25,11 @@ impl NmPortDescriptor {
     }
     
     
-    /// open an initialized port descriptor
+    /// Open an initialized port descriptor.
+    /// 
+    /// Equivalent to `nmport_open_desc(self.nmport_d)`
     pub fn open_desc(&mut self) -> Result<(), String> {
+        assert!(!self.nmport_d.is_null());
         match unsafe { nmport_open_desc(self.nmport_d) } {
             -1 => Err(format!("{}", errno::errno())),
             0 => Ok(()),
@@ -53,6 +57,7 @@ impl DerefMut for NmPortDescriptor {
 }
 
 impl Drop for NmPortDescriptor {
+    /// Close the Netmap port when its descriptor is dropped.
     fn drop(&mut self) {
         if !self.nmport_d.is_null() {
             unsafe { nmport_close(self.nmport_d) };

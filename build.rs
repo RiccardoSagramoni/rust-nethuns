@@ -1,5 +1,5 @@
 fn main() {
-    // Check if have been enabled more than one feature flag
+    // Assert that only one feature flag have been enabled
     // for the underlying I/O framework
     assert_io_framework_mutual_exclusivity();
 }
@@ -35,9 +35,9 @@ fn assert_io_framework_mutual_exclusivity() {
     };
     
     if found == 0 {
-        panic!("Error: no IO framework found");
+        panic!("Error: no I/O framework found");
     }
     if found > 1 {
-        panic!("Error: more than one IO framework found");
+        panic!("Error: more than one I/O framework found");
     }
 }
