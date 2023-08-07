@@ -1,4 +1,4 @@
-use std::error;
+use std::sync::PoisonError;
 
 use thiserror::Error;
 
@@ -16,11 +16,13 @@ pub enum NethunsBindError {
     FrameworkError(String),
     #[error("[bind] error caused by an illegal or inappropiate argument: {0}")]
     IllegalArgument(String),
+    #[error("[bind] lock acquisition error: {0}")]
+    LockError(String),
     #[error("[bind] error caused by nethuns: {0}")]
     NethunsError(String),
 }
 
-#[derive(Clone, Debug, Error)]
+#[derive(Debug, Error)]
 pub enum NethunsRecvError {
     #[error("[recv] you must execute bind(...) before using the socket")]
     NonBinded,
@@ -30,8 +32,18 @@ pub enum NethunsRecvError {
     InUse,
     #[error("[recv] no packets have been received")]
     NoPacketsAvailable,
+    #[error("[recv] lock acquisition error: {0}")]
+    LockError(String),
     #[error("[recv] filtered")] // TODO improve
-    Filtered,
-    #[error("[bind] unexpected error: {0}")]
+    PacketFiltered,
+    #[error("[recv] error of the I/O framework: {0}")]
+    FrameworkError(String),
+    #[error("[recv] unexpected error: {0}")]
     NethunsError(String),
+}
+
+impl<T> From<PoisonError<T>> for NethunsRecvError {
+    fn from(e: PoisonError<T>) -> Self {
+        Self::LockError(e.to_string())
+    }
 }

@@ -91,7 +91,7 @@ pub fn __nethuns_clear_if_promisc(devname: &CString) -> Result<(), String> {
         }
         
         dbg!(do_clear);
-            
+        
         if do_clear {
             flags &= !(libc::IFF_PROMISC as u32);
             if let Err(e) = nethuns_ioctl_if(

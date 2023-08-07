@@ -2,7 +2,7 @@ use std::ops::{Deref, DerefMut};
 
 use crate::bindings::netmap_slot;
 
-/// Safe wrapper for `netmap_slot` structure from the C library.
+/// Safe wrapper for `netmap_slot` struct. It's a buffer descriptor.
 pub struct NetmapSlot {
     netmap_slot: *mut netmap_slot
 }
