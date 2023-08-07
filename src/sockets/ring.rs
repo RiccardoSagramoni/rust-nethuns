@@ -1,5 +1,4 @@
 use std::cell::RefCell;
-use std::mem;
 use std::rc::Rc;
 
 use super::ring_slot::NethunsRingSlot;
@@ -53,41 +52,15 @@ impl NethunsRing {
 }
 
 
-///
+/// TODO
 macro_rules! nethuns_ring_free_slots {
-    ($s: expr, $ring: expr, $slot: expr, $blocks_free: ident) => {
+    ($s: expr, $ring: expr, $slot: expr, $blocks_free_macro: ident) => {
         while $ring.tail != $ring.head
             && !$slot.inuse.load(atomic::Ordering::Acquire)
         {
-            $blocks_free!($s, $slot);
+            $blocks_free_macro!($s, $slot);
             $ring.tail += 1;
         }
     };
 }
 pub(crate) use nethuns_ring_free_slots;
-
-
-/// Compute the closest power of 2 larger or equal than x
-#[inline(always)]
-pub fn nethuns_lpow2(x: usize) -> usize {
-    // TODO move to another module?
-    if x == 0 {
-        0 // FIXME is it ok?
-    } else if (x & (x - 1)) == 0 {
-        x
-    } else {
-        1 << (mem::size_of::<usize>() * 8 - x.leading_zeros() as usize)
-    }
-}
-
-
-#[cfg(test)]
-mod tests {
-    #[test]
-    fn lpow2() {
-        assert_eq!(super::nethuns_lpow2(0), 0);
-        assert_eq!(super::nethuns_lpow2(1), 1);
-        assert_eq!(super::nethuns_lpow2(2), 2);
-        assert_eq!(super::nethuns_lpow2(30), 32);
-    }
-}

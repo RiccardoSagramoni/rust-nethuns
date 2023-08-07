@@ -37,6 +37,9 @@ impl NetmapRing {
         Ok(Self { netmap_ring: ptr })
     }
     
+    /// Given the current value of the index of the ring slots 
+    /// (`head`, `cur`, `tail`), move it ahead of one position 
+    /// in a circular manner.
     pub fn nm_ring_next(&self, i: u32) -> u32 {
         assert!(!self.netmap_ring.is_null());
         unsafe {

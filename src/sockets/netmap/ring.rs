@@ -5,7 +5,29 @@ use c_netmap_wrapper::ring::NetmapRing;
 use crate::sockets::errors::NethunsRecvError;
 
 
-/// Search for a RX ring which contains packet to be received
+/// Finds the first non-empty RX ring within the given Netmap port descriptor.
+///
+/// This function searches for a non-empty RX (receive) ring within the Netmap
+/// port descriptor `d`. It iterates through the available RX rings, starting
+/// from the `cur_rx_ring` field of the descriptor, and wraps around if necessary.
+/// The function returns the first non-empty ring found, updating the `cur_rx_ring`
+/// field of the descriptor to point to this ring.
+///
+/// # Arguments
+///
+/// - `d` - A mutable reference to the `NmPortDescriptor` representing the Netmap port.
+///
+/// # Returns
+///
+/// - `Ok(NetmapRing)` - If a non-empty RX ring is found, it returns the corresponding `NetmapRing`.
+/// - `Err(NethunsRecvError::FrameworkError)` - If `netmap_rxring` returns a null pointer.
+/// - `Err(NethunsRecvError::NoPacketsAvailable)` - If all RX rings are empty, and the search fails.
+///
+/// # Safety
+///
+/// This function makes use of unsafe code due to the interaction with the Netmap C API
+/// through the `netmap_rxring` function.
+/// Be sure that the Netmap port descriptor is properly initialized.
 pub fn non_empty_rx_ring(
     d: &mut NmPortDescriptor,
 ) -> Result<NetmapRing, NethunsRecvError> {
@@ -15,7 +37,7 @@ pub fn non_empty_rx_ring(
         // Compute current ring to use
         let ring =
             NetmapRing::try_new(unsafe { netmap_rxring(d.nifp, ri as usize) })
-                .map_err(NethunsRecvError::NethunsError)?;
+                .map_err(NethunsRecvError::FrameworkError)?;
         
         // Check if the ring contains some received packets
         if ring.cur != ring.tail {

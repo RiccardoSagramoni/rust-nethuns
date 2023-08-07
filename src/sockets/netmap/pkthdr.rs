@@ -2,6 +2,8 @@ use c_netmap_wrapper::bindings::timeval;
 
 use crate::sockets::PkthdrTrait;
 
+
+/// Packet header containing metadata
 #[repr(C)]
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
 pub struct Pkthdr {

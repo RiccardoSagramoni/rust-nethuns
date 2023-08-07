@@ -29,7 +29,7 @@ cfg_if::cfg_if! {
 
 /// Trait which defines the public API for Nethuns sockets.
 pub trait NethunsSocket: Debug {
-    fn try_new(
+    fn open(
         opt: NethunsSocketOptions,
     ) -> Result<Box<dyn NethunsSocket>, NethunsOpenError>
     where
@@ -44,9 +44,10 @@ pub trait NethunsSocket: Debug {
     
     fn recv(&mut self) -> Result<RecvPacket, NethunsRecvError>;
     
-    
-    //
-    fn get_socket_base(&mut self) -> &mut NethunsSocketBase;
+    /// Get an immutable reference to the base socket descriptor.
+    fn socket_base(&self) -> &NethunsSocketBase;
+    /// Get a mutable reference to the base socket descriptor.
+    fn socket_base_mut(&mut self) -> &mut NethunsSocketBase;
 }
 
 
@@ -59,7 +60,7 @@ impl NethunsSocketFactory {
     ) -> Result<Box<dyn NethunsSocket>, NethunsOpenError> {
         cfg_if::cfg_if! {
             if #[cfg(feature="netmap")] {
-                return NethunsSocketNetmap::try_new(opt);
+                return NethunsSocketNetmap::open(opt);
             }
             else {
                 std::compile_error!("The support for the specified I/O framework is not available yet. Check the documentation for more information.");

@@ -36,6 +36,8 @@ pub enum NethunsRecvError {
     LockError(String),
     #[error("[recv] filtered")] // TODO improve
     PacketFiltered,
+    #[error("[recv] error of the I/O framework: {0}")]
+    FrameworkError(String),
     #[error("[recv] unexpected error: {0}")]
     NethunsError(String),
 }
