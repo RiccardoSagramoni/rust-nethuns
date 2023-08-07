@@ -34,8 +34,6 @@ pub enum NethunsRecvError {
     NoPacketsAvailable,
     #[error("[recv] lock acquisition error: {0}")]
     LockError(String),
-    #[error("[recv] unable to deserialize Ethernet packet: {0}")]
-    PacketInWrongFormat(#[from] etherparse::ReadError),
     #[error("[recv] filtered")] // TODO improve
     PacketFiltered,
     #[error("[recv] unexpected error: {0}")]

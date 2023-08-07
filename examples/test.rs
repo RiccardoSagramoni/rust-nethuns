@@ -1,7 +1,9 @@
+use etherparse::Ethernet2Header;
 use nethuns::types::{
     NethunsCaptureDir, NethunsCaptureMode, NethunsQueue, NethunsSocketMode,
     NethunsSocketOptions,
 };
+use nethuns::vlan::{nethuns_vlan_tci_, nethuns_vlan_tpid_, nethuns_vlan_tci, nethuns_vlan_tpid, nethuns_vlan_vid};
 use nethuns::{NethunsSocketFactory, RecvPacket};
 
 fn main() {
@@ -24,7 +26,6 @@ fn main() {
     for _ in 0..5000 {
         match socket.recv() {
             Ok(p) => {
-                let p = dbg!(p);
                 dump_packet(&p)
             },
             Err(e) => {
@@ -36,14 +37,26 @@ fn main() {
 
 
 fn dump_packet(pkt: &RecvPacket) {
-    println!(
-        "{}:{} snap:{} len:{} offload{{ tci:{:X} tpid:{:X}}} packet{{ tci:_ pid:_}} => [tci:_ tpid:_ vid:_] rxhash:0x{:X}| ", 
+    print!(
+        concat!(
+            "{}:{} snap:{} len:{} offload{{tci:{:X} tpid:{:X}}} ",
+            "packet{{tci:{:X} pid:{:X}}} => [tci:{:X} tpid:{:X} vid:{:X}] rxhash:0x{:X} | "
+        ),
         pkt.pkthdr.tstamp_sec(), 
         pkt.pkthdr.tstamp_nsec(), 
         pkt.pkthdr.snaplen(), 
         pkt.pkthdr.len(), 
         pkt.pkthdr.offvlan_tci(), 
-        pkt.pkthdr.offvlan_tpid(), 
+        pkt.pkthdr.offvlan_tpid(),
+        nethuns_vlan_tci(pkt.packet),
+        nethuns_vlan_tpid(pkt.packet),
+        nethuns_vlan_tci_(&pkt.pkthdr, pkt.packet),
+        nethuns_vlan_tpid_(&pkt.pkthdr, pkt.packet),
+        nethuns_vlan_vid(nethuns_vlan_tci_(&pkt.pkthdr, pkt.packet)),
         pkt.pkthdr.rxhash()
     );
+    
+    if let Ok(eth) = Ethernet2Header::from_slice(&pkt.packet) {
+        println!("{:?}", eth.0);
+    }
 }

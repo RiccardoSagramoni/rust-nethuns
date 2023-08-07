@@ -4,7 +4,6 @@ use std::rc::Weak;
 use std::sync::atomic;
 
 use derivative::Derivative;
-use etherparse::PacketHeaders;
 
 use crate::types::{NethunsQueue, NethunsSocketOptions};
 
@@ -57,7 +56,7 @@ pub struct NethunsSocketBase {
 pub struct RecvPacket<'a> {
     pub id: u64,
     pub pkthdr: Box<dyn PkthdrTrait>,
-    pub packet: PacketHeaders<'a>,
+    pub packet: &'a [u8],
     
     slot: Weak<RefCell<NethunsRingSlot>>,
 }
@@ -75,31 +74,26 @@ impl Drop for RecvPacket<'_> {
 }
 
 impl RecvPacket<'_> {
-    /// Tries to create a new `RecvPacket` instance.
+    /// Create a new `RecvPacket` instance.
     ///
     /// # Arguments
     ///
     /// - `id`: The ID of the received packet.
     /// - `pkthdr`: A boxed trait object representing packet header metadata.
-    /// - `pkt`: A byte slice containing the received packet.
+    /// - `packet`: A byte slice containing the received packet.
     /// - `slot`: A weak reference to the Nethuns ring slot where the packet is stored.
-    ///
-    /// # Returns
-    ///
-    /// Returns a `Result` containing either the created `RecvPacket` instance on success,
-    /// or an `etherparse::ReadError` if there was an error parsing the packet headers.
-    pub fn try_new(
+    pub fn new(
         id: u64,
         pkthdr: Box<dyn PkthdrTrait>,
-        pkt: &'_ [u8],
+        packet: &'_ [u8],
         slot: Weak<RefCell<NethunsRingSlot>>,
-    ) -> Result<RecvPacket<'_>, etherparse::ReadError> {
-        Ok(RecvPacket {
+    ) -> RecvPacket<'_> {
+        RecvPacket {
             id,
             pkthdr,
-            packet: PacketHeaders::from_ethernet_slice(pkt)?,
+            packet,
             slot,
-        })
+        }
     }
 }
 

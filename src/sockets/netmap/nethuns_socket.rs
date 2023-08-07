@@ -323,12 +323,12 @@ impl NethunsSocket for NethunsSocketNetmap {
             
             rx_ring.head += 1;
             
-            return Ok(RecvPacket::try_new(
+            return Ok(RecvPacket::new(
                 rx_ring.head,
                 Box::new(slot.pkthdr),
                 pkt,
                 Rc::downgrade(&rc_slot),
-            )?);
+            ));
         }
         
         nethuns_ring_free_slots!(self, rx_ring, slot, nethuns_blocks_free);
