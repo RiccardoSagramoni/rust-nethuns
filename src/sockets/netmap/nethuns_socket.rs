@@ -29,8 +29,7 @@ use crate::types::{NethunsQueue, NethunsSocketMode, NethunsSocketOptions};
 pub struct NethunsSocketNetmap {
     base: NethunsSocketBase,
     p: Option<NmPortDescriptor>,
-    some_ring: Option<NetmapRing>, /* ? chiedere a Lettieri a che cosa serve
-                                    * some_ring */
+    some_ring: Option<NetmapRing>, // ? chiedere a Lettieri a che cosa serve some_ring
     free_ring: Vec<u32>,
     free_mask: u64,
     free_head: u64,
