@@ -33,7 +33,7 @@ pub fn nethuns_vlan_dei(tci: u16) -> u16 {
 pub fn nethuns_vlan_tpid(payload: &[u8]) -> u16 {
     match Ethernet2Header::from_slice(payload) {
         Ok(eth) => {
-            return if eth.0.ether_type == NETHUNS_ETH_P_8021Q
+            if eth.0.ether_type == NETHUNS_ETH_P_8021Q
                 || eth.0.ether_type == NETHUNS_ETH_P_8021AD
             {
                 eth.0.ether_type
@@ -41,17 +41,17 @@ pub fn nethuns_vlan_tpid(payload: &[u8]) -> u16 {
                 0
             }
         }
-        Err(_) => return 0,
+        Err(_) => 0,
     }
 }
 
 
 /// Tag control information
 #[inline(always)]
-pub fn nethuns_vlan_tci<'a>(payload: &[u8]) -> u16 {
+pub fn nethuns_vlan_tci(payload: &[u8]) -> u16 {
     match SingleVlanHeader::from_slice(payload) {
         Ok(vlan) => {
-            return if vlan.0.ether_type == NETHUNS_ETH_P_8021Q
+            if vlan.0.ether_type == NETHUNS_ETH_P_8021Q
                 || vlan.0.ether_type == NETHUNS_ETH_P_8021AD
             {
                 u16::from_be(
@@ -67,14 +67,14 @@ pub fn nethuns_vlan_tci<'a>(payload: &[u8]) -> u16 {
                 0
             }
         }
-        Err(_) => return 0,
+        Err(_) => 0,
     }
 }
 
 
 /// Tag protocol identifier for nethuns socket
 #[inline(always)]
-pub fn nethuns_vlan_tpid_(hdr: &Box<dyn PkthdrTrait>, payload: &[u8]) -> u16 {
+pub fn nethuns_vlan_tpid_(hdr: &dyn PkthdrTrait, payload: &[u8]) -> u16 {
     let tpid = hdr.offvlan_tpid();
     if tpid != 0 {
         tpid
@@ -85,8 +85,8 @@ pub fn nethuns_vlan_tpid_(hdr: &Box<dyn PkthdrTrait>, payload: &[u8]) -> u16 {
 
 
 /// Tag control information for nethuns socket
-pub fn nethuns_vlan_tci_<'a>(
-    hdr: &Box<dyn PkthdrTrait>,
+pub fn nethuns_vlan_tci_(
+    hdr: &dyn PkthdrTrait,
     payload: &[u8],
 ) -> u16 {
     if hdr.offvlan_tpid() != 0 {
