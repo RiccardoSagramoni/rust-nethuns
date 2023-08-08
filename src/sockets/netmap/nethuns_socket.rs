@@ -6,18 +6,18 @@ use std::{mem, thread, time};
 use c_netmap_wrapper::bindings::NS_BUF_CHANGED;
 use c_netmap_wrapper::constants::NIOCRXSYNC;
 use c_netmap_wrapper::macros::{netmap_buf, netmap_rxring};
-use c_netmap_wrapper::netmap_buf_pkt;
 use c_netmap_wrapper::nmport::NmPortDescriptor;
 use c_netmap_wrapper::ring::NetmapRing;
+use c_netmap_wrapper::{netmap_buf_pkt, nm_pkt_copy};
 
 use crate::api::nethuns_dev_queue_name;
 use crate::misc::macros::{min, nethuns_lpow2};
 use crate::nethuns::{__nethuns_clear_if_promisc, __nethuns_set_if_promisc};
 use crate::sockets::base::{NethunsSocketBase, RecvPacket};
 use crate::sockets::errors::{
-    NethunsBindError, NethunsOpenError, NethunsRecvError,
+    NethunsBindError, NethunsOpenError, NethunsRecvError, NethunsSendError,
 };
-use crate::sockets::netmap::ring::non_empty_rx_ring;
+use crate::sockets::netmap::ring::{non_empty_rx_ring, nethuns_send_slot};
 use crate::sockets::ring::{nethuns_ring_free_slots, NethunsRing};
 use crate::sockets::NethunsSocket;
 use crate::types::{NethunsQueue, NethunsSocketMode, NethunsSocketOptions};
@@ -340,6 +340,31 @@ impl NethunsSocket for NethunsSocketNetmap {
     }
     
     
+    fn send(&mut self, packet: &[u8]) -> Result<(), NethunsSendError> {
+        let tx_ring = match &mut self.base.tx_ring {
+            Some(r) => r,
+            None => return Err(NethunsSendError::NotTx),
+        };
+        let some_ring = match &self.some_ring {
+            Some(r) => r,
+            None => return Err(NethunsSendError::NonBinded),
+        };
+        
+        let rc_slot = tx_ring.get_slot(tx_ring.tail as usize);
+        if rc_slot.borrow().inuse.load(atomic::Ordering::Relaxed) {
+            return Err(NethunsSendError::InUse);
+        }
+        
+        let dst =
+            nethuns_get_buf_addr_netmap!(some_ring, tx_ring, tx_ring.tail);
+        nm_pkt_copy(packet, dst as *mut libc::c_void);
+        nethuns_send_slot(tx_ring, tx_ring.tail, packet.len());
+        tx_ring.tail += 1;
+        
+        Ok(())
+    }
+    
+    
     /// Get an immutable reference to the base socket descriptor.
     #[inline(always)]
     fn socket_base(&self) -> &NethunsSocketBase {
@@ -402,11 +427,13 @@ impl Drop for NethunsSocketNetmap {
 
 
 impl NethunsSocketNetmap {
+    /// Check if the socket is in TX mode
     #[inline(always)]
     fn tx(&self) -> bool {
         self.base.tx_ring.is_some()
     }
     
+    /// Check if the socket is in RX mode
     #[inline(always)]
     fn rx(&self) -> bool {
         self.base.rx_ring.is_some()
@@ -414,6 +441,7 @@ impl NethunsSocketNetmap {
 }
 
 
+/// TODO
 macro_rules! nethuns_blocks_free {
     ($s: expr, $slot: expr) => {
         $s.free_ring[($s.free_tail & $s.free_mask) as usize] =
@@ -422,3 +450,15 @@ macro_rules! nethuns_blocks_free {
     };
 }
 pub(self) use nethuns_blocks_free;
+
+
+/// TODO
+macro_rules! nethuns_get_buf_addr_netmap {
+    ($some_ring: expr, $tx_ring: expr, $pktid: expr) => {
+        netmap_buf(
+            $some_ring,
+            $tx_ring.get_slot($pktid as usize).borrow().pkthdr.buf_idx as usize,
+        ) as *mut libc::c_char
+    };
+}
+pub(self) use nethuns_get_buf_addr_netmap;

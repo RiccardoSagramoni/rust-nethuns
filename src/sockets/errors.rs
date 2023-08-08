@@ -24,7 +24,7 @@ pub enum NethunsRecvError {
     NonBinded,
     #[error("[recv] socket not in RX mode")]
     NotRx,
-    #[error("[recv] socket in use by another thread")]
+    #[error("[recv] ring in use")]
     InUse,
     #[error("[recv] no packets have been received")]
     NoPacketsAvailable,
@@ -33,5 +33,17 @@ pub enum NethunsRecvError {
     #[error("[recv] error of the I/O framework: {0}")]
     FrameworkError(String),
     #[error("[recv] an unexpected error occurred: {0}")]
+    Error(String),
+}
+
+#[derive(Error, Debug)]
+pub enum NethunsSendError {
+    #[error("[send] you must execute bind(...) before using the socket")]
+    NonBinded,
+    #[error("[send] socket not in TX mode")]
+    NotTx,
+    #[error("[send] ring in use")]
+    InUse,
+    #[error("[send] an unexpected error occurred: {0}")]
     Error(String),
 }

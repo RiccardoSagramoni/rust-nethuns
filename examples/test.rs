@@ -6,6 +6,7 @@ use nethuns::types::{
 use nethuns::vlan::{nethuns_vlan_tci_, nethuns_vlan_tpid_, nethuns_vlan_tci, nethuns_vlan_tpid, nethuns_vlan_vid};
 use nethuns::{NethunsSocketFactory, RecvPacket};
 
+
 fn main() {
     let opt = NethunsSocketOptions {
         numblocks: 4,
