@@ -1,6 +1,8 @@
 use crate::types::NethunsQueue;
 
 
+/// Get full device name, taking into account 
+/// both the real device name and the queue
 #[inline(always)]
 pub fn nethuns_dev_queue_name(
     dev: Option<&str>,

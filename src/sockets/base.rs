@@ -19,7 +19,7 @@ type NethunsFilter = dyn Fn(&dyn PkthdrTrait, &[u8]) -> i32;
 /// Base structure for a `NethunsSocket`.
 /// 
 /// This data structure is common to all the implementation of a "nethuns socket",
-/// for the supported underlying I/O frameworks. Thus, it's indipendent from
+/// for the supported underlying I/O frameworks. Thus, it's independent from
 /// low-level implementation of the sockets.
 #[derive(Derivative)]
 #[derivative(Debug, Default)]

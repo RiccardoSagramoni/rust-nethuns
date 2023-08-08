@@ -30,6 +30,8 @@ pub struct NetmapRing {
 }
 
 impl NetmapRing {
+    /// Try to create a new `NetmapRing` object by a raw pointer.
+    /// Return error if the pointer is null.
     pub fn try_new(ptr: *mut netmap_ring) -> Result<Self, String> {
         if ptr.is_null() {
             return Err("[NetmapRing::try_new()] ptr is null".to_owned());

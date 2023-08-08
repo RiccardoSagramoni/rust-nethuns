@@ -1,7 +1,7 @@
 use std::ffi::CString;
 use std::rc::Rc;
 use std::sync::atomic;
-use std::{thread, time};
+use std::{mem, thread, time};
 
 use c_netmap_wrapper::bindings::NS_BUF_CHANGED;
 use c_netmap_wrapper::constants::NIOCRXSYNC;
@@ -56,23 +56,17 @@ impl NethunsSocket for NethunsSocketNetmap {
         let mut base = NethunsSocketBase::default();
         
         if rx {
-            base.rx_ring = Some(
-                NethunsRing::try_new(
-                    (opt.numblocks * opt.numpackets) as usize,
-                    opt.packetsize as usize,
-                )
-                .map_err(NethunsOpenError::AllocationError)?,
-            );
+            base.rx_ring = Some(NethunsRing::new(
+                (opt.numblocks * opt.numpackets) as usize,
+                opt.packetsize as usize,
+            ));
         }
         
         if tx {
-            base.tx_ring = Some(
-                NethunsRing::try_new(
-                    (opt.numblocks * opt.numpackets) as usize,
-                    opt.packetsize as usize,
-                )
-                .map_err(NethunsOpenError::AllocationError)?,
-            );
+            base.tx_ring = Some(NethunsRing::new(
+                (opt.numblocks * opt.numpackets) as usize,
+                opt.packetsize as usize,
+            ));
         }
         
         // set a single consumer by default
@@ -90,7 +84,6 @@ impl NethunsSocket for NethunsSocketNetmap {
     }
     
     
-    ///
     fn bind(
         &mut self,
         dev: &str,
@@ -192,7 +185,7 @@ impl NethunsSocket for NethunsSocketNetmap {
             )
         })
         .map_err(|e| {
-            NethunsBindError::NethunsError(format!(
+            NethunsBindError::Error(format!(
                 "failed to initialize some_ring: {e}"
             ))
         })?;
@@ -241,7 +234,7 @@ impl NethunsSocket for NethunsSocketNetmap {
         if self.base.opt.promisc {
             // Set the interface in promisc mode
             __nethuns_set_if_promisc(&self.base.devname).map_err(|e| {
-                NethunsBindError::NethunsError(format!(
+                NethunsBindError::Error(format!(
                     "couldn't set promisc mode: {e}"
                 ))
             })?
@@ -269,15 +262,17 @@ impl NethunsSocket for NethunsSocketNetmap {
         
         // Get the first slot available to userspace (head of RX ring) and check if it's in use
         let rc_slot = rx_ring.get_slot(rx_ring.head as usize);
-        let mut slot = rc_slot.borrow_mut();
+        let slot = rc_slot.borrow();
         if slot.inuse.load(atomic::Ordering::Acquire) {
             return Err(NethunsRecvError::InUse);
         }
+        mem::drop(slot);
         
         if self.free_head == self.free_tail {
-            nethuns_ring_free_slots!(self, rx_ring, slot, nethuns_blocks_free);
+            nethuns_ring_free_slots!(self, rx_ring, nethuns_blocks_free);
+            
             if self.free_head == self.free_tail {
-                return Err(NethunsRecvError::NethunsError("".to_owned())); // FIXME better error
+                return Err(NethunsRecvError::Error("".to_owned())); // FIXME better error
             }
         }
         
@@ -300,11 +295,12 @@ impl NethunsSocket for NethunsSocketNetmap {
         let i = netmap_ring.cur;
         let mut cur_netmap_slot = netmap_ring
             .get_slot(i as usize)
-            .map_err(NethunsRecvError::NethunsError)?;
+            .map_err(NethunsRecvError::Error)?;
         let idx = cur_netmap_slot.buf_idx;
         let pkt = netmap_buf_pkt!(netmap_ring, idx);
         
         // Update the packet header metadata of the nethuns ring abstraction against the actual netmap packet.
+        let mut slot = rc_slot.borrow_mut();
         slot.pkthdr.ts = netmap_ring.ts;
         slot.pkthdr.caplen = cur_netmap_slot.len as u32;
         slot.pkthdr.len = cur_netmap_slot.len as u32;
@@ -339,7 +335,7 @@ impl NethunsSocket for NethunsSocketNetmap {
             ));
         }
         
-        nethuns_ring_free_slots!(self, rx_ring, slot, nethuns_blocks_free);
+        nethuns_ring_free_slots!(self, rx_ring, nethuns_blocks_free);
         Err(NethunsRecvError::PacketFiltered)
     }
     

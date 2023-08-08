@@ -4,6 +4,7 @@ use std::rc::Rc;
 use super::ring_slot::NethunsRingSlot;
 
 
+/// Ring abstraction for Nethuns sockets.
 #[derive(Debug)]
 pub struct NethunsRing {
     pub size: usize,
@@ -17,12 +18,12 @@ pub struct NethunsRing {
 
 
 impl NethunsRing {
-    /// Equivalent to nethuns_make_ring
+    /// Create a new `NethunsRing` object.
+    ///
+    /// Equivalent to `nethuns_make_ring` from the original C library.
     #[inline(always)]
-    pub fn try_new(
-        nslots: usize,
-        pktsize: usize,
-    ) -> Result<NethunsRing, String> {
+    pub fn new(nslots: usize, pktsize: usize) -> NethunsRing {
+        // Allocate the slots for the ring
         let mut rings = Vec::with_capacity(nslots);
         for _i in 0..nslots {
             rings.push(Rc::new(RefCell::new(
@@ -30,35 +31,49 @@ impl NethunsRing {
             )));
         }
         
-        Ok(NethunsRing {
+        NethunsRing {
             size: nslots,
             pktsize,
             head: 0,
             tail: 0,
             rings,
-        })
+        }
     }
     
     
-    /// Equivalent to nethuns_get_slot
+    /// Get a reference to a slot in the ring, given its index.
+    ///
+    /// Equivalent to `nethuns_get_slot` from the original C library.
     #[inline(always)]
     pub fn get_slot(
         self: &NethunsRing,
-        n: usize,
+        index: usize,
     ) -> Rc<RefCell<NethunsRingSlot>> {
-        let n = n % self.rings.len();
-        self.rings[n].clone()
+        let index = index % self.rings.len();
+        self.rings[index].clone()
     }
 }
 
 
-/// TODO
+/// Free all the currently unused slots in the ring.
+/// 
+/// # Arguments
+/// * `s` - A reference to the `NethunsSocket` object.
+/// * `ring` - A reference to the `NethunsRing` object.
+/// * `free_macro` - The name of the macro to call to free the slots.
 macro_rules! nethuns_ring_free_slots {
-    ($s: expr, $ring: expr, $slot: expr, $blocks_free_macro: ident) => {
-        while $ring.tail != $ring.head
-            && !$slot.inuse.load(atomic::Ordering::Acquire)
-        {
-            $blocks_free_macro!($s, $slot);
+    ($s: expr, $ring: expr, $free_macro: ident) => {
+        loop {
+            let rc_slot = $ring.get_slot($ring.tail as usize);
+            let slot = rc_slot.borrow();
+            
+            if !($ring.tail != $ring.head
+                && !slot.inuse.load(atomic::Ordering::Acquire))
+            {
+                break;
+            }
+            
+            $free_macro!($s, slot);
             $ring.tail += 1;
         }
     };
