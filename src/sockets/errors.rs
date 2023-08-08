@@ -57,6 +57,8 @@ pub enum NethunsFlushError {
     NotTx,
     #[error("[flush] ring in use")]
     InUse,
+    #[error("[flush] failed transmission: {0}")]
+    FailedTransmission(String),
     #[error("[recv] error of the I/O framework: {0}")]
     FrameworkError(String),
     #[error("[flush] an unexpected error occurred: {0}")]

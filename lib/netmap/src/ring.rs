@@ -1,6 +1,6 @@
 use std::ops::{Deref, DerefMut};
 
-use crate::bindings::{netmap_ring, netmap_slot, nm_ring_empty, nm_ring_next};
+use crate::bindings::{netmap_ring, netmap_slot, nm_ring_next};
 use crate::slot::NetmapSlot;
 
 /// Safe wrapper for `netmap_ring` structure from the C library.

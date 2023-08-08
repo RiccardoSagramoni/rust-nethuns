@@ -9,7 +9,7 @@ use core::fmt::Debug;
 use crate::types::{NethunsQueue, NethunsSocketOptions};
 
 use self::base::{NethunsSocketBase, RecvPacket};
-use self::errors::{NethunsBindError, NethunsOpenError, NethunsRecvError, NethunsSendError};
+use self::errors::{NethunsBindError, NethunsOpenError, NethunsRecvError, NethunsSendError, NethunsFlushError};
 
 
 /*
@@ -82,6 +82,8 @@ pub trait NethunsSocket: Debug {
     
     /// TODO
     fn send(&mut self, packet: &[u8]) -> Result<(), NethunsSendError>;
+    /// TODO
+    fn flush(&mut self) -> Result<(), NethunsFlushError>;
     
     /// Get an immutable reference to the base socket descriptor.
     fn socket_base(&self) -> &NethunsSocketBase;

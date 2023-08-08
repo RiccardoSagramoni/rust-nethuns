@@ -4,6 +4,7 @@ use super::Pkthdr;
 
 
 /// Ring slot of a Nethuns socket.
+#[repr(C)]
 #[derive(Debug, Default)]
 pub struct NethunsRingSlot {
     pub pkthdr: Pkthdr,
