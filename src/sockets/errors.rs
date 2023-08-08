@@ -47,3 +47,18 @@ pub enum NethunsSendError {
     #[error("[send] an unexpected error occurred: {0}")]
     Error(String),
 }
+
+
+#[derive(Error, Debug)]
+pub enum NethunsFlushError {
+    #[error("[flush] you must execute bind(...) before using the socket")]
+    NonBinded,
+    #[error("[flush] socket not in TX mode")]
+    NotTx,
+    #[error("[flush] ring in use")]
+    InUse,
+    #[error("[recv] error of the I/O framework: {0}")]
+    FrameworkError(String),
+    #[error("[flush] an unexpected error occurred: {0}")]
+    Error(String),
+}
