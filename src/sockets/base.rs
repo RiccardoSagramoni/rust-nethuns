@@ -68,7 +68,7 @@ impl Drop for RecvPacket<'_> {
             // Unset the `inuse` flag of the related ring slot
             rc.borrow_mut()
                 .inuse
-                .store(false, atomic::Ordering::Release);
+                .store(0, atomic::Ordering::Release);
         }
     }
 }

@@ -72,10 +72,10 @@ pub fn nethuns_send_slot(
 ) -> bool {
     let rc_slot = tx_ring.get_slot(pktid as usize);
     let mut slot = rc_slot.borrow_mut();
-    if slot.inuse.load(Ordering::Acquire) {
+    if slot.inuse.load(Ordering::Acquire) != 0 {
         return false;
     }
     slot.len = len as i32;
-    slot.inuse.store(true, Ordering::Release);
+    slot.inuse.store(1, Ordering::Release);
     true
 }

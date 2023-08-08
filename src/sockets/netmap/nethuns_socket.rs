@@ -264,7 +264,7 @@ impl NethunsSocket for NethunsSocketNetmap {
         // Get the first slot available to userspace (head of RX ring) and check if it's in use
         let rc_slot = rx_ring.get_slot(rx_ring.head as usize);
         let slot = rc_slot.borrow();
-        if slot.inuse.load(atomic::Ordering::Acquire) {
+        if slot.inuse.load(atomic::Ordering::Acquire) != 0 {
             return Err(NethunsRecvError::InUse);
         }
         mem::drop(slot);
@@ -324,7 +324,7 @@ impl NethunsSocket for NethunsSocketNetmap {
             slot.pkthdr.caplen =
                 min!(self.base.opt.packetsize, slot.pkthdr.caplen);
             
-            slot.inuse.store(true, atomic::Ordering::Release);
+            slot.inuse.store(1, atomic::Ordering::Release);
             
             rx_ring.head += 1;
             
@@ -352,7 +352,7 @@ impl NethunsSocket for NethunsSocketNetmap {
         };
         
         let rc_slot = tx_ring.get_slot(tx_ring.tail as usize);
-        if rc_slot.borrow().inuse.load(atomic::Ordering::Relaxed) {
+        if rc_slot.borrow().inuse.load(atomic::Ordering::Relaxed) != 0 {
             return Err(NethunsSendError::InUse);
         }
         
@@ -492,7 +492,7 @@ impl NethunsSocketNetmap {
             let ring = NetmapRing::try_new(unsafe { netmap_txring(nmport_d.nifp, i) }).map_err(NethunsFlushError::Error)?;
             prev_tails[i] = ring.tail;
             
-            while !ring.nm_ring_empty() && slot.inuse.load(Ordering::Acquire) {
+            while !ring.nm_ring_empty() && slot.inuse.load(atomic::Ordering::Acquire) == 1 {
                 // swap buf indexes between the nethuns and netmap slots, mark
                 // the nethuns slot as in-flight (inuse <- 2)
             }

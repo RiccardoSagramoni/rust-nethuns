@@ -1,4 +1,4 @@
-use std::sync::atomic::AtomicBool;
+use std::sync::atomic::AtomicU8;
 
 use super::Pkthdr;
 
@@ -8,7 +8,8 @@ use super::Pkthdr;
 pub struct NethunsRingSlot {
     pub pkthdr: Pkthdr,
     pub id: u64,
-    pub inuse: AtomicBool,
+    /// In-use flag => `0`: not in use; `1`: in use (a thread is reading a packet); `2`: in-flight (a thread is sending a packet)
+    pub inuse: AtomicU8,
     pub len: i32,
     
     pub packet: Vec<libc::c_uchar>,
