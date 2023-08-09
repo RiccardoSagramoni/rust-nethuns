@@ -68,7 +68,7 @@ macro_rules! nethuns_ring_free_slots {
             let slot = rc_slot.borrow();
             
             if !($ring.tail != $ring.head
-                && !slot.inuse.load(atomic::Ordering::Acquire))
+                && slot.inuse.load(atomic::Ordering::Acquire) == 0)
             {
                 break;
             }

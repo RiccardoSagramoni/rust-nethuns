@@ -1,8 +1,11 @@
+use std::sync::atomic::Ordering;
+
 use c_netmap_wrapper::macros::netmap_rxring;
 use c_netmap_wrapper::nmport::NmPortDescriptor;
 use c_netmap_wrapper::ring::NetmapRing;
 
 use crate::sockets::errors::NethunsRecvError;
+use crate::sockets::ring::NethunsRing;
 
 
 /// Finds the first non-empty RX ring within the given Netmap port descriptor.
@@ -57,4 +60,22 @@ pub fn non_empty_rx_ring(
             return Err(NethunsRecvError::NoPacketsAvailable);
         }
     }
+}
+
+
+/// TODO
+#[inline(always)]
+pub fn nethuns_send_slot(
+    tx_ring: &NethunsRing,
+    pktid: u64,
+    len: usize,
+) -> bool {
+    let rc_slot = tx_ring.get_slot(pktid as usize);
+    let mut slot = rc_slot.borrow_mut();
+    if slot.inuse.load(Ordering::Acquire) != 0 {
+        return false;
+    }
+    slot.len = len as i32;
+    slot.inuse.store(1, Ordering::Release);
+    true
 }
