@@ -33,7 +33,7 @@ pub enum NethunsSocketMode {
 
 
 /// Options for the nethuns socket.
-#[derive(Builder, Debug, Derivative, PartialEq, PartialOrd)]
+#[derive(Builder, Clone, Debug, Derivative, PartialEq, PartialOrd)]
 #[derivative(Default)]
 #[builder(pattern = "owned", default)]
 pub struct NethunsSocketOptions {
@@ -49,15 +49,15 @@ pub struct NethunsSocketOptions {
     pub tx_qdisc_bypass: bool,
     
     /// xdp only
-    pub xdp_prog: CString,
+    pub xdp_prog: Option<CString>,
     /// xdp only   
-    pub xdp_prog_sec: CString,
+    pub xdp_prog_sec: Option<CString>,
     /// xdp only
-    pub xsk_map_name: CString,
+    pub xsk_map_name: Option<CString>,
     /// xdp only
-    pub reuse_maps: bool,
+    pub reuse_maps: Option<bool>,
     /// xdp only
-    pub pin_dir: CString,
+    pub pin_dir: Option<CString>,
 }
 
 
