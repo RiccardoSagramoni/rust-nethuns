@@ -29,6 +29,10 @@ cfg-if = "1.0.0"
 
 
 [dev-dependencies]
+anyhow = "1.0.72"
+bus = "2.4.0"
+ctrlc = "3.4.0"
+pico-args = "0.5.0"
 
 
 [features]

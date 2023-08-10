@@ -19,14 +19,15 @@ use self::errors::{NethunsBindError, NethunsOpenError, NethunsRecvError, Nethuns
     - A struct which implements the `NethunsSocket` trait, which will
         be built by the `NethunsSocketFactory` factory.
     - A struct named `Pkthdr` which must implement the `PkthdrTrait` trait.
+    TODO: Add new functions
 */
 cfg_if::cfg_if! {
     if #[cfg(feature="netmap")] {
         mod netmap;
         
-        use netmap::NethunsSocketNetmap;
+        use netmap::nethuns_socket::NethunsSocketNetmap;
         
-        pub use netmap::Pkthdr;
+        pub use netmap::pkthdr::Pkthdr;
     }
     else {
         std::compile_error!("The support for the specified I/O framework is not available yet. Check the documentation for more information.");
@@ -70,7 +71,7 @@ pub trait NethunsSocket: Debug {
     ///
     /// # Returns
     /// * `Ok(RecvPacket)` - The unprocessed received packet, if no error occurred.
-    /// * `Err(NethunsRecvError::NonBinded)` - If the socket is not bound to a device. Make sure to call `NethunsSocket::bind(...)` first.
+    /// * `Err(NethunsRecvError::NonBinded)` - If the socket is not bound to a device. Make sure to call `bind(...)` first.
     /// * `Err(NethunsRecvError::NotRx)` -  If the socket is not configured in RX mode. Check the configuration parameters passed to `open(...)`.
     /// * `Err(NethunsRecvError::InUse)` - If the slot at the head of the RX ring is currently in use, i.e. the corresponding received packet is not released yet.
     /// * `Err(NethunsRecvError::NoPacketsAvailable)` - If there are no new packets available in the RX ring.
@@ -85,10 +86,18 @@ pub trait NethunsSocket: Debug {
     /// TODO
     fn flush(&mut self) -> Result<(), NethunsFlushError>;
     
+    /// TODO
+    fn send_slot(&self, pktid: u64, len: usize) -> Result<(), NethunsSendError>;
+    
     /// Get an immutable reference to the base socket descriptor.
     fn socket_base(&self) -> &NethunsSocketBase;
     /// Get a mutable reference to the base socket descriptor.
     fn socket_base_mut(&mut self) -> &mut NethunsSocketBase;
+    
+    /// TODO
+    fn get_buf_addr(&self, pktid:u64) -> Option<&mut [u8]>;
+    /// TODO
+    fn txring_get_size(&self) -> Option<usize>;
 }
 
 

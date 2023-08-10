@@ -1,5 +1,3 @@
-use std::ffi::CString;
-
 use derivative::Derivative;
 use derive_builder::Builder;
 
@@ -49,15 +47,15 @@ pub struct NethunsSocketOptions {
     pub tx_qdisc_bypass: bool,
     
     /// xdp only
-    pub xdp_prog: Option<CString>,
+    pub xdp_prog: Option<String>,
     /// xdp only   
-    pub xdp_prog_sec: Option<CString>,
+    pub xdp_prog_sec: Option<String>,
     /// xdp only
-    pub xsk_map_name: Option<CString>,
+    pub xsk_map_name: Option<String>,
     /// xdp only
     pub reuse_maps: Option<bool>,
     /// xdp only
-    pub pin_dir: Option<CString>,
+    pub pin_dir: Option<String>,
 }
 
 
