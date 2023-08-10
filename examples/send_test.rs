@@ -32,8 +32,8 @@ fn main() {
     let mut socket = NethunsSocketFactory::try_new_nethuns_socket(opt).unwrap();
     socket.bind("vi11", NethunsQueue::Any).unwrap();
     
-    for i in 0..1000 {
-        for _ in 0..10 {
+    for i in 0..10 {
+        for _ in 0..40 {
             socket.send(&PAYLOAD).unwrap();
         }
         socket.flush().unwrap();

@@ -207,7 +207,7 @@ impl NethunsSocket for NethunsSocketNetmap {
                 scan = unsafe {
                     let ptr =
                         netmap_buf(&some_ring, scan as usize) as *const u32;
-                    *ptr
+                    ptr.read_unaligned()
                 }
             }
         }
@@ -221,7 +221,7 @@ impl NethunsSocket for NethunsSocketNetmap {
                     let ptr =
                         netmap_buf(&some_ring, scan as usize) as *const u32;
                     assert!(!ptr.is_null());
-                    *ptr
+                    ptr.read_unaligned()
                 };
             }
         }
@@ -378,15 +378,13 @@ impl NethunsSocket for NethunsSocketNetmap {
             Some(p) => p,
             None => return Err(NethunsFlushError::NonBinded),
         };
-        
-        let mut prev_tails: Vec<u32> = Vec::with_capacity(
-            (nmport_d.last_tx_ring - nmport_d.last_rx_ring + 1) as usize,
-        );
+
+        let mut prev_tails: Vec<u32> = vec![0; (nmport_d.last_tx_ring - nmport_d.last_rx_ring + 1) as usize];
         
         let mut head = tx_ring.head;
         
         // Try to push packets marked for transmission
-        for i in nmport_d.first_tx_ring as usize..nmport_d.last_tx_ring as usize
+        for i in nmport_d.first_tx_ring as usize..=nmport_d.last_tx_ring as usize
         {
             let mut ring =
                 NetmapRing::try_new(unsafe { netmap_txring(nmport_d.nifp, i) })
@@ -434,7 +432,7 @@ impl NethunsSocket for NethunsSocketNetmap {
         // cleanup completed transmissions: for each completed
         // netmap slot, mark the corresponding nethuns slot as
         // available (inuse <- 0)
-        for i in nmport_d.first_tx_ring as usize..nmport_d.last_tx_ring as usize
+        for i in nmport_d.first_tx_ring as usize..=nmport_d.last_tx_ring as usize
         {
             let ring =
                 NetmapRing::try_new(unsafe { netmap_txring(nmport_d.nifp, i) })

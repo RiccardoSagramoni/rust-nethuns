@@ -30,9 +30,7 @@ pub(crate) use min;
 /// Compute the closest power of 2 larger or equal than `x`
 #[inline(always)]
 pub fn nethuns_lpow2(x: usize) -> usize {
-    if x == 0 {
-        0
-    } else if (x & (x - 1)) == 0 {
+    if x != 0 && (x & (x - 1)) == 0 {
         x
     } else {
         1 << (mem::size_of::<usize>() * 8 - x.leading_zeros() as usize)
@@ -54,7 +52,7 @@ mod tests {
     
     #[test]
     fn lpow2() {
-        assert_eq!(super::nethuns_lpow2(0), 0);
+        assert_eq!(super::nethuns_lpow2(0), 1);
         assert_eq!(super::nethuns_lpow2(1), 1);
         assert_eq!(super::nethuns_lpow2(2), 2);
         assert_eq!(super::nethuns_lpow2(30), 32);
