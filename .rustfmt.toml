@@ -1,0 +1,6 @@
+max_width = 80
+
+# Unstable features: run ftm in nightly mode (cargo +nightly fmt)
+unstable_features = true
+blank_lines_upper_bound = 2
+imports_granularity = "Module"
