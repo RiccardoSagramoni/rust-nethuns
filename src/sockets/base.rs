@@ -81,7 +81,7 @@ impl RecvPacket<'_> {
     /// - `id`: The ID of the received packet.
     /// - `pkthdr`: A boxed trait object representing packet header metadata.
     /// - `packet`: A byte slice containing the received packet.
-    /// - `slot`: A weak reference to the Nethuns ring slot where the packet is stored.
+    /// - `slot`: A weak reference to the Nethuns ring slot where the packet is stored. This is required to automatically release the packet once it goes out of scope.
     pub fn new(
         id: u64,
         pkthdr: Box<dyn PkthdrTrait>,

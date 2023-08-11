@@ -7,7 +7,6 @@ use super::ring_slot::NethunsRingSlot;
 /// Ring abstraction for Nethuns sockets.
 #[derive(Debug)]
 pub struct NethunsRing {
-    pub size: usize,
     pub pktsize: usize,
     
     pub head: u64,
@@ -32,7 +31,6 @@ impl NethunsRing {
         }
         
         NethunsRing {
-            size: nslots,
             pktsize,
             head: 0,
             tail: 0,
@@ -51,6 +49,13 @@ impl NethunsRing {
     ) -> Rc<RefCell<NethunsRingSlot>> {
         let index = index % self.rings.len();
         self.rings[index].clone()
+    }
+    
+    
+    /// Get the number of slots in the ring.
+    #[inline(always)]
+    pub fn size(&self) -> usize {
+        self.rings.len()
     }
 }
 

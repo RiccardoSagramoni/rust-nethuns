@@ -31,7 +31,7 @@ use crate::sockets::ring::NethunsRing;
 /// This function makes use of unsafe code due to the interaction with the Netmap C API
 /// through the `netmap_rxring` function.
 /// Be sure that the Netmap port descriptor is properly initialized.
-pub fn non_empty_rx_ring(
+pub(super) fn non_empty_rx_ring(
     d: &mut NmPortDescriptor,
 ) -> Result<NetmapRing, NethunsRecvError> {
     let mut ri = d.cur_rx_ring;
@@ -65,7 +65,7 @@ pub fn non_empty_rx_ring(
 
 /// TODO
 #[inline(always)]
-pub fn nethuns_send_slot(
+pub(super) fn nethuns_send_slot(
     tx_ring: &NethunsRing,
     pktid: u64,
     len: usize,
