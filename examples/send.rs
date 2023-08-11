@@ -4,7 +4,7 @@ use nethuns::types::{
     NethunsSocketOptions,
 };
 use nethuns::{NethunsSocket, NethunsSocketFactory};
-use std::error::Error;
+use std::io::Write;
 use std::sync::mpsc::TryRecvError;
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, SystemTime};
@@ -170,11 +170,11 @@ fn configure_example() -> (Args, [u8; 34], NethunsSocketOptions) {
 ///
 /// # Returns
 ///
-/// - `Ok(args: Args)`: If the command-line arguments are successfully parsed, a
+/// - `Ok(Args)`: If the command-line arguments are successfully parsed, a
 ///   Result with an Args instance containing the parsed options is returned.
-/// - `Err(err: Box<dyn Error>)`: If an error occurs during argument parsing or
+/// - `Err(anyhow::Error)`: If an error occurs during argument parsing or
 ///   any related operations, a Result with a boxed error is returned.
-fn parse_args() -> Result<Args, Box<dyn Error>> {
+fn parse_args() -> Result<Args, anyhow::Error> {
     let mut pargs = pico_args::Arguments::from_env();
     
     // Help has a higher priority and should be handled separately.
@@ -184,7 +184,7 @@ fn parse_args() -> Result<Args, Box<dyn Error>> {
     }
     
     let args = Args {
-        interface: pargs.value_from_str(["-i", "--interface"]).unwrap(),
+        interface: pargs.value_from_str(["-i", "--interface"])?,
         batch_size: pargs.value_from_str(["-b", "--batch_size"]).unwrap_or(1),
         num_sockets: pargs.value_from_str(["-n", "--sockets"]).unwrap_or(1),
         multithreading: pargs.contains(["-m", "--multithreading"]),
@@ -256,7 +256,7 @@ fn meter(totals: Arc<Mutex<Vec<u64>>>, mut rx: BusReader<()>) {
 ///
 /// # Arguments
 /// - `args`: Parsed command-line arguments.
-/// - `net_opt`: Nethuns socket options.
+/// - `opt`: Nethuns socket options.
 /// - `payload`: Payload for packets.
 /// - `rx`: BusReader for SPMC (single-producer/multiple-consumers)
 ///   communication between threads.
@@ -266,13 +266,13 @@ fn meter(totals: Arc<Mutex<Vec<u64>>>, mut rx: BusReader<()>) {
 /// transmission.
 fn st_execution(
     args: Args,
-    net_opt: NethunsSocketOptions,
-    payload: &[libc::c_uchar],
+    opt: NethunsSocketOptions,
+    payload: &[u8],
     rx: BusReader<()>,
     totals: Arc<Mutex<Vec<u64>>>,
 ) {
     // Starts transmission
-    if let Err(e) = st_send(&args, net_opt, payload, rx, totals) {
+    if let Err(e) = st_send(&args, opt, payload, rx, totals) {
         eprintln!("Error in transmission: {:?}", e);
         std::process::exit(1);
     }
@@ -283,7 +283,7 @@ fn st_execution(
 ///
 /// # Arguments
 /// - `args`: Parsed command-line arguments.
-/// - `net_opt`: Nethuns socket options.
+/// - `opt`: Nethuns socket options.
 /// - `payload`: Payload for packets.
 /// - `rx`: BusReader for SPMC (single-producer/multiple-consumers)
 ///   communication between threads.
@@ -291,10 +291,10 @@ fn st_execution(
 ///
 /// # Returns
 /// - `Ok(())`: If transmission is successful.
-/// - `Err(SendError)`: If an error occurs during transmission.
+/// - `Err(anyhow::Error)`: If an error occurs during transmission.
 fn st_send(
     args: &Args,
-    net_opt: NethunsSocketOptions,
+    opt: NethunsSocketOptions,
     payload: &[u8],
     mut bus_rx: BusReader<()>,
     totals: Arc<Mutex<Vec<u64>>>,
@@ -307,7 +307,7 @@ fn st_send(
     
     // Setup and fill transmission rings for each socket
     for i in 0..args.num_sockets {
-        out_sockets.push(fill_tx_ring(args, net_opt.clone(), i, payload)?);
+        out_sockets.push(fill_tx_ring(args, opt.clone(), i, payload)?);
     }
     
     loop {
@@ -341,7 +341,7 @@ fn st_send(
 ///
 /// # Arguments
 /// - `args`: Parsed command-line arguments.
-/// - `net_opt`: Nethuns socket options.
+/// - `opt`: Nethuns socket options.
 /// - `th_idx`: Thread index.
 /// - `payload`: Payload for packets.
 /// - `rx`: BusReader for SPMC (single-producer/multiple-consumers)
@@ -366,7 +366,7 @@ fn mt_execution(
 ///
 /// # Arguments
 /// - `args`: Parsed command-line arguments.
-/// - `net_opt`: Nethuns socket options.
+/// - `opt`: Nethuns socket options.
 /// - `th_idx`: Thread index.
 /// - `payload`: Payload for packets.
 /// - `rx`: BusReader for SPMC (single-producer/multiple-consumers)
@@ -375,7 +375,7 @@ fn mt_execution(
 ///
 /// # Returns
 /// - `Ok(())`: If transmission is successful.
-/// - `Err(SendError)`: If an error occurs during transmission.
+/// - `Err(anyhow::Error)`: If an error occurs during transmission.
 fn mt_send(
     args: &Args,
     opt: NethunsSocketOptions,
@@ -420,11 +420,9 @@ fn mt_send(
 ///
 /// # Arguments
 /// - `args`: Parsed command-line arguments.
-/// - `net_opt`: Nethuns socket options.
+/// - `opt`: Nethuns socket options.
 /// - `socket_idx`: Socket index.
-/// - `out_socket`: Socket descriptor.
 /// - `payload`: Payload for packets.
-/// - `errbuf`: Error buffer.
 ///
 /// # Returns
 /// - `Ok(())`: If transmission is successful.
@@ -452,11 +450,11 @@ fn fill_tx_ring(
         
         for j in 0..size {
             // tell me where to copy the j-th packet to be transmitted
-            let pkt =
+            let mut pkt =
                 socket.get_buf_addr(j as _).expect("bind(...) not called");
             
             // copy the packet
-            pkt.copy_from_slice(payload);
+            pkt.write_all(payload)?;
         }
     }
     
@@ -468,7 +466,7 @@ fn fill_tx_ring(
 ///
 /// # Arguments
 /// - `args`: Parsed command-line arguments.
-/// - `out_socket`: Socket descriptor.
+/// - `socket`: Socket descriptor.
 /// - `pktid`: Current packet id.
 /// - `pkt_size`: Packet size.
 /// - `totals`: Vector for storing the number of packets sent from each socket.
@@ -502,7 +500,7 @@ fn transmit_zc(
 ///
 /// # Arguments
 /// - `args`: Parsed command-line arguments.
-/// - `out_socket`: Socket descriptor.
+/// - `socket`: Socket descriptor.
 /// - `payload`: Payload for packets.
 /// - `totals`: Vector for storing the number of packets sent from each socket.
 /// - `socket_idx`: Socket index.
@@ -516,7 +514,7 @@ fn transmit_c(
     // Prepare batch
     for _ in 0..args.batch_size {
         if let Err(e) = socket.send(payload) {
-            eprintln!("Error in trasmission for socket {socket_idx}: {e}");
+            eprintln!("Error in transmission for socket {socket_idx}: {e}");
             break;
         }
         if let Some(t) = totals.lock().unwrap().get_mut(socket_idx) {
