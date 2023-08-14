@@ -49,8 +49,7 @@ impl NethunsRing {
         self.rings
             .iter()
             .cycle()
-            .skip(index)
-            .next()
+            .nth(index)
             .expect(
                 "Index out of bounds in a cyclic iterator should be impossible",
             )
@@ -137,7 +136,7 @@ pub struct NethunsRingSlot {
     pub inuse: AtomicU8,
     pub len: i32,
     
-    pub packet: Vec<libc::c_uchar>,
+    pub packet: Vec<u8>,
 }
 
 

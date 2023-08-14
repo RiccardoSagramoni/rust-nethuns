@@ -17,7 +17,7 @@ use crate::sockets::errors::{
     NethunsBindError, NethunsFlushError, NethunsOpenError, NethunsRecvError,
     NethunsSendError,
 };
-use crate::sockets::netmap::ring::non_empty_rx_ring;
+use crate::sockets::netmap::utility::{non_empty_rx_ring, nethuns_blocks_free};
 use crate::sockets::ring::{
     nethuns_ring_free_slots, NethunsRing, NethunsRingSlot,
 };
@@ -25,6 +25,8 @@ use crate::sockets::NethunsSocket;
 use crate::types::{
     NethunsQueue, NethunsSocketMode, NethunsSocketOptions, NethunsStat,
 };
+
+use super::utility::nethuns_get_buf_addr_netmap;
 
 
 #[derive(Debug)]
@@ -141,7 +143,7 @@ impl NethunsSocket for NethunsSocketNetmap {
         // Configure NethunsSocketBase structure
         self.base.queue = queue;
         self.base.ifindex =
-            unsafe { libc::if_nametoindex(c_dev.as_ptr()) } as libc::c_int;
+            unsafe { libc::if_nametoindex(c_dev.as_ptr()) } as _;
         
         // Configure the Netmap port descriptor
         // with the number of required extra buffers
@@ -587,44 +589,3 @@ impl NethunsSocketNetmap {
         self.base.rx_ring.is_some()
     }
 }
-
-
-/// Add the id of a newly available ring slot
-/// to the list of currently available slots.
-///
-/// This should be passed to [`nethuns_ring_free_slots`] as
-/// *free_macro* parameter.
-///
-/// # Arguments
-/// * `s` - the nethuns socket
-/// * `slot` - the newly available ring slot
-macro_rules! nethuns_blocks_free {
-    ($s: expr, $slot: expr) => {
-        $s.free_ring[($s.free_tail & $s.free_mask) as usize] =
-            $slot.pkthdr.buf_idx;
-        $s.free_tail += 1;
-    };
-}
-pub(self) use nethuns_blocks_free;
-
-
-/// Get a raw pointer to the buffer which contains the packet,
-/// inside a specific ring slot.
-///
-/// # Arguments
-/// * `$some_ring`: a NetmapRing object
-/// * `$tx_ring`: a NethunsRing object
-/// * `$pktid`: the ring slot ID
-/// FIXME better doc
-///
-/// # Returns
-/// A `*mut u8` raw pointer pointing to the requested buffer
-macro_rules! nethuns_get_buf_addr_netmap {
-    ($some_ring: expr, $tx_ring: expr, $pktid: expr) => {
-        netmap_buf(
-            $some_ring,
-            $tx_ring.get_slot($pktid as _).borrow().pkthdr.buf_idx as _,
-        ) as *mut u8
-    };
-}
-pub(self) use nethuns_get_buf_addr_netmap;
