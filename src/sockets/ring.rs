@@ -1,6 +1,9 @@
 use std::cell::RefCell;
+use std::cmp;
 use std::rc::Rc;
-use std::sync::atomic::AtomicU8;
+use std::sync::atomic::{AtomicU8, Ordering};
+
+use super::Pkthdr;
 
 use crate::NethunsSocket;
 
@@ -41,15 +44,17 @@ impl NethunsRing {
     
     
     /// Get a reference to a slot in the ring, given its index.
-    ///
-    /// Equivalent to `nethuns_get_slot` from the original C library.
     #[inline(always)]
-    pub fn get_slot(
-        self: &NethunsRing,
-        index: usize,
-    ) -> Rc<RefCell<NethunsRingSlot>> {
-        let index = index % self.rings.len();
-        self.rings[index].clone()
+    pub fn get_slot(&self, index: usize) -> Rc<RefCell<NethunsRingSlot>> {
+        self.rings
+            .iter()
+            .cycle()
+            .skip(index)
+            .next()
+            .expect(
+                "Index out of bounds in a cyclic iterator should be impossible",
+            )
+            .clone()
     }
     
     
@@ -57,6 +62,68 @@ impl NethunsRing {
     #[inline(always)]
     pub fn size(&self) -> usize {
         self.rings.len()
+    }
+    
+    
+    /// Get the number of the consecutive available slots
+    /// in the ring, starting from the given position.
+    ///
+    /// The returned value is capped to 32.
+    #[inline(always)]
+    pub fn num_free_slots(&self, pos: usize) -> usize {
+        let mut total = 0_usize;
+        
+        for slot in self
+            .rings
+            .iter()
+            .cycle()
+            .skip(pos)
+            .take(cmp::min(self.rings.len() - 1, 32))
+        {
+            if slot.borrow().inuse.load(Ordering::Acquire) == 0 {
+                total += 1;
+            } else {
+                break;
+            }
+        }
+        
+        total
+    }
+    
+    
+    /// Get a reference to the head slot in the ring
+    /// and shift the head to the following slot.
+    pub fn next_slot(&mut self) -> Rc<RefCell<NethunsRingSlot>> {
+        let slot = self.get_slot(self.head as _);
+        self.head += 1;
+        slot
+    }
+    
+    
+    /// Mark the packet contained in a specific slot of a TX ring
+    /// as *ready for transmission*, by setting to 1 the `inuse` field.
+    ///
+    /// # Arguments
+    /// * `id` - The id of the slot which contains the packet to send.
+    /// * `len` - The length of the packet.
+    ///
+    /// # Returns
+    /// * `true` - On success.
+    /// * `false` - If the slot is already in use.
+    #[inline(always)]
+    pub fn nethuns_send_slot(
+        &self,
+        id: u64,
+        len: usize,
+    ) -> bool {
+        let rc_slot = self.get_slot(id as _);
+        let mut slot = rc_slot.borrow_mut();
+        if slot.inuse.load(Ordering::Acquire) != 0 {
+            return false;
+        }
+        slot.len = len as i32;
+        slot.inuse.store(1, Ordering::Release);
+        true
     }
 }
 
@@ -111,7 +178,16 @@ macro_rules! nethuns_ring_free_slots {
 }
 pub(crate) use nethuns_ring_free_slots;
 
-use super::Pkthdr;
+
+/// Get size of the RX ring.
+#[inline(always)]
+pub fn rxring_get_size(socket: &dyn NethunsSocket) -> Option<usize> {
+    let rx_ring = match &socket.socket_base().rx_ring {
+        Some(r) => r,
+        None => return None,
+    };
+    Some(rx_ring.size())
+}
 
 
 /// Get size of the TX ring.

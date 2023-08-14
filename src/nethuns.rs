@@ -1,4 +1,4 @@
-use std::ffi::{CStr, CString};
+use std::ffi::CStr;
 use std::mem;
 use std::os::fd::AsRawFd;
 
@@ -16,7 +16,7 @@ use crate::global::{NethunsNetInfo, NETHUNS_GLOBAL};
 /// # Returns
 /// * `Ok(())` - If the setting was successful.
 /// * `Err(String)` - If an error occurs.
-pub fn __nethuns_set_if_promisc(devname: &CString) -> Result<(), String> {
+pub fn __nethuns_set_if_promisc(devname: &CStr) -> Result<(), String> {
     // Get the active flag word of the device.
     let mut flags = nethuns_ioctl_if(
         devname,
@@ -87,7 +87,7 @@ pub fn __nethuns_set_if_promisc(devname: &CString) -> Result<(), String> {
 /// # Returns
 /// * `Ok(())` - If the setting was successful.
 /// * `Err(String)` - If an error occurs.
-pub fn __nethuns_clear_if_promisc(devname: &CString) -> Result<(), String> {
+pub fn __nethuns_clear_if_promisc(devname: &CStr) -> Result<(), String> {
     // Get the active flag word of the device.
     let mut flags = nethuns_ioctl_if(
         devname,

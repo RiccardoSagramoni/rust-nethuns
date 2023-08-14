@@ -1,7 +1,7 @@
 use std::ffi::{CStr, CString};
 use std::rc::Rc;
 use std::sync::atomic;
-use std::{mem, slice, thread, time, cmp};
+use std::{cmp, mem, slice, thread, time};
 
 use c_netmap_wrapper::bindings::{nm_pkt_copy, NS_BUF_CHANGED};
 use c_netmap_wrapper::constants::{NIOCRXSYNC, NIOCTXSYNC};
@@ -10,14 +10,14 @@ use c_netmap_wrapper::netmap_buf_pkt;
 use c_netmap_wrapper::nmport::NmPortDescriptor;
 use c_netmap_wrapper::ring::NetmapRing;
 
-use crate::misc::{nethuns_lpow2, nethuns_dev_queue_name};
+use crate::misc::{nethuns_dev_queue_name, nethuns_lpow2};
 use crate::nethuns::{__nethuns_clear_if_promisc, __nethuns_set_if_promisc};
 use crate::sockets::base::{NethunsSocketBase, RecvPacket};
 use crate::sockets::errors::{
     NethunsBindError, NethunsFlushError, NethunsOpenError, NethunsRecvError,
     NethunsSendError,
 };
-use crate::sockets::netmap::ring::{nethuns_send_slot, non_empty_rx_ring};
+use crate::sockets::netmap::ring::non_empty_rx_ring;
 use crate::sockets::ring::{
     nethuns_ring_free_slots, NethunsRing, NethunsRingSlot,
 };
@@ -364,7 +364,7 @@ impl NethunsSocket for NethunsSocketNetmap {
         unsafe {
             nm_pkt_copy(packet.as_ptr() as _, dst as _, packet.len() as _)
         };
-        nethuns_send_slot(tx_ring, tx_ring.tail, packet.len());
+        tx_ring.nethuns_send_slot(tx_ring.tail, packet.len());
         tx_ring.tail += 1;
         
         Ok(())
@@ -472,7 +472,7 @@ impl NethunsSocket for NethunsSocketNetmap {
             Some(r) => r,
             None => return Err(NethunsSendError::NotTx),
         };
-        if nethuns_send_slot(tx_ring, id, len) {
+        if tx_ring.nethuns_send_slot(id, len) {
             Ok(())
         } else {
             Err(NethunsSendError::InUse)
