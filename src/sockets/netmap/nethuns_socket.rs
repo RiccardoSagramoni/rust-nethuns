@@ -1,7 +1,7 @@
 use std::ffi::{CStr, CString};
 use std::rc::Rc;
 use std::sync::atomic;
-use std::{mem, slice, thread, time};
+use std::{mem, slice, thread, time, cmp};
 
 use c_netmap_wrapper::bindings::{nm_pkt_copy, NS_BUF_CHANGED};
 use c_netmap_wrapper::constants::{NIOCRXSYNC, NIOCTXSYNC};
@@ -10,8 +10,7 @@ use c_netmap_wrapper::netmap_buf_pkt;
 use c_netmap_wrapper::nmport::NmPortDescriptor;
 use c_netmap_wrapper::ring::NetmapRing;
 
-use crate::api::nethuns_dev_queue_name;
-use crate::misc::macros::{min, nethuns_lpow2};
+use crate::misc::{nethuns_lpow2, nethuns_dev_queue_name};
 use crate::nethuns::{__nethuns_clear_if_promisc, __nethuns_set_if_promisc};
 use crate::sockets::base::{NethunsSocketBase, RecvPacket};
 use crate::sockets::errors::{
@@ -326,7 +325,7 @@ impl NethunsSocket for NethunsSocketNetmap {
             Some(filter) => filter(&slot.pkthdr, pkt) != 0,
         } {
             slot.pkthdr.caplen =
-                min!(self.base.opt.packetsize, slot.pkthdr.caplen);
+                cmp::min(self.base.opt.packetsize, slot.pkthdr.caplen);
             
             slot.inuse.store(1, atomic::Ordering::Release);
             
