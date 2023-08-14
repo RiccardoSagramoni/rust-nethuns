@@ -7,8 +7,7 @@ use derivative::Derivative;
 
 use crate::types::{NethunsQueue, NethunsSocketOptions};
 
-use super::ring::NethunsRing;
-use super::ring_slot::NethunsRingSlot;
+use super::ring::{NethunsRing, NethunsRingSlot};
 use super::PkthdrTrait;
 
 
@@ -17,9 +16,9 @@ type NethunsFilter = dyn Fn(&dyn PkthdrTrait, &[u8]) -> i32;
 
 
 /// Base structure for a `NethunsSocket`.
-/// 
+///
 /// This data structure is common to all the implementation of a "nethuns socket",
-/// for the supported underlying I/O frameworks. Thus, it's indipendent from
+/// for the supported underlying I/O frameworks. Thus, it's independent from
 /// low-level implementation of the sockets.
 #[derive(Derivative)]
 #[derivative(Debug, Default)]
@@ -66,9 +65,7 @@ impl Drop for RecvPacket<'_> {
     fn drop(&mut self) {
         if let Some(rc) = self.slot.upgrade() {
             // Unset the `inuse` flag of the related ring slot
-            rc.borrow_mut()
-                .inuse
-                .store(false, atomic::Ordering::Release);
+            rc.borrow_mut().inuse.store(0, atomic::Ordering::Release);
         }
     }
 }
@@ -81,7 +78,7 @@ impl RecvPacket<'_> {
     /// - `id`: The ID of the received packet.
     /// - `pkthdr`: A boxed trait object representing packet header metadata.
     /// - `packet`: A byte slice containing the received packet.
-    /// - `slot`: A weak reference to the Nethuns ring slot where the packet is stored.
+    /// - `slot`: A weak reference to the Nethuns ring slot where the packet is stored. This is required to automatically release the packet once it goes out of scope.
     pub fn new(
         id: u64,
         pkthdr: Box<dyn PkthdrTrait>,
@@ -96,6 +93,3 @@ impl RecvPacket<'_> {
         }
     }
 }
-
-
-// TODO continue

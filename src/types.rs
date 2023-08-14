@@ -1,7 +1,13 @@
-use std::ffi::CString;
-
 use derivative::Derivative;
 use derive_builder::Builder;
+
+
+#[derive(Clone, Copy, Debug, Default, PartialEq, PartialOrd)]
+pub enum NethunsQueue {
+    Some(u32),
+    #[default]
+    Any,
+}
 
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, PartialOrd)]
@@ -32,7 +38,8 @@ pub enum NethunsSocketMode {
 }
 
 
-#[derive(Builder, Debug, Derivative, PartialEq, PartialOrd)]
+/// Options for the nethuns socket.
+#[derive(Builder, Clone, Debug, Derivative, PartialEq, PartialOrd)]
 #[derivative(Default)]
 #[builder(pattern = "owned", default)]
 pub struct NethunsSocketOptions {
@@ -47,51 +54,31 @@ pub struct NethunsSocketOptions {
     pub rxhash: bool,
     pub tx_qdisc_bypass: bool,
     
-    pub xdp_prog: CString,     // xdp only
-    pub xdp_prog_sec: CString, // xdp only
-    pub xsk_map_name: CString, // xdp only
-    pub reuse_maps: bool,      // xdp only
-    pub pin_dir: CString,      // xdp only
+    /// xdp only
+    pub xdp_prog: Option<String>,
+    /// xdp only   
+    pub xdp_prog_sec: Option<String>,
+    /// xdp only
+    pub xsk_map_name: Option<String>,
+    /// xdp only
+    pub reuse_maps: Option<bool>,
+    /// xdp only
+    pub pin_dir: Option<String>,
 }
 
 
-// TODO unused struct?
-// #[derive(Clone, Copy, Builder, Debug, Default, PartialEq, PartialOrd)]
-// #[builder(pattern = "owned", default)]
-// pub struct NethunsStat {
-//     pub rx_packets: u64,
-//     pub tx_packets: u64,
-//     pub rx_dropped: u64,
-//     pub rx_if_dropped: u64,
-//     pub rx_invalid: u64, // xdp only
-//     pub tx_invalid: u64, // xdp only
-//     pub freeze: u64,
-// }
-
-// TODO unused struct?
-// #[derive(Builder, Debug, Default)]
-// #[builder(pattern = "owned", default)]
-// pub struct NethunsPacket {
-//     pub payload: Vec<u8>,
-//     pub pkthdr: Box<dyn Pkthdr>,
-//     pub sock: NethunsSocketBase,
-//     pub id: u64,
-// }
-
-
-#[derive(Clone, Builder, Debug, Default, PartialEq, PartialOrd)]
-#[builder(pattern = "owned", default)]
-pub struct NethunsTimeval {
-    tv_sec: u32,
-    tv_usec: u32,
-}
-
-
+/// Statistics for the nethuns socket.
 #[derive(Clone, Copy, Debug, Default, PartialEq, PartialOrd)]
-pub enum NethunsQueue {
-    Some(u32),
-    #[default]
-    Any,
+pub struct NethunsStat {
+    pub rx_packets: u64,
+    pub tx_packets: u64,
+    pub rx_dropped: u64,
+    pub rx_if_dropped: u64,
+    /// xdp only
+    pub rx_invalid: u64,
+    /// xdp only
+    pub tx_invalid: u64,
+    pub freeze: u64,
 }
 
 
@@ -101,26 +88,22 @@ mod tests {
     
     
     #[test]
-    fn check_send_trait() {
+    fn assert_send_trait() {
         assert!(is_trait!(super::NethunsCaptureDir, Send));
         assert!(is_trait!(super::NethunsCaptureMode, Send));
         assert!(is_trait!(super::NethunsSocketMode, Send));
         assert!(is_trait!(super::NethunsSocketOptions, Send));
-        // assert!(is_trait!(super::NethunsStat, Send));
-        // assert!(is_trait!(super::NethunsPacket, Send));
-        assert!(is_trait!(super::NethunsTimeval, Send));
+        assert!(is_trait!(super::NethunsStat, Send));
     }
     
     
     #[test]
-    fn check_sync_trait() {
+    fn assert_sync_trait() {
         assert!(is_trait!(super::NethunsCaptureDir, Sync));
         assert!(is_trait!(super::NethunsCaptureMode, Sync));
         assert!(is_trait!(super::NethunsSocketMode, Sync));
         assert!(is_trait!(super::NethunsSocketOptions, Sync));
-        // assert!(is_trait!(super::NethunsStat, Sync));
-        // assert!(is_trait!(super::NethunsPacket, Sync));
-        assert!(is_trait!(super::NethunsTimeval, Sync));
+        assert!(is_trait!(super::NethunsStat, Sync));
     }
     
     

@@ -4,6 +4,6 @@
 // These are non blocking and take no argument.
 
 /// sync tx queues
-pub const NIOCTXSYNC: u64 = uapi::_IO('i' as u64, 148 as u64);
+pub const NIOCTXSYNC: u64 = uapi::_IO('i' as u64, 148_u64);
 /// sync rx queues
-pub const NIOCRXSYNC: u64 = uapi::_IO('i' as u64, 149 as u64);
+pub const NIOCRXSYNC: u64 = uapi::_IO('i' as u64, 149_u64);

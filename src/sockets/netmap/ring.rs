@@ -1,8 +1,11 @@
+use std::sync::atomic::Ordering;
+
 use c_netmap_wrapper::macros::netmap_rxring;
 use c_netmap_wrapper::nmport::NmPortDescriptor;
 use c_netmap_wrapper::ring::NetmapRing;
 
 use crate::sockets::errors::NethunsRecvError;
+use crate::sockets::ring::NethunsRing;
 
 
 /// Finds the first non-empty RX ring within the given Netmap port descriptor.
@@ -28,7 +31,7 @@ use crate::sockets::errors::NethunsRecvError;
 /// This function makes use of unsafe code due to the interaction with the Netmap C API
 /// through the `netmap_rxring` function.
 /// Be sure that the Netmap port descriptor is properly initialized.
-pub fn non_empty_rx_ring(
+pub(super) fn non_empty_rx_ring(
     d: &mut NmPortDescriptor,
 ) -> Result<NetmapRing, NethunsRecvError> {
     let mut ri = d.cur_rx_ring;
@@ -36,7 +39,7 @@ pub fn non_empty_rx_ring(
     loop {
         // Compute current ring to use
         let ring =
-            NetmapRing::try_new(unsafe { netmap_rxring(d.nifp, ri as usize) })
+            NetmapRing::try_new(unsafe { netmap_rxring(d.nifp, ri as _) })
                 .map_err(NethunsRecvError::FrameworkError)?;
         
         // Check if the ring contains some received packets
@@ -57,4 +60,32 @@ pub fn non_empty_rx_ring(
             return Err(NethunsRecvError::NoPacketsAvailable);
         }
     }
+}
+
+
+/// Mark the packet contained in a specific slot of the TX ring
+/// as *ready for transmission*, by setting to 1 the `inuse` field.
+///
+/// # Arguments
+/// * `tx_ring` - A reference to the transmission ring.
+/// * `id` - The id of the slot which contains the packet to send.
+/// * `len` - The length of the packet.
+///
+/// # Returns
+/// * `true` - On success.
+/// * `false` - If the slot is already in use.
+#[inline(always)]
+pub(super) fn nethuns_send_slot(
+    tx_ring: &NethunsRing,
+    id: u64,
+    len: usize,
+) -> bool {
+    let rc_slot = tx_ring.get_slot(id as _);
+    let mut slot = rc_slot.borrow_mut();
+    if slot.inuse.load(Ordering::Acquire) != 0 {
+        return false;
+    }
+    slot.len = len as i32;
+    slot.inuse.store(1, Ordering::Release);
+    true
 }

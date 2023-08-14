@@ -30,6 +30,8 @@ pub struct NetmapRing {
 }
 
 impl NetmapRing {
+    /// Try to create a new `NetmapRing` object by a raw pointer.
+    /// Return error if the pointer is null.
     pub fn try_new(ptr: *mut netmap_ring) -> Result<Self, String> {
         if ptr.is_null() {
             return Err("[NetmapRing::try_new()] ptr is null".to_owned());
@@ -37,14 +39,26 @@ impl NetmapRing {
         Ok(Self { netmap_ring: ptr })
     }
     
-    /// Given the current value of the index of the ring slots 
-    /// (`head`, `cur`, `tail`), move it ahead of one position 
+    
+    /// Check if space is available in the ring. 
+    /// 
+    /// We use `self.head`, which points to the next netmap slot 
+    /// to be published to netmap. It is possible that the applications 
+    /// moves `self.cur` ahead of `self.tail` (e.g., by setting `self.cur` <== `self.tail`), 
+    /// if it wants more slots than the ones currently available, 
+    /// and it wants to be notified when more arrive.
+    #[inline(always)]
+    pub fn nm_ring_empty(&self) -> bool {
+        self.head == self.tail
+    }
+    
+    
+    /// Given the current value of the index of the ring slots
+    /// (`head`, `cur`, `tail`), move it ahead of one position
     /// in a circular manner.
     pub fn nm_ring_next(&self, i: u32) -> u32 {
         assert!(!self.netmap_ring.is_null());
-        unsafe {
-            nm_ring_next(self.netmap_ring, i)
-        }
+        unsafe { nm_ring_next(self.netmap_ring, i) }
     }
 }
 

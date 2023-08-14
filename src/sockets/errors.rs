@@ -1,25 +1,21 @@
-use std::sync::PoisonError;
-
 use thiserror::Error;
 
 #[derive(Clone, Debug, Error)]
 pub enum NethunsOpenError {
-    #[error("[try_new] invalid options: {0}")]
+    #[error("[open] invalid options: {0}")]
     InvalidOptions(String),
-    #[error("[try_new] allocation error: {0}")]
-    AllocationError(String),
+    #[error("[open] an unexpected error occurred: {0}")]
+    Error(String),
 }
 
 #[derive(Clone, Debug, Error)]
 pub enum NethunsBindError {
+    #[error("[bind] error caused by an illegal or inappropriate argument: {0}")]
+    IllegalArgument(String),
     #[error("[bind] error of the I/O framework: {0}")]
     FrameworkError(String),
-    #[error("[bind] error caused by an illegal or inappropiate argument: {0}")]
-    IllegalArgument(String),
-    #[error("[bind] lock acquisition error: {0}")]
-    LockError(String),
-    #[error("[bind] error caused by nethuns: {0}")]
-    NethunsError(String),
+    #[error("[bind] an unexpected error occurred: {0}")]
+    Error(String),
 }
 
 #[derive(Debug, Error)]
@@ -28,22 +24,43 @@ pub enum NethunsRecvError {
     NonBinded,
     #[error("[recv] socket not in RX mode")]
     NotRx,
-    #[error("[recv] socket in use by another thread")]
+    #[error("[recv] ring in use")]
     InUse,
     #[error("[recv] no packets have been received")]
     NoPacketsAvailable,
-    #[error("[recv] lock acquisition error: {0}")]
-    LockError(String),
     #[error("[recv] filtered")] // TODO improve
     PacketFiltered,
     #[error("[recv] error of the I/O framework: {0}")]
     FrameworkError(String),
-    #[error("[recv] unexpected error: {0}")]
-    NethunsError(String),
+    #[error("[recv] an unexpected error occurred: {0}")]
+    Error(String),
 }
 
-impl<T> From<PoisonError<T>> for NethunsRecvError {
-    fn from(e: PoisonError<T>) -> Self {
-        Self::LockError(e.to_string())
-    }
+#[derive(Error, Debug)]
+pub enum NethunsSendError {
+    #[error("[send] you must execute bind(...) before using the socket")]
+    NonBinded,
+    #[error("[send] socket not in TX mode")]
+    NotTx,
+    #[error("[send] ring in use")]
+    InUse,
+    #[error("[send] an unexpected error occurred: {0}")]
+    Error(String),
+}
+
+
+#[derive(Error, Debug)]
+pub enum NethunsFlushError {
+    #[error("[flush] you must execute bind(...) before using the socket")]
+    NonBinded,
+    #[error("[flush] socket not in TX mode")]
+    NotTx,
+    #[error("[flush] ring in use")]
+    InUse,
+    #[error("[flush] failed transmission: {0}")]
+    FailedTransmission(String),
+    #[error("[recv] error of the I/O framework: {0}")]
+    FrameworkError(String),
+    #[error("[flush] an unexpected error occurred: {0}")]
+    Error(String),
 }

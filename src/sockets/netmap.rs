@@ -1,7 +1,3 @@
-mod nethuns_socket;
-pub use nethuns_socket::*;
-
-mod pkthdr;
-pub use pkthdr::*;
-
+pub mod nethuns_socket;
+pub mod pkthdr;
 mod ring;

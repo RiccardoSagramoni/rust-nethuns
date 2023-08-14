@@ -1,11 +1,12 @@
+// TODO documentazione (soprattuto per la Safety)
+
 use std::ops::Deref;
 
 use crate::bindings::{netmap_if, netmap_ring};
 use crate::ring::NetmapRing;
 
 
-/// Equivalent to __NETMAP_OFFSET
-/// ((type)(void *)((char *)(ptr) + (offset)))
+/// Equivalent to `__NETMAP_OFFSET`
 macro_rules! __netmap_offset {
     ($type: ident, $ptr: expr, $off: expr) => {
         unsafe {
@@ -17,7 +18,7 @@ macro_rules! __netmap_offset {
 pub(crate) use __netmap_offset;
 
 
-/// Equivalent to NETMAP_TXRING
+/// Equivalent to `NETMAP_TXRING`
 #[inline(always)]
 pub unsafe fn netmap_txring(
     nifp: *mut netmap_if,
@@ -35,7 +36,7 @@ pub unsafe fn netmap_txring(
 }
 
 
-/// Equivalent to NETMAP_RXRING
+/// Equivalent to `NETMAP_RXRING`
 #[inline(always)]
 pub unsafe fn netmap_rxring(
     nifp: *mut netmap_if,
@@ -56,17 +57,23 @@ pub unsafe fn netmap_rxring(
 }
 
 
-/// Equivalent to C macro NETMAP_BUF(ring, index)
+/// Equivalent to `NETMAP_BUF`
 #[inline(always)]
 pub fn netmap_buf(ring: &NetmapRing, index: usize) -> *const libc::c_char {
     unsafe {
-        (ring.deref() as *const netmap_ring as *const libc::c_char)
+        (ring.deref() as *const _ as *const libc::c_char)
             .add(ring.buf_ofs as usize)
             .add(index * ring.nr_buf_size as usize)
     }
 }
 
-///
+/// Returns a buffer which contains a packet as a slice of `u8`.
+/// 
+/// # Safety
+/// Must be used only to read a packet from the netmap ring, 
+/// since it converts the raw pointer got from `netmap_buf` 
+/// into a slice assuming that the pointer is valid and the
+/// size of the slice is equals to the packets size.
 #[macro_export]
 macro_rules! netmap_buf_pkt {
     ($ring: expr, $index: expr) => {
