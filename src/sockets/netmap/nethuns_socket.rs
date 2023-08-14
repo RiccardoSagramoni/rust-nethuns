@@ -1,4 +1,4 @@
-use std::ffi::CString;
+use std::ffi::{CStr, CString};
 use std::rc::Rc;
 use std::sync::atomic;
 use std::{mem, slice, thread, time};
@@ -19,10 +19,13 @@ use crate::sockets::errors::{
     NethunsSendError,
 };
 use crate::sockets::netmap::ring::{nethuns_send_slot, non_empty_rx_ring};
-use crate::sockets::ring::{nethuns_ring_free_slots, NethunsRing};
-use crate::sockets::ring_slot::NethunsRingSlot;
+use crate::sockets::ring::{
+    nethuns_ring_free_slots, NethunsRing, NethunsRingSlot,
+};
 use crate::sockets::NethunsSocket;
-use crate::types::{NethunsQueue, NethunsSocketMode, NethunsSocketOptions};
+use crate::types::{
+    NethunsQueue, NethunsSocketMode, NethunsSocketOptions, NethunsStat,
+};
 
 
 #[derive(Debug)]
@@ -274,7 +277,7 @@ impl NethunsSocket for NethunsSocketNetmap {
             nethuns_ring_free_slots!(self, rx_ring, nethuns_blocks_free);
             
             if self.free_head == self.free_tail {
-                return Err(NethunsRecvError::Error("".to_owned())); // FIXME better error
+                return Err(NethunsRecvError::NoPacketsAvailable); // FIXME better error
             }
         }
         
@@ -465,16 +468,12 @@ impl NethunsSocket for NethunsSocketNetmap {
     
     
     #[inline(always)]
-    fn send_slot(
-        &self,
-        pktid: u64,
-        len: usize,
-    ) -> Result<(), NethunsSendError> {
+    fn send_slot(&self, id: u64, len: usize) -> Result<(), NethunsSendError> {
         let tx_ring = match &self.base.tx_ring {
             Some(r) => r,
             None => return Err(NethunsSendError::NotTx),
         };
-        if nethuns_send_slot(tx_ring, pktid, len) {
+        if nethuns_send_slot(tx_ring, id, len) {
             Ok(())
         } else {
             Err(NethunsSendError::InUse)
@@ -494,7 +493,7 @@ impl NethunsSocket for NethunsSocketNetmap {
     
     
     #[inline(always)]
-    fn get_buf_addr(&self, pktid: u64) -> Option<&mut [u8]> {
+    fn get_packet_buffer_ref(&self, pktid: u64) -> Option<&mut [u8]> {
         let some_ring = match &self.some_ring {
             Some(r) => r,
             None => return None,
@@ -511,13 +510,21 @@ impl NethunsSocket for NethunsSocketNetmap {
         })
     }
     
-    #[inline(always)]
-    fn txring_get_size(&self) -> Option<usize> {
-        let tx_ring = match &self.base.tx_ring {
-            Some(r) => r,
-            None => return None,
-        };
-        Some(tx_ring.size())
+    
+    fn fd(&self) -> Option<libc::c_int> {
+        self.p.as_ref().map(|p| p.fd)
+    }
+    
+    /// NOT IMPLEMENTED IN NETMAP
+    fn fanout(&mut self, _: libc::c_int, _: &CStr) -> bool {
+        false
+    }
+    
+    /// NOT IMPLEMENTED IN NETMAP
+    fn dump_rings(&mut self) {}
+    
+    fn stats(&self) -> Option<NethunsStat> {
+        Some(NethunsStat::default())
     }
 }
 
@@ -583,7 +590,15 @@ impl NethunsSocketNetmap {
 }
 
 
-/// TODO
+/// Add the id of a newly available ring slot
+/// to the list of currently available slots.
+///
+/// This should be passed to [`nethuns_ring_free_slots`] as
+/// *free_macro* parameter.
+///
+/// # Arguments
+/// * `s` - the nethuns socket
+/// * `slot` - the newly available ring slot
 macro_rules! nethuns_blocks_free {
     ($s: expr, $slot: expr) => {
         $s.free_ring[($s.free_tail & $s.free_mask) as usize] =
@@ -594,12 +609,22 @@ macro_rules! nethuns_blocks_free {
 pub(self) use nethuns_blocks_free;
 
 
-/// TODO
+/// Get a raw pointer to the buffer which contains the packet,
+/// inside a specific ring slot.
+///
+/// # Arguments
+/// * `$some_ring`: a NetmapRing object
+/// * `$tx_ring`: a NethunsRing object
+/// * `$pktid`: the ring slot ID
+/// FIXME better doc
+///
+/// # Returns
+/// A `*mut u8` raw pointer pointing to the requested buffer
 macro_rules! nethuns_get_buf_addr_netmap {
     ($some_ring: expr, $tx_ring: expr, $pktid: expr) => {
         netmap_buf(
             $some_ring,
-            $tx_ring.get_slot($pktid as usize).borrow().pkthdr.buf_idx as usize,
+            $tx_ring.get_slot($pktid as _).borrow().pkthdr.buf_idx as _,
         ) as *mut u8
     };
 }

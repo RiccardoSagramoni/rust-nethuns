@@ -1,7 +1,8 @@
 use std::cell::RefCell;
 use std::rc::Rc;
+use std::sync::atomic::AtomicU8;
 
-use super::ring_slot::NethunsRingSlot;
+use crate::NethunsSocket;
 
 
 /// Ring abstraction for Nethuns sockets.
@@ -24,7 +25,7 @@ impl NethunsRing {
     pub fn new(nslots: usize, pktsize: usize) -> NethunsRing {
         // Allocate the slots for the ring
         let mut rings = Vec::with_capacity(nslots);
-        for _i in 0..nslots {
+        for _ in 0..nslots {
             rings.push(Rc::new(RefCell::new(
                 NethunsRingSlot::default_with_packet_size(pktsize),
             )));
@@ -60,8 +61,33 @@ impl NethunsRing {
 }
 
 
+/// Ring slot of a Nethuns socket.
+#[derive(Debug, Default)]
+pub struct NethunsRingSlot {
+    pub pkthdr: Pkthdr,
+    pub id: u64,
+    /// In-use flag => `0`: not in use; `1`: in use (a thread is reading a packet); `2`: in-flight (a thread is sending a packet)
+    pub inuse: AtomicU8,
+    pub len: i32,
+    
+    pub packet: Vec<libc::c_uchar>,
+}
+
+
+impl NethunsRingSlot {
+    /// Get a new `NethunsRingSlot` with `packet` initialized
+    /// with a given packet size.
+    pub fn default_with_packet_size(pktsize: usize) -> Self {
+        NethunsRingSlot {
+            packet: vec![0; pktsize],
+            ..Default::default()
+        }
+    }
+}
+
+
 /// Free all the currently unused slots in the ring.
-/// 
+///
 /// # Arguments
 /// * `s` - A reference to the `NethunsSocket` object.
 /// * `ring` - A reference to the `NethunsRing` object.
@@ -72,8 +98,8 @@ macro_rules! nethuns_ring_free_slots {
             let rc_slot = $ring.get_slot($ring.tail as usize);
             let slot = rc_slot.borrow();
             
-            if !($ring.tail != $ring.head
-                && slot.inuse.load(atomic::Ordering::Acquire) == 0)
+            if $ring.tail == $ring.head
+                || slot.inuse.load(atomic::Ordering::Acquire) != 0
             {
                 break;
             }
@@ -84,3 +110,16 @@ macro_rules! nethuns_ring_free_slots {
     };
 }
 pub(crate) use nethuns_ring_free_slots;
+
+use super::Pkthdr;
+
+
+/// Get size of the TX ring.
+#[inline(always)]
+pub fn txring_get_size(socket: &dyn NethunsSocket) -> Option<usize> {
+    let tx_ring = match &socket.socket_base().tx_ring {
+        Some(r) => r,
+        None => return None,
+    };
+    Some(tx_ring.size())
+}

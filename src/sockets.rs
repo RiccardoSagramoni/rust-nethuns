@@ -1,15 +1,18 @@
 pub mod base;
 pub mod errors;
 pub mod ring;
-pub mod ring_slot;
 
 
 use core::fmt::Debug;
+use std::ffi::CStr;
 
-use crate::types::{NethunsQueue, NethunsSocketOptions};
+use crate::types::{NethunsQueue, NethunsSocketOptions, NethunsStat};
 
 use self::base::{NethunsSocketBase, RecvPacket};
-use self::errors::{NethunsBindError, NethunsOpenError, NethunsRecvError, NethunsSendError, NethunsFlushError};
+use self::errors::{
+    NethunsBindError, NethunsFlushError, NethunsOpenError, NethunsRecvError,
+    NethunsSendError,
+};
 
 
 /*
@@ -19,7 +22,7 @@ use self::errors::{NethunsBindError, NethunsOpenError, NethunsRecvError, Nethuns
     - A struct which implements the `NethunsSocket` trait, which will
         be built by the `NethunsSocketFactory` factory.
     - A struct named `Pkthdr` which must implement the `PkthdrTrait` trait.
-    TODO: Add new functions
+    TODO: move it to mod documentation
 */
 cfg_if::cfg_if! {
     if #[cfg(feature="netmap")] {
@@ -81,23 +84,79 @@ pub trait NethunsSocket: Debug {
     fn recv(&mut self) -> Result<RecvPacket, NethunsRecvError>;
     
     
-    /// TODO
+    /// Queue up a packet for transmission.
+    ///
+    /// # Returns
+    /// * `Ok(())` - On success.
+    /// * `Err(NethunsSendError::NonBinded)` - If the socket is not bound to a device. Make sure to call `bind(...)` first.
+    /// * `Err(NethunsSendError::NotTx)` -  If the socket is not configured in TX mode. Check the configuration parameters passed to `open(...)`.
+    /// * `Err(NethunsSendError::InUse)` - If the slot at the tail of the TX ring is not released yet and it's currently in use by the application.
     fn send(&mut self, packet: &[u8]) -> Result<(), NethunsSendError>;
-    /// TODO
+    
+    
+    /// Send all queued up packets.
+    ///
+    /// # Returns
+    /// * `Ok(())` - On success.
+    /// * `Err(NethunsFlushError::NonBinded)` - If the socket is not bound to a device. Make sure to call `bind(...)` first.
+    /// * `Err(NethunsFlushError::NotTx)` -  If the socket is not configured in TX mode. Check the configuration parameters passed to `open(...)`.
+    /// * `Err(NethunsFlushError::FrameworkError)` - If an error from the unsafe interaction with underlying I/O framework occurs.
+    /// * `Err(NethunsFlushError::Error)` - If an unexpected error occurs.
     fn flush(&mut self) -> Result<(), NethunsFlushError>;
     
-    /// TODO
-    fn send_slot(&self, pktid: u64, len: usize) -> Result<(), NethunsSendError>;
+    
+    /// Mark the packet contained in the a specific slot
+    /// of the TX ring as *ready for transmission*.
+    ///
+    /// # Arguments
+    /// * `id` - The id of the slot which contains the packet to send.
+    /// * `len` - The length of the packet.
+    ///
+    /// # Returns
+    /// * `Ok(())` - On success.
+    /// * `Err(NethunsSendError::InUse)` - If the slot is not released yet and it's currently in use by the application.
+    fn send_slot(&self, id: u64, len: usize) -> Result<(), NethunsSendError>;
+    
     
     /// Get an immutable reference to the base socket descriptor.
     fn socket_base(&self) -> &NethunsSocketBase;
     /// Get a mutable reference to the base socket descriptor.
     fn socket_base_mut(&mut self) -> &mut NethunsSocketBase;
     
-    /// TODO
-    fn get_buf_addr(&self, pktid:u64) -> Option<&mut [u8]>;
-    /// TODO
-    fn txring_get_size(&self) -> Option<usize>;
+    
+    /// Get the file descriptor of the socket.
+    fn fd(&self) -> Option<libc::c_int>;
+    
+    
+    /// Get a mutable reference to the buffer inside
+    /// a specific ring slot which will contain the packet
+    /// to be sent.
+    ///
+    /// Equivalent to `nethuns_get_buf_addr` in the C API.
+    ///
+    /// # Arguments
+    /// * `pktid` - id of the slot.
+    ///
+    /// # Returns
+    /// * `Some(&mut [u8])` - buffer reference.
+    /// * `None` - if the socket is not bound or not in TX mode.
+    fn get_packet_buffer_ref(&self, pktid: u64) -> Option<&mut [u8]>;
+    
+    
+    /// Join a fanout group.
+    ///
+    /// # Arguments
+    /// * `group` - The group id.
+    /// * `fanout` - A string encoding the details of the fanout mode.
+    fn fanout(&mut self, group: libc::c_int, fanout: &CStr) -> bool;
+    
+    
+    /// Dump the rings.
+    fn dump_rings(&mut self);
+    
+    /// Get some statistics about the socket
+    /// or `None` on error.
+    fn stats(&self) -> Option<NethunsStat>;
 }
 
 
@@ -140,11 +199,14 @@ pub trait PkthdrTrait: Debug {
     fn tstamp_set_sec(&mut self, sec: u32);
     fn tstamp_set_usec(&mut self, usec: u32);
     fn tstamp_set_nsec(&mut self, nsec: u32);
+    
     fn snaplen(&self) -> u32;
     fn len(&self) -> u32;
     fn set_snaplen(&mut self, len: u32);
     fn set_len(&mut self, len: u32);
+    
     fn rxhash(&self) -> u32;
+    
     fn offvlan_tpid(&self) -> u16;
     fn offvlan_tci(&self) -> u16;
 }

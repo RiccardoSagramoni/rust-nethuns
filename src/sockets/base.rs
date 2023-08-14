@@ -7,8 +7,7 @@ use derivative::Derivative;
 
 use crate::types::{NethunsQueue, NethunsSocketOptions};
 
-use super::ring::NethunsRing;
-use super::ring_slot::NethunsRingSlot;
+use super::ring::{NethunsRing, NethunsRingSlot};
 use super::PkthdrTrait;
 
 
@@ -17,7 +16,7 @@ type NethunsFilter = dyn Fn(&dyn PkthdrTrait, &[u8]) -> i32;
 
 
 /// Base structure for a `NethunsSocket`.
-/// 
+///
 /// This data structure is common to all the implementation of a "nethuns socket",
 /// for the supported underlying I/O frameworks. Thus, it's independent from
 /// low-level implementation of the sockets.
@@ -66,9 +65,7 @@ impl Drop for RecvPacket<'_> {
     fn drop(&mut self) {
         if let Some(rc) = self.slot.upgrade() {
             // Unset the `inuse` flag of the related ring slot
-            rc.borrow_mut()
-                .inuse
-                .store(0, atomic::Ordering::Release);
+            rc.borrow_mut().inuse.store(0, atomic::Ordering::Release);
         }
     }
 }
@@ -96,6 +93,3 @@ impl RecvPacket<'_> {
         }
     }
 }
-
-
-// TODO continue

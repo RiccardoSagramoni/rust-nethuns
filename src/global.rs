@@ -8,20 +8,32 @@ use once_cell::sync::Lazy;
 /// Struct which holds networking information
 /// relative to a unique device.
 #[derive(Clone, Copy, Debug, Default)]
-pub struct NethunsNetInfo {
+#[allow(dead_code)] // disable warnings due to missing implementation of XDP
+pub(crate) struct NethunsNetInfo {
     pub promisc_refcnt: i32,
-    pub xdp_prog_refcnt: u32,
+    /// xdp only
+    pub xdp_prog_refcnt: i32,
+    /// xdp only
     pub xdp_prog_id: u32,
 }
 
 /// Networking information of all the available Nethuns-enabled devices.
 /// Global R/W allowed in a thread-safe manner (mutex).
-pub static NETHUNS_GLOBAL: Mutex<Lazy<HashMap<CString, NethunsNetInfo>>> =
-    Mutex::new(Lazy::new(HashMap::new));
+pub(crate) static NETHUNS_GLOBAL: Mutex<
+    Lazy<HashMap<CString, NethunsNetInfo>>,
+> = Mutex::new(Lazy::new(HashMap::new));
 
 
 /// Set RLIMIT_MEMLOCK to infinity at application startup.
+///
+/// This function requires CAP_SYS_RESOURCE capability
+/// because the call to [`libc::setrlimit`]
+/// (see [setrlimit(2) - Linux man page](https://linux.die.net/man/2/setrlimit)
+/// for more details).
+/// Since this usually means that we must run the tests with root privileges,
+/// this function is disabled in debug builds.
 #[cfg(target_os = "linux")]
+#[cfg(not(debug_assertions))] // available only in release builds
 #[small_ctor::ctor]
 unsafe fn setrlimit() {
     let rlim = libc::rlimit {

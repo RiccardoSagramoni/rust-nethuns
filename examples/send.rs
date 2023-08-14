@@ -1,4 +1,5 @@
 use bus::{Bus, BusReader};
+use nethuns::sockets::ring::txring_get_size;
 use nethuns::types::{
     NethunsCaptureDir, NethunsCaptureMode, NethunsQueue, NethunsSocketMode,
     NethunsSocketOptions,
@@ -446,12 +447,12 @@ fn fill_tx_ring(
     
     // fill the slots in the tx ring (optimized send only)
     if args.zerocopy {
-        let size = socket.txring_get_size().expect("bind(...) not called");
+        let size = txring_get_size(&*socket).expect("bind(...) not called");
         
         for j in 0..size {
             // tell me where to copy the j-th packet to be transmitted
             let mut pkt =
-                socket.get_buf_addr(j as _).expect("bind(...) not called");
+                socket.get_packet_buffer_ref(j as _).expect("bind(...) not called");
             
             // copy the packet
             pkt.write_all(payload)?;

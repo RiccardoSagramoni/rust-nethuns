@@ -39,7 +39,7 @@ pub(super) fn non_empty_rx_ring(
     loop {
         // Compute current ring to use
         let ring =
-            NetmapRing::try_new(unsafe { netmap_rxring(d.nifp, ri as usize) })
+            NetmapRing::try_new(unsafe { netmap_rxring(d.nifp, ri as _) })
                 .map_err(NethunsRecvError::FrameworkError)?;
         
         // Check if the ring contains some received packets
@@ -63,14 +63,24 @@ pub(super) fn non_empty_rx_ring(
 }
 
 
-/// TODO
+/// Mark the packet contained in a specific slot of the TX ring
+/// as *ready for transmission*, by setting to 1 the `inuse` field.
+///
+/// # Arguments
+/// * `tx_ring` - A reference to the transmission ring.
+/// * `id` - The id of the slot which contains the packet to send.
+/// * `len` - The length of the packet.
+///
+/// # Returns
+/// * `true` - On success.
+/// * `false` - If the slot is already in use.
 #[inline(always)]
 pub(super) fn nethuns_send_slot(
     tx_ring: &NethunsRing,
-    pktid: u64,
+    id: u64,
     len: usize,
 ) -> bool {
-    let rc_slot = tx_ring.get_slot(pktid as usize);
+    let rc_slot = tx_ring.get_slot(id as _);
     let mut slot = rc_slot.borrow_mut();
     if slot.inuse.load(Ordering::Acquire) != 0 {
         return false;

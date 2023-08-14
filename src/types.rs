@@ -3,6 +3,14 @@ use derive_builder::Builder;
 
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, PartialOrd)]
+pub enum NethunsQueue {
+    Some(u32),
+    #[default]
+    Any,
+}
+
+
+#[derive(Clone, Copy, Debug, Default, PartialEq, PartialOrd)]
 pub enum NethunsCaptureDir {
     #[default]
     In,
@@ -59,44 +67,18 @@ pub struct NethunsSocketOptions {
 }
 
 
-// TODO unused?
-// #[derive(Clone, Copy, Builder, Debug, Default, PartialEq, PartialOrd)]
-// #[builder(pattern = "owned", default)]
-// pub struct NethunsStat {
-//     pub rx_packets: u64,
-//     pub tx_packets: u64,
-//     pub rx_dropped: u64,
-//     pub rx_if_dropped: u64,
-//     pub rx_invalid: u64, // xdp only
-//     pub tx_invalid: u64, // xdp only
-//     pub freeze: u64,
-// }
-
-// TODO unused?
-// #[derive(Builder, Debug, Default)]
-// #[builder(pattern = "owned", default)]
-// pub struct NethunsPacket {
-//     pub payload: Vec<u8>,
-//     pub pkthdr: Box<dyn Pkthdr>,
-//     pub sock: NethunsSocketBase,
-//     pub id: u64,
-// }
-
-
-// TODO unused?
-#[derive(Clone, Builder, Debug, Default, PartialEq, PartialOrd)]
-#[builder(pattern = "owned", default)]
-pub struct NethunsTimeval {
-    tv_sec: u32,
-    tv_usec: u32,
-}
-
-
+/// Statistics for the nethuns socket.
 #[derive(Clone, Copy, Debug, Default, PartialEq, PartialOrd)]
-pub enum NethunsQueue {
-    Some(u32),
-    #[default]
-    Any,
+pub struct NethunsStat {
+    pub rx_packets: u64,
+    pub tx_packets: u64,
+    pub rx_dropped: u64,
+    pub rx_if_dropped: u64,
+    /// xdp only
+    pub rx_invalid: u64,
+    /// xdp only
+    pub tx_invalid: u64,
+    pub freeze: u64,
 }
 
 
@@ -111,9 +93,7 @@ mod tests {
         assert!(is_trait!(super::NethunsCaptureMode, Send));
         assert!(is_trait!(super::NethunsSocketMode, Send));
         assert!(is_trait!(super::NethunsSocketOptions, Send));
-        // assert!(is_trait!(super::NethunsStat, Send));
-        // assert!(is_trait!(super::NethunsPacket, Send));
-        assert!(is_trait!(super::NethunsTimeval, Send));
+        assert!(is_trait!(super::NethunsStat, Send));
     }
     
     
@@ -123,9 +103,7 @@ mod tests {
         assert!(is_trait!(super::NethunsCaptureMode, Sync));
         assert!(is_trait!(super::NethunsSocketMode, Sync));
         assert!(is_trait!(super::NethunsSocketOptions, Sync));
-        // assert!(is_trait!(super::NethunsStat, Sync));
-        // assert!(is_trait!(super::NethunsPacket, Sync));
-        assert!(is_trait!(super::NethunsTimeval, Sync));
+        assert!(is_trait!(super::NethunsStat, Sync));
     }
     
     

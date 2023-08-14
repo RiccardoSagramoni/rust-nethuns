@@ -1,12 +1,12 @@
-mod api;
 mod define;
 mod global;
 mod misc;
 mod nethuns;
-mod sockets;
 
 
 // Nethuns public API {
+pub mod api;
+pub mod sockets;
 pub mod types;
 pub mod vlan;
 
