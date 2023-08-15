@@ -63,7 +63,7 @@ fn main() {
     
     // Stats counter
     let totals: Arc<Mutex<Vec<u64>>> =
-        Arc::new(Mutex::new(vec![0; args.num_sockets as usize]));
+        Arc::new(Mutex::new(vec![0; args.num_sockets as _]));
     
     // Define bus for SPMC communication between threads
     let mut bus: Bus<()> = Bus::new(5);
@@ -302,9 +302,9 @@ fn st_send(
 ) -> Result<(), anyhow::Error> {
     // Vector for storing socket ids
     let mut out_sockets: Vec<Box<dyn NethunsSocket>> =
-        Vec::with_capacity(args.num_sockets as usize);
+        Vec::with_capacity(args.num_sockets as _);
     // One packet index per socket (pos of next slot/packet to send in tx ring)
-    let mut pktid: Vec<u64> = vec![0; args.num_sockets as usize];
+    let mut pktid: Vec<u64> = vec![0; args.num_sockets as _];
     
     // Setup and fill transmission rings for each socket
     for i in 0..args.num_sockets {
@@ -406,10 +406,10 @@ fn mt_send(
                 &mut pktid,
                 payload.len(),
                 &totals,
-                th_idx as usize,
+                th_idx as _,
             )?
         } else {
-            transmit_c(args, &mut socket, payload, &totals, th_idx as usize)?
+            transmit_c(args, &mut socket, payload, &totals, th_idx as _)?
         }
     }
     

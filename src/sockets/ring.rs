@@ -120,7 +120,7 @@ impl NethunsRing {
         if slot.inuse.load(Ordering::Acquire) != 0 {
             return false;
         }
-        slot.len = len as i32;
+        slot.len = len as _;
         slot.inuse.store(1, Ordering::Release);
         true
     }
@@ -161,7 +161,7 @@ impl NethunsRingSlot {
 macro_rules! nethuns_ring_free_slots {
     ($s: expr, $ring: expr, $free_macro: ident) => {
         loop {
-            let rc_slot = $ring.get_slot($ring.tail as usize);
+            let rc_slot = $ring.get_slot($ring.tail as _);
             let slot = rc_slot.borrow();
             
             if $ring.tail == $ring.head

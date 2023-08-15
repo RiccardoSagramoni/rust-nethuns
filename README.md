@@ -12,7 +12,7 @@
 │   └── macro.h OK
 ├── nethuns.c OK
 ├── nethuns.h OK
-├── queue.h TODO <==<==
+├── queue.h OK (use rtrb crate)
 ├── sockets
 │   ├── base.h DOING (only pcap_* structs TODO) <==
 │   ├── file.inc TODO <==

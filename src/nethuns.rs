@@ -164,13 +164,13 @@ fn nethuns_ioctl_if(
         .take(ifr.ifr_name.len() - 1)
         .enumerate()
         .for_each(|(i, c)| {
-            ifr.ifr_name[i] = *c as i8;
+            ifr.ifr_name[i] = *c as _;
         });
     
     // If the caller asked to set the flags of the device,
     // configure the `ifreq` object with the new flags
     if what == IoctlRequestCode::SIOCSIFFLAGS {
-        ifr.ifr_ifru.ifru_flags = flags as i16;
+        ifr.ifr_ifru.ifru_flags = flags as _;
     }
     
     // Call `ioctl` with the request code and the `ifreq` object.

@@ -10,7 +10,7 @@ use crate::ring::NetmapRing;
 macro_rules! __netmap_offset {
     ($type: ident, $ptr: expr, $off: expr) => {
         unsafe {
-            ($ptr as *const libc::c_char).add($off as usize) as *const _
+            ($ptr as *const libc::c_char).add($off as _) as *const _
                 as *mut $type
         }
     };
@@ -49,8 +49,8 @@ pub unsafe fn netmap_rxring(
             .ring_ofs
             .as_ptr()
             .add(index)
-            .add((*nifp).ni_tx_rings as usize)
-            .add((*nifp).ni_host_tx_rings as usize);
+            .add((*nifp).ni_tx_rings as _)
+            .add((*nifp).ni_host_tx_rings as _);
         *ptr
     };
     __netmap_offset!(netmap_ring, nifp, offset)
@@ -62,7 +62,7 @@ pub unsafe fn netmap_rxring(
 pub fn netmap_buf(ring: &NetmapRing, index: usize) -> *const libc::c_char {
     unsafe {
         (ring.deref() as *const _ as *const libc::c_char)
-            .add(ring.buf_ofs as usize)
+            .add(ring.buf_ofs as _)
             .add(index * ring.nr_buf_size as usize)
     }
 }
@@ -79,8 +79,8 @@ macro_rules! netmap_buf_pkt {
     ($ring: expr, $index: expr) => {
         unsafe {
             std::slice::from_raw_parts(
-                netmap_buf(&$ring, $index as usize) as *const u8,
-                $ring.nr_buf_size as usize,
+                netmap_buf(&$ring, $index as _) as *const u8,
+                $ring.nr_buf_size as _,
             )
         }
     };
