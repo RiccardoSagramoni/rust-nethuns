@@ -12,7 +12,7 @@
 │   └── macro.h OK
 ├── nethuns.c OK
 ├── nethuns.h OK
-├── queue.h OK (use rtrb crate)
+├── queue.h NOT NECESSARY (use rtrb crate)
 ├── sockets
 │   ├── base.h DOING (only pcap_* structs TODO) <==
 │   ├── file.inc TODO <==
@@ -23,13 +23,12 @@
 │   ├── types.h OK (in sockets.rs with traits)
 ├── stub.h DONE (included in sockets.rs and vlan.rs)
 ├── types.h OK
-├── version.c.in TODO?? <==
+├── version.c.in NOT NECESSARY?
 └── vlan.h OK
 ```
 
 Unable to rewrite in Rust
-- `compiler.h` all of it
-- `ring.h` => `nethuns_slot_get_idx`
+- `compiler.h`
 
 
 

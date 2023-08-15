@@ -57,6 +57,22 @@ impl NethunsRing {
     }
     
     
+    /// Get the index of a slot in the ring, given its reference.
+    ///
+    /// # Returns
+    /// * `Some(index)` - On success.
+    /// * `None` - If the slot is not in the ring.
+    #[inline(always)]
+    pub fn get_idx_slot(
+        &self,
+        rc_slot: &Rc<RefCell<NethunsRingSlot>>,
+    ) -> Option<usize> {
+        self.rings
+            .iter()
+            .position(|slot: _| Rc::ptr_eq(slot, rc_slot))
+    }
+    
+    
     /// Get the number of slots in the ring.
     #[inline(always)]
     pub fn size(&self) -> usize {
@@ -110,11 +126,7 @@ impl NethunsRing {
     /// * `true` - On success.
     /// * `false` - If the slot is already in use.
     #[inline(always)]
-    pub fn nethuns_send_slot(
-        &self,
-        id: u64,
-        len: usize,
-    ) -> bool {
+    pub fn nethuns_send_slot(&self, id: u64, len: usize) -> bool {
         let rc_slot = self.get_slot(id as _);
         let mut slot = rc_slot.borrow_mut();
         if slot.inuse.load(Ordering::Acquire) != 0 {
