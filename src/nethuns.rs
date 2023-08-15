@@ -1,4 +1,4 @@
-use std::ffi::{CStr, CString};
+use std::ffi::CStr;
 use std::mem;
 use std::os::fd::AsRawFd;
 
@@ -16,7 +16,7 @@ use crate::global::{NethunsNetInfo, NETHUNS_GLOBAL};
 /// # Returns
 /// * `Ok(())` - If the setting was successful.
 /// * `Err(String)` - If an error occurs.
-pub fn __nethuns_set_if_promisc(devname: &CString) -> Result<(), String> {
+pub fn __nethuns_set_if_promisc(devname: &CStr) -> Result<(), String> {
     // Get the active flag word of the device.
     let mut flags = nethuns_ioctl_if(
         devname,
@@ -87,7 +87,7 @@ pub fn __nethuns_set_if_promisc(devname: &CString) -> Result<(), String> {
 /// # Returns
 /// * `Ok(())` - If the setting was successful.
 /// * `Err(String)` - If an error occurs.
-pub fn __nethuns_clear_if_promisc(devname: &CString) -> Result<(), String> {
+pub fn __nethuns_clear_if_promisc(devname: &CStr) -> Result<(), String> {
     // Get the active flag word of the device.
     let mut flags = nethuns_ioctl_if(
         devname,
@@ -164,13 +164,13 @@ fn nethuns_ioctl_if(
         .take(ifr.ifr_name.len() - 1)
         .enumerate()
         .for_each(|(i, c)| {
-            ifr.ifr_name[i] = *c as i8;
+            ifr.ifr_name[i] = *c as _;
         });
     
     // If the caller asked to set the flags of the device,
     // configure the `ifreq` object with the new flags
     if what == IoctlRequestCode::SIOCSIFFLAGS {
-        ifr.ifr_ifru.ifru_flags = flags as i16;
+        ifr.ifr_ifru.ifru_flags = flags as _;
     }
     
     // Call `ioctl` with the request code and the `ifreq` object.

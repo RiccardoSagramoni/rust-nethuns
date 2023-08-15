@@ -12,20 +12,26 @@
 │   └── macro.h OK
 ├── nethuns.c OK
 ├── nethuns.h OK
-├── queue.h TODO? <==
+├── queue.h OK (use rtrb crate)
 ├── sockets
 │   ├── base.h DOING (only pcap_* structs TODO) <==
 │   ├── file.inc TODO <==
 │   ├── netmap.c DONE
 │   ├── netmap.h DOING (only pcap_* functions TODO) <==
 │   ├── netmap_pkthdr.h OK
-│   ├── ring.h DOING <==<==
+│   ├── ring.h DONE
 │   ├── types.h OK (in sockets.rs with traits)
 ├── stub.h DONE (included in sockets.rs and vlan.rs)
 ├── types.h OK
 ├── version.c.in TODO?? <==
 └── vlan.h OK
 ```
+
+Unable to rewrite in Rust
+- `compiler.h` all of it
+- `ring.h` => `nethuns_slot_get_idx`
+
+
 
 ## WIP: Framework API (stub.h)
 

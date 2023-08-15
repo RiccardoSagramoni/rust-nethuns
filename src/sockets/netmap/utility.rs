@@ -1,11 +1,10 @@
-use std::sync::atomic::Ordering;
+//! Module containing some helper functions for [super] module
 
 use c_netmap_wrapper::macros::netmap_rxring;
 use c_netmap_wrapper::nmport::NmPortDescriptor;
 use c_netmap_wrapper::ring::NetmapRing;
 
 use crate::sockets::errors::NethunsRecvError;
-use crate::sockets::ring::NethunsRing;
 
 
 /// Finds the first non-empty RX ring within the given Netmap port descriptor.
@@ -18,13 +17,13 @@ use crate::sockets::ring::NethunsRing;
 ///
 /// # Arguments
 ///
-/// - `d` - A mutable reference to the `NmPortDescriptor` representing the Netmap port.
+/// * `d` - A mutable reference to the `NmPortDescriptor` representing the Netmap port.
 ///
 /// # Returns
 ///
-/// - `Ok(NetmapRing)` - If a non-empty RX ring is found, it returns the corresponding `NetmapRing`.
-/// - `Err(NethunsRecvError::FrameworkError)` - If `netmap_rxring` returns a null pointer.
-/// - `Err(NethunsRecvError::NoPacketsAvailable)` - If all RX rings are empty, and the search fails.
+/// * `Ok(NetmapRing)` - If a non-empty RX ring is found, it returns the corresponding `NetmapRing`.
+/// * `Err(NethunsRecvError::FrameworkError)` - If `netmap_rxring` returns a null pointer.
+/// * `Err(NethunsRecvError::NoPacketsAvailable)` - If all RX rings are empty, and the search fails.
 ///
 /// # Safety
 ///
@@ -63,29 +62,42 @@ pub(super) fn non_empty_rx_ring(
 }
 
 
-/// Mark the packet contained in a specific slot of the TX ring
-/// as *ready for transmission*, by setting to 1 the `inuse` field.
+/// Add the id of a newly available ring slot
+/// to the list of currently available slots.
+///
+/// This should be passed to [`crate::sockets::ring::nethuns_ring_free_slots`] as
+/// *free_macro* parameter.
 ///
 /// # Arguments
-/// * `tx_ring` - A reference to the transmission ring.
-/// * `id` - The id of the slot which contains the packet to send.
-/// * `len` - The length of the packet.
+/// * `s` - the nethuns socket
+/// * `slot` - the newly available ring slot
+macro_rules! nethuns_blocks_free {
+    ($s: expr, $slot: expr) => {
+        $s.free_ring[($s.free_tail & $s.free_mask) as usize] =
+            $slot.pkthdr.buf_idx;
+        $s.free_tail += 1;
+    };
+}
+pub(super) use nethuns_blocks_free;
+
+
+/// Get a raw pointer to the buffer which contains the packet,
+/// inside a specific ring slot.
+///
+/// # Arguments
+/// * `$some_ring`: a NetmapRing object
+/// * `$tx_ring`: a NethunsRing object
+/// * `$pktid`: the ring slot ID
+/// FIXME better doc
 ///
 /// # Returns
-/// * `true` - On success.
-/// * `false` - If the slot is already in use.
-#[inline(always)]
-pub(super) fn nethuns_send_slot(
-    tx_ring: &NethunsRing,
-    id: u64,
-    len: usize,
-) -> bool {
-    let rc_slot = tx_ring.get_slot(id as _);
-    let mut slot = rc_slot.borrow_mut();
-    if slot.inuse.load(Ordering::Acquire) != 0 {
-        return false;
-    }
-    slot.len = len as i32;
-    slot.inuse.store(1, Ordering::Release);
-    true
+/// A `*mut u8` raw pointer pointing to the requested buffer
+macro_rules! nethuns_get_buf_addr_netmap {
+    ($some_ring: expr, $tx_ring: expr, $pktid: expr) => {
+        netmap_buf(
+            $some_ring,
+            $tx_ring.get_slot($pktid as _).borrow().pkthdr.buf_idx as _,
+        ) as *mut u8
+    };
 }
+pub(super) use nethuns_get_buf_addr_netmap;

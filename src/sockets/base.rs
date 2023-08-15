@@ -44,13 +44,15 @@ pub struct NethunsSocketBase {
 
 
 /// Packet received when calling `recv()` on a `NethunsSocket` object.
+/// 
+/// It's valid as long as the related `NethunsRingSlot` object is alive.
 ///
 /// You can use the `RecvPacket::try_new()` method to create a new instance.
 ///
 /// # Fields
 /// - `id`: the id of the packet.
-/// - `pkthdr`: the packet header metadata. Its internal format depends on the selected I/O framework
-/// - `packet`: the Ethernet packet payload, deserialized.
+/// - `pkthdr`: the packet header metadata. Its internal format depends on the selected I/O framework.
+/// - `packet`: the Ethernet packet payload.
 #[derive(Debug)]
 pub struct RecvPacket<'a> {
     pub id: u64,

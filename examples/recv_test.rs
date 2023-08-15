@@ -27,7 +27,7 @@ fn main() {
     for _ in 0..5000 {
         match socket.recv() {
             Ok(p) => {
-                dump_packet(&p)
+                dump_packet(&p);
             },
             Err(e) => {
                 eprintln!("[ERROR]: {}", e);
