@@ -115,7 +115,7 @@ pub trait NethunsSocket: Debug {
     /// # Returns
     /// * `Ok(())` - On success.
     /// * `Err(NethunsSendError::InUse)` - If the slot is not released yet and it's currently in use by the application.
-    fn send_slot(&self, id: u64, len: usize) -> Result<(), NethunsSendError>;
+    fn send_slot(&self, id: usize, len: usize) -> Result<(), NethunsSendError>;
     
     
     /// Get an immutable reference to the base socket descriptor.
@@ -140,7 +140,7 @@ pub trait NethunsSocket: Debug {
     /// # Returns
     /// * `Some(&mut [u8])` - buffer reference.
     /// * `None` - if the socket is not bound or not in TX mode.
-    fn get_packet_buffer_ref(&self, pktid: u64) -> Option<&mut [u8]>;
+    fn get_packet_buffer_ref(&self, pktid: usize) -> Option<&mut [u8]>;
     
     
     /// Join a fanout group.

@@ -73,9 +73,7 @@ pub(super) fn non_empty_rx_ring(
 /// * `slot` - the newly available ring slot
 macro_rules! nethuns_blocks_free {
     ($s: expr, $slot: expr) => {
-        $s.free_ring[($s.free_tail & $s.free_mask) as usize] =
-            $slot.pkthdr.buf_idx;
-        $s.free_tail += 1;
+        $s.free_ring.as_mut().unwrap().push($slot.pkthdr.buf_idx);
     };
 }
 pub(super) use nethuns_blocks_free;
@@ -96,7 +94,7 @@ macro_rules! nethuns_get_buf_addr_netmap {
     ($some_ring: expr, $tx_ring: expr, $pktid: expr) => {
         netmap_buf(
             $some_ring,
-            $tx_ring.get_slot($pktid as _).borrow().pkthdr.buf_idx as _,
+            $tx_ring.get_slot($pktid).borrow().pkthdr.buf_idx as _,
         ) as *mut u8
     };
 }
