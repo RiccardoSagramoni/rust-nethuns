@@ -5,7 +5,7 @@ use std::sync::atomic::{AtomicU8, Ordering};
 
 use super::Pkthdr;
 
-use crate::misc::CircularBuffer;
+use crate::misc::CircularCloneBuffer;
 use crate::NethunsSocket;
 
 
@@ -14,7 +14,7 @@ use crate::NethunsSocket;
 pub struct NethunsRing {
     pktsize: usize,
     
-    pub(super) rings: CircularBuffer<Rc<RefCell<NethunsRingSlot>>>,
+    pub(super) rings: CircularCloneBuffer<Rc<RefCell<NethunsRingSlot>>>,
 }
 
 
@@ -32,7 +32,7 @@ impl NethunsRing {
         
         NethunsRing {
             pktsize,
-            rings: CircularBuffer::new(nslots, &builder),
+            rings: CircularCloneBuffer::new(nslots, &builder),
         }
     }
     
@@ -44,13 +44,17 @@ impl NethunsRing {
     }
     
     
-    // /// Get the index of a slot in the ring, given its reference.
+    /// Get the index of a slot in the ring, given its reference.
     #[inline(always)]
     pub fn get_idx_slot(
         &self,
         rc_slot: &Rc<RefCell<NethunsRingSlot>>,
-    ) -> usize {
-        self.rings.position(rc_slot)
+    ) -> Option<usize> {
+        // FIXME: this is inefficient. How can we improve it?
+        self.rings
+            .iter()
+            .take(self.rings.size())
+            .position(|slot: _| Rc::ptr_eq(slot, rc_slot))
     }
     
     
@@ -95,7 +99,7 @@ impl NethunsRing {
     /// Get a reference to the head slot in the ring
     /// and shift the head to the following slot.
     pub fn next_slot(&mut self) -> Rc<RefCell<NethunsRingSlot>> {
-        self.rings.pop()
+        self.rings.pop_unchecked()
     }
     
     
@@ -160,7 +164,7 @@ macro_rules! nethuns_ring_free_slots {
             let rc_slot = $ring.get_slot($ring.rings.tail());
             let slot = rc_slot.borrow();
             
-            if $ring.rings.empty()
+            if $ring.rings.is_empty()
                 || slot.inuse.load(atomic::Ordering::Acquire) != 0
             {
                 break;
