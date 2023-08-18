@@ -1,5 +1,7 @@
 //! Module containing some helper functions for [super] module
 
+use std::ptr::NonNull;
+
 use c_netmap_wrapper::macros::netmap_rxring;
 use c_netmap_wrapper::nmport::NmPortDescriptor;
 use c_netmap_wrapper::ring::NetmapRing;
@@ -37,9 +39,14 @@ pub(super) fn non_empty_rx_ring(
     
     loop {
         // Compute current ring to use
-        let ring =
-            NetmapRing::try_new(unsafe { netmap_rxring(d.nifp, ri as _) })
-                .map_err(NethunsRecvError::FrameworkError)?;
+        let ring = NetmapRing::new(
+            NonNull::new(unsafe { netmap_rxring(d.nifp, ri as _) }).ok_or(
+                NethunsRecvError::FrameworkError(
+                    "[non_empty_rx_ring] netmap_rxring returned null"
+                        .to_owned(),
+                ),
+            )?,
+        );
         
         // Check if the ring contains some received packets
         if ring.cur != ring.tail {

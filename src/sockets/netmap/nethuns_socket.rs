@@ -1,4 +1,5 @@
 use std::ffi::{CStr, CString};
+use std::ptr::NonNull;
 use std::rc::Rc;
 use std::sync::atomic;
 use std::{cmp, mem, slice, thread, time};
@@ -17,7 +18,7 @@ use crate::sockets::errors::{
     NethunsBindError, NethunsFlushError, NethunsOpenError, NethunsRecvError,
     NethunsSendError,
 };
-use crate::sockets::netmap::utility::{non_empty_rx_ring, nethuns_blocks_free};
+use crate::sockets::netmap::utility::{nethuns_blocks_free, non_empty_rx_ring};
 use crate::sockets::ring::{
     nethuns_ring_free_slots, NethunsRing, NethunsRingSlot,
 };
@@ -179,22 +180,23 @@ impl NethunsSocket for NethunsSocketNetmap {
         }
         
         // Initialize some_ring
-        let some_ring = NetmapRing::try_new(unsafe {
+        let some_ring = NetmapRing::new({
             assert!(!nm_port_d.nifp.is_null());
-            netmap_rxring(
-                nm_port_d.nifp,
-                if self.rx() {
-                    nm_port_d.first_rx_ring as _
-                } else {
-                    nm_port_d.first_tx_ring as _
-                },
-            )
-        })
-        .map_err(|e| {
-            NethunsBindError::Error(format!(
-                "failed to initialize some_ring: {e}"
-            ))
-        })?;
+            let ptr = unsafe {
+                netmap_rxring(
+                    nm_port_d.nifp,
+                    if self.rx() {
+                        nm_port_d.first_rx_ring as _
+                    } else {
+                        nm_port_d.first_tx_ring as _
+                    },
+                )
+            };
+            NonNull::new(ptr).ok_or(NethunsBindError::FrameworkError(
+                "failed to initialize some_ring: netmap_rxring returned null"
+                    .to_owned(),
+            ))?
+        });
         
         // Initialize free_ring and free_mask
         let extra_bufs = nethuns_lpow2(nm_port_d.reg.nr_extra_bufs as _);
@@ -209,8 +211,7 @@ impl NethunsSocket for NethunsSocketNetmap {
             for i in 0..tx_ring.size() {
                 tx_ring.get_slot(i).borrow_mut().pkthdr.buf_idx = scan;
                 scan = unsafe {
-                    let ptr =
-                        netmap_buf(&some_ring, scan as _) as *const u32;
+                    let ptr = netmap_buf(&some_ring, scan as _) as *const u32;
                     ptr.read_unaligned()
                 }
             }
@@ -222,8 +223,7 @@ impl NethunsSocket for NethunsSocketNetmap {
                     scan;
                 self.free_tail += 1;
                 scan = unsafe {
-                    let ptr =
-                        netmap_buf(&some_ring, scan as _) as *const u32;
+                    let ptr = netmap_buf(&some_ring, scan as _) as *const u32;
                     assert!(!ptr.is_null());
                     ptr.read_unaligned()
                 };
@@ -257,7 +257,7 @@ impl NethunsSocket for NethunsSocketNetmap {
     
     fn recv(&mut self) -> Result<RecvPacket, NethunsRecvError> {
         // Check if the ring has been binded to a queue and if it's in RX mode
-        let nmport_d: &mut NmPortDescriptor = match &mut self.p {
+        let nmport_d = match &mut self.p {
             Some(p) => p,
             None => return Err(NethunsRecvError::NonBinded),
         };
@@ -383,21 +383,23 @@ impl NethunsSocket for NethunsSocketNetmap {
             None => return Err(NethunsFlushError::NonBinded),
         };
         
-        let mut prev_tails: Vec<u32> = vec![
-            0;
-            (nmport_d.last_tx_ring - nmport_d.last_rx_ring + 1)
-                as _
-        ];
+        let mut prev_tails: Vec<u32> =
+            vec![0; (nmport_d.last_tx_ring - nmport_d.last_rx_ring + 1) as _];
         
         let mut head = tx_ring.head;
         
         // Try to push packets marked for transmission
-        for i in
-            nmport_d.first_tx_ring as _..=nmport_d.last_tx_ring as _
-        {
-            let mut ring =
-                NetmapRing::try_new(unsafe { netmap_txring(nmport_d.nifp, i) })
-                    .map_err(NethunsFlushError::Error)?;
+        for i in nmport_d.first_tx_ring as _..=nmport_d.last_tx_ring as _ {
+            let mut ring = NetmapRing::new(
+                NonNull::new(
+                    unsafe { netmap_txring(nmport_d.nifp, i) }
+                )
+                .ok_or(
+                    NethunsFlushError::FrameworkError(
+                        "failed to initialize some_ring: netmap_txring returned null".to_owned()
+                    )
+                )?
+            );
             prev_tails[i - nmport_d.first_tx_ring as usize] = ring.tail;
             
             loop {
@@ -441,12 +443,17 @@ impl NethunsSocket for NethunsSocketNetmap {
         // cleanup completed transmissions: for each completed
         // netmap slot, mark the corresponding nethuns slot as
         // available (inuse <- 0)
-        for i in
-            nmport_d.first_tx_ring as _..=nmport_d.last_tx_ring as _
-        {
-            let ring =
-                NetmapRing::try_new(unsafe { netmap_txring(nmport_d.nifp, i) })
-                    .map_err(NethunsFlushError::Error)?;
+        for i in nmport_d.first_tx_ring as _..=nmport_d.last_tx_ring as _ {
+            let ring = NetmapRing::new(
+                NonNull::new(
+                    unsafe { netmap_txring(nmport_d.nifp, i) }
+                )
+                .ok_or(
+                    NethunsFlushError::FrameworkError(
+                        "failed to initialize some_ring: netmap_txring returned null".to_owned()
+                    )
+                )?
+            );
             
             let stop = ring.nm_ring_next(ring.tail);
             let mut scan = ring

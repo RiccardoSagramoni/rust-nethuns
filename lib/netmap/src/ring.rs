@@ -1,4 +1,5 @@
 use std::ops::{Deref, DerefMut};
+use std::ptr::NonNull;
 
 use crate::bindings::{netmap_ring, netmap_slot, nm_ring_next};
 use crate::slot::NetmapSlot;
@@ -26,26 +27,23 @@ use crate::slot::NetmapSlot;
 /// ```
 #[derive(Debug)]
 pub struct NetmapRing {
-    netmap_ring: *mut netmap_ring,
+    netmap_ring: NonNull<netmap_ring>,
 }
 
 impl NetmapRing {
     /// Try to create a new `NetmapRing` object by a raw pointer.
     /// Return error if the pointer is null.
-    pub fn try_new(ptr: *mut netmap_ring) -> Result<Self, String> {
-        if ptr.is_null() {
-            return Err("[NetmapRing::try_new()] ptr is null".to_owned());
-        }
-        Ok(Self { netmap_ring: ptr })
+    pub fn new(ptr: NonNull<netmap_ring>) -> Self {
+        Self { netmap_ring: ptr }
     }
     
     
-    /// Check if space is available in the ring. 
-    /// 
-    /// We use `self.head`, which points to the next netmap slot 
-    /// to be published to netmap. It is possible that the applications 
-    /// moves `self.cur` ahead of `self.tail` (e.g., by setting `self.cur` <== `self.tail`), 
-    /// if it wants more slots than the ones currently available, 
+    /// Check if space is available in the ring.
+    ///
+    /// We use `self.head`, which points to the next netmap slot
+    /// to be published to netmap. It is possible that the applications
+    /// moves `self.cur` ahead of `self.tail` (e.g., by setting `self.cur` <== `self.tail`),
+    /// if it wants more slots than the ones currently available,
     /// and it wants to be notified when more arrive.
     #[inline(always)]
     pub fn nm_ring_empty(&self) -> bool {
@@ -57,8 +55,7 @@ impl NetmapRing {
     /// (`head`, `cur`, `tail`), move it ahead of one position
     /// in a circular manner.
     pub fn nm_ring_next(&self, i: u32) -> u32 {
-        assert!(!self.netmap_ring.is_null());
-        unsafe { nm_ring_next(self.netmap_ring, i) }
+        unsafe { nm_ring_next(self.netmap_ring.as_ptr(), i) }
     }
 }
 
@@ -66,21 +63,22 @@ impl Deref for NetmapRing {
     type Target = netmap_ring;
     
     fn deref(&self) -> &Self::Target {
-        assert!(!self.netmap_ring.is_null());
-        unsafe { &*self.netmap_ring }
+        unsafe { self.netmap_ring.as_ref() }
     }
 }
 
 impl DerefMut for NetmapRing {
     fn deref_mut(&mut self) -> &mut Self::Target {
-        assert!(!self.netmap_ring.is_null());
-        unsafe { &mut *self.netmap_ring }
+        unsafe { self.netmap_ring.as_mut() }
     }
 }
 
 impl NetmapRing {
     pub fn get_slot(&self, index: usize) -> Result<NetmapSlot, String> {
         let slot_array = std::ptr::addr_of!(self.slot) as *mut netmap_slot;
-        NetmapSlot::try_new(unsafe { slot_array.add(index) })
+        Ok(NetmapSlot::new(
+            NonNull::new(unsafe { slot_array.add(index) })
+                .ok_or("[get_slot] slot pointer is null".to_owned())?,
+        ))
     }
 }
