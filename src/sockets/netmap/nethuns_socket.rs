@@ -303,7 +303,7 @@ impl NethunsSocket for NethunsSocketNetmap {
             .get_slot(i as _)
             .map_err(NethunsRecvError::Error)?;
         let idx = cur_netmap_slot.buf_idx;
-        let pkt = netmap_buf_pkt!(netmap_ring, idx);
+        let pkt = unsafe { netmap_buf_pkt!(netmap_ring, idx) };
         
         // Update the packet header metadata of the nethuns ring abstraction against the actual netmap packet.
         let mut slot = rc_slot.borrow_mut();
