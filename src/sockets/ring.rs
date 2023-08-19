@@ -5,18 +5,16 @@ use std::sync::atomic::{AtomicU8, Ordering};
 
 use super::Pkthdr;
 
+use crate::misc::CircularCloneBuffer;
 use crate::NethunsSocket;
 
 
 /// Ring abstraction for Nethuns sockets.
 #[derive(Debug)]
 pub struct NethunsRing {
-    pub pktsize: usize,
+    pktsize: usize,
     
-    pub head: u64,
-    pub tail: u64,
-    
-    rings: Vec<Rc<RefCell<NethunsRingSlot>>>,
+    pub(super) rings: CircularCloneBuffer<Rc<RefCell<NethunsRingSlot>>>,
 }
 
 
@@ -26,19 +24,15 @@ impl NethunsRing {
     /// Equivalent to `nethuns_make_ring` from the original C library.
     #[inline(always)]
     pub fn new(nslots: usize, pktsize: usize) -> NethunsRing {
-        // Allocate the slots for the ring
-        let mut rings = Vec::with_capacity(nslots);
-        for _ in 0..nslots {
-            rings.push(Rc::new(RefCell::new(
-                NethunsRingSlot::default_with_packet_size(pktsize),
-            )));
-        }
+        let builder = || {
+            Rc::new(RefCell::new(NethunsRingSlot::default_with_packet_size(
+                pktsize,
+            )))
+        };
         
         NethunsRing {
             pktsize,
-            head: 0,
-            tail: 0,
-            rings,
+            rings: CircularCloneBuffer::new(nslots, &builder),
         }
     }
     
@@ -46,29 +40,20 @@ impl NethunsRing {
     /// Get a reference to a slot in the ring, given its index.
     #[inline(always)]
     pub fn get_slot(&self, index: usize) -> Rc<RefCell<NethunsRingSlot>> {
-        self.rings
-            .iter()
-            .cycle()
-            .nth(index)
-            .expect(
-                "Index out of bounds in a cyclic iterator should be impossible",
-            )
-            .clone()
+        self.rings.get(index)
     }
     
     
     /// Get the index of a slot in the ring, given its reference.
-    ///
-    /// # Returns
-    /// * `Some(index)` - On success.
-    /// * `None` - If the slot is not in the ring.
     #[inline(always)]
     pub fn get_idx_slot(
         &self,
         rc_slot: &Rc<RefCell<NethunsRingSlot>>,
     ) -> Option<usize> {
+        // FIXME: this is inefficient. How can we improve it?
         self.rings
             .iter()
+            .take(self.rings.size())
             .position(|slot: _| Rc::ptr_eq(slot, rc_slot))
     }
     
@@ -76,7 +61,13 @@ impl NethunsRing {
     /// Get the number of slots in the ring.
     #[inline(always)]
     pub fn size(&self) -> usize {
-        self.rings.len()
+        self.rings.size()
+    }
+    
+    /// Get the packet size
+    #[inline(always)]
+    pub fn pktsize(&self) -> usize {
+        self.pktsize
     }
     
     
@@ -91,9 +82,8 @@ impl NethunsRing {
         for slot in self
             .rings
             .iter()
-            .cycle()
             .skip(pos)
-            .take(cmp::min(self.rings.len() - 1, 32))
+            .take(cmp::min(self.size() - 1, 32))
         {
             if slot.borrow().inuse.load(Ordering::Acquire) == 0 {
                 total += 1;
@@ -109,9 +99,7 @@ impl NethunsRing {
     /// Get a reference to the head slot in the ring
     /// and shift the head to the following slot.
     pub fn next_slot(&mut self) -> Rc<RefCell<NethunsRingSlot>> {
-        let slot = self.get_slot(self.head as _);
-        self.head += 1;
-        slot
+        self.rings.pop_unchecked()
     }
     
     
@@ -126,13 +114,13 @@ impl NethunsRing {
     /// * `true` - On success.
     /// * `false` - If the slot is already in use.
     #[inline(always)]
-    pub fn nethuns_send_slot(&self, id: u64, len: usize) -> bool {
+    pub fn nethuns_send_slot(&self, id: usize, len: usize) -> bool {
         let rc_slot = self.get_slot(id as _);
         let mut slot = rc_slot.borrow_mut();
         if slot.inuse.load(Ordering::Acquire) != 0 {
             return false;
         }
-        slot.len = len as _;
+        slot.len = len;
         slot.inuse.store(1, Ordering::Release);
         true
     }
@@ -143,10 +131,10 @@ impl NethunsRing {
 #[derive(Debug, Default)]
 pub struct NethunsRingSlot {
     pub pkthdr: Pkthdr,
-    pub id: u64,
+    pub id: usize, // FIXME: purpose??
     /// In-use flag => `0`: not in use; `1`: in use (a thread is reading a packet); `2`: in-flight (a thread is sending a packet)
     pub inuse: AtomicU8,
-    pub len: i32,
+    pub len: usize,
     
     pub packet: Vec<u8>,
 }
@@ -173,21 +161,21 @@ impl NethunsRingSlot {
 macro_rules! nethuns_ring_free_slots {
     ($s: expr, $ring: expr, $free_macro: ident) => {
         loop {
-            let rc_slot = $ring.get_slot($ring.tail as _);
+            let rc_slot = $ring.get_slot($ring.rings.tail());
             let slot = rc_slot.borrow();
             
-            if $ring.tail == $ring.head
+            if $ring.rings.is_empty()
                 || slot.inuse.load(atomic::Ordering::Acquire) != 0
             {
                 break;
             }
             
             $free_macro!($s, slot);
-            $ring.tail += 1;
+            $ring.rings.advance_tail();
         }
     };
 }
-pub(crate) use nethuns_ring_free_slots;
+pub(super) use nethuns_ring_free_slots;
 
 
 /// Get size of the RX ring.
