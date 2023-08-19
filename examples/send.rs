@@ -1,3 +1,9 @@
+use std::io::Write;
+use std::sync::mpsc::TryRecvError;
+use std::sync::{Arc, Mutex};
+use std::time::{Duration, SystemTime};
+use std::{env, thread};
+
 use bus::{Bus, BusReader};
 use nethuns::sockets::ring::txring_get_size;
 use nethuns::types::{
@@ -5,11 +11,6 @@ use nethuns::types::{
     NethunsSocketOptions,
 };
 use nethuns::{NethunsSocket, NethunsSocketFactory};
-use std::io::Write;
-use std::sync::mpsc::TryRecvError;
-use std::sync::{Arc, Mutex};
-use std::time::{Duration, SystemTime};
-use std::{env, thread};
 
 
 const HELP_BRIEF: &str = "\
