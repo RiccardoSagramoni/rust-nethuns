@@ -435,7 +435,7 @@ fn fill_tx_ring(
     payload: &[u8],
 ) -> Result<Box<dyn NethunsSocket>, anyhow::Error> {
     // Open socket
-    let mut socket = NethunsSocketFactory::try_new_nethuns_socket(opt)?;
+    let mut socket = NethunsSocketFactory::nethuns_socket_open(opt)?;
     
     // Bind socket
     let queue = if args.num_sockets > 1 {
@@ -451,8 +451,9 @@ fn fill_tx_ring(
         
         for j in 0..size {
             // tell me where to copy the j-th packet to be transmitted
-            let mut pkt =
-                socket.get_packet_buffer_ref(j as _).expect("bind(...) not called");
+            let mut pkt = socket
+                .get_packet_buffer_ref(j as _)
+                .expect("bind(...) not called");
             
             // copy the packet
             pkt.write_all(payload)?;

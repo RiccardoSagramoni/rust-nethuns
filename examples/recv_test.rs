@@ -1,3 +1,5 @@
+use std::env;
+
 use etherparse::Ethernet2Header;
 use nethuns::types::{
     NethunsCaptureDir, NethunsCaptureMode, NethunsQueue, NethunsSocketMode,
@@ -21,8 +23,11 @@ fn main() {
         tx_qdisc_bypass: false,
         ..Default::default()
     };
-    let mut socket = NethunsSocketFactory::try_new_nethuns_socket(opt).unwrap();
-    socket.bind("vi0", NethunsQueue::Any).unwrap();
+    let mut socket = NethunsSocketFactory::nethuns_socket_open(opt).unwrap();
+    socket.bind(
+        &env::args().nth(1).expect("Usage: ./recv_test <device_name>"), 
+        NethunsQueue::Any
+    ).unwrap();
     
     for _ in 0..5000 {
         match socket.recv() {

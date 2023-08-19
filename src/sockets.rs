@@ -174,7 +174,7 @@ impl NethunsSocketFactory {
     /// * `Ok(Box<dyn NethunsSocket>)` - A new nethuns socket, in no error occurs.
     /// * `Err(NethunsOpenError::InvalidOptions)` - If at least one of the options holds a invalid value.
     /// * `Err(NethunsOpenError::Error)` - If an unexpected error occurs.
-    pub fn try_new_nethuns_socket(
+    pub fn nethuns_socket_open(
         opt: NethunsSocketOptions,
     ) -> Result<Box<dyn NethunsSocket>, NethunsOpenError> {
         cfg_if::cfg_if! {

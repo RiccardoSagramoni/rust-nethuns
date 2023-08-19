@@ -74,7 +74,7 @@ impl<T: Clone> CircularCloneBuffer<T> {
     /// **It doesn't check if the buffer is empty.**
     #[inline(always)]
     pub fn pop_unchecked(&mut self) -> T {
-        let ret = self.buffer[self.head.0].clone();
+        let ret = self.buffer[self.head.0 & self.mask].clone();
         self.head += 1;
         ret
     }
@@ -101,7 +101,7 @@ impl<T: Clone> CircularCloneBuffer<T> {
     /// **It doesn't check if the buffer is full.**
     #[inline(always)]
     pub fn push_unchecked(&mut self, value: T) {
-        self.buffer[self.tail.0] = value;
+        self.buffer[self.tail.0 & self.mask] = value;
         self.tail += 1;
     }
     
