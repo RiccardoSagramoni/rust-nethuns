@@ -6,13 +6,11 @@ use crate::bindings::{netmap_if, netmap_ring};
 use crate::ring::NetmapRing;
 
 
-/// Equivalent to `__NETMAP_OFFSET`
+/// This macro is equivalent to the C macro `__NETMAP_OFFSET`.
+/// It executes **unsafe** code, so it must be wrapped in unsafe blocks.
 macro_rules! __netmap_offset {
     ($type: ident, $ptr: expr, $off: expr) => {
-        unsafe {
-            ($ptr as *const libc::c_char).add($off as _) as *const _
-                as *mut $type
-        }
+        ($ptr as *const libc::c_char).add($off as _) as *const _ as *mut $type
     };
 }
 pub(crate) use __netmap_offset;
@@ -32,7 +30,7 @@ pub unsafe fn netmap_txring(
         let ring_ofs_ptr = ring_ofs_ptr.add(index);
         *ring_ofs_ptr
     };
-    __netmap_offset!(netmap_ring, nifp, offset)
+    unsafe { __netmap_offset!(netmap_ring, nifp, offset) }
 }
 
 
@@ -53,7 +51,7 @@ pub unsafe fn netmap_rxring(
             .add((*nifp).ni_host_tx_rings as _);
         *ptr
     };
-    __netmap_offset!(netmap_ring, nifp, offset)
+    unsafe { __netmap_offset!(netmap_ring, nifp, offset) }
 }
 
 
@@ -69,20 +67,20 @@ pub fn netmap_buf(ring: &NetmapRing, index: usize) -> *const libc::c_char {
 
 /// Returns a buffer which contains a packet as a slice of `u8`.
 /// 
+/// This macro is **unsafe**.
+///
 /// # Safety
-/// Must be used only to read a packet from the netmap ring, 
-/// since it converts the raw pointer got from `netmap_buf` 
+/// Must be used only to read a packet from the netmap ring,
+/// since it converts the raw pointer got from `netmap_buf`
 /// into a slice assuming that the pointer is valid and the
 /// size of the slice is equals to the packets size.
 #[macro_export]
 macro_rules! netmap_buf_pkt {
     ($ring: expr, $index: expr) => {
-        unsafe {
-            std::slice::from_raw_parts(
-                netmap_buf(&$ring, $index as _) as *const u8,
-                $ring.nr_buf_size as _,
-            )
-        }
+        std::slice::from_raw_parts(
+            netmap_buf(&$ring, $index as _) as *const u8,
+            $ring.nr_buf_size as _,
+        )
     };
 }
 
@@ -96,14 +94,15 @@ mod test {
         let x = 0;
         let x_ptr = &x as *const i32 as *mut i32;
         
-        assert_eq!(__netmap_offset!(i32, x_ptr, 0), x_ptr);
-        
-        assert_eq!(__netmap_offset!(i32, x_ptr, size_of::<i32>()), unsafe {
-            x_ptr.add(1)
-        });
+        assert_eq!(unsafe { __netmap_offset!(i32, x_ptr, 0) }, x_ptr);
         
         assert_eq!(
-            __netmap_offset!(i32, x_ptr, 10 * size_of::<i32>()),
+            unsafe { __netmap_offset!(i32, x_ptr, size_of::<i32>()) },
+            unsafe { x_ptr.add(1) }
+        );
+        
+        assert_eq!(
+            unsafe { __netmap_offset!(i32, x_ptr, 10 * size_of::<i32>()) },
             unsafe { x_ptr.add(10) }
         );
     }

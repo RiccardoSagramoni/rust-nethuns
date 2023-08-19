@@ -1,4 +1,5 @@
 use std::ffi::{CStr, CString};
+use std::ptr::NonNull;
 use std::rc::Rc;
 use std::sync::atomic;
 use std::{cmp, mem, slice, thread, time};
@@ -174,22 +175,23 @@ impl NethunsSocket for NethunsSocketNetmap {
         }
         
         // Initialize some_ring
-        let some_ring = NetmapRing::try_new(unsafe {
+        let some_ring = NetmapRing::new({
             assert!(!nm_port_d.nifp.is_null());
-            netmap_rxring(
-                nm_port_d.nifp,
-                if self.rx() {
-                    nm_port_d.first_rx_ring as _
-                } else {
-                    nm_port_d.first_tx_ring as _
-                },
-            )
-        })
-        .map_err(|e| {
-            NethunsBindError::Error(format!(
-                "failed to initialize some_ring: {e}"
-            ))
-        })?;
+            let ptr = unsafe {
+                netmap_rxring(
+                    nm_port_d.nifp,
+                    if self.rx() {
+                        nm_port_d.first_rx_ring as _
+                    } else {
+                        nm_port_d.first_tx_ring as _
+                    },
+                )
+            };
+            NonNull::new(ptr).ok_or(NethunsBindError::FrameworkError(
+                "failed to initialize some_ring: netmap_rxring returned null"
+                    .to_owned(),
+            ))?
+        });
         
         // TODO comment
         self.free_ring = Some(CircularCloneBuffer::new(
@@ -249,7 +251,7 @@ impl NethunsSocket for NethunsSocketNetmap {
     
     fn recv(&mut self) -> Result<RecvPacket, NethunsRecvError> {
         // Check if the ring has been binded to a queue and if it's in RX mode
-        let nmport_d: &mut NmPortDescriptor = match &mut self.p {
+        let nmport_d = match &mut self.p {
             Some(p) => p,
             None => return Err(NethunsRecvError::NonBinded),
         };
@@ -296,7 +298,7 @@ impl NethunsSocket for NethunsSocketNetmap {
             .get_slot(i as _)
             .map_err(NethunsRecvError::Error)?;
         let idx = cur_netmap_slot.buf_idx;
-        let pkt = netmap_buf_pkt!(netmap_ring, idx);
+        let pkt = unsafe { netmap_buf_pkt!(netmap_ring, idx) };
         
         // Update the packet header metadata of the nethuns ring abstraction against the actual netmap packet.
         let mut slot = rc_slot.borrow_mut();
@@ -385,9 +387,16 @@ impl NethunsSocket for NethunsSocketNetmap {
         
         // Try to push packets marked for transmission
         for i in nmport_d.first_tx_ring as _..=nmport_d.last_tx_ring as _ {
-            let mut ring =
-                NetmapRing::try_new(unsafe { netmap_txring(nmport_d.nifp, i) })
-                    .map_err(NethunsFlushError::Error)?;
+            let mut ring = NetmapRing::new(
+                NonNull::new(
+                    unsafe { netmap_txring(nmport_d.nifp, i) }
+                )
+                .ok_or(
+                    NethunsFlushError::FrameworkError(
+                        "failed to initialize some_ring: netmap_txring returned null".to_owned()
+                    )
+                )?
+            );
             prev_tails[i - nmport_d.first_tx_ring as usize] = ring.tail;
             
             loop {
@@ -432,9 +441,16 @@ impl NethunsSocket for NethunsSocketNetmap {
         // netmap slot, mark the corresponding nethuns slot as
         // available (inuse <- 0)
         for i in nmport_d.first_tx_ring as _..=nmport_d.last_tx_ring as _ {
-            let ring =
-                NetmapRing::try_new(unsafe { netmap_txring(nmport_d.nifp, i) })
-                    .map_err(NethunsFlushError::Error)?;
+            let ring = NetmapRing::new(
+                NonNull::new(
+                    unsafe { netmap_txring(nmport_d.nifp, i) }
+                )
+                .ok_or(
+                    NethunsFlushError::FrameworkError(
+                        "failed to initialize some_ring: netmap_txring returned null".to_owned()
+                    )
+                )?
+            );
             
             let stop = ring.nm_ring_next(ring.tail);
             let mut scan = ring
