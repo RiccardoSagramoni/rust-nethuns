@@ -23,8 +23,6 @@ pub enum NethunsBindError {
 /// Error type for [super::NethunsSocket::recv]
 #[derive(Debug, Error)]
 pub enum NethunsRecvError {
-    #[error("[recv] you must execute bind(...) before using the socket")]
-    NonBinded,
     #[error("[recv] socket not in RX mode")]
     NotRx,
     #[error("[recv] ring in use")]
@@ -42,8 +40,6 @@ pub enum NethunsRecvError {
 /// Error type for [super::NethunsSocket::send]
 #[derive(Error, Debug)]
 pub enum NethunsSendError {
-    #[error("[send] you must execute bind(...) before using the socket")]
-    NonBinded,
     #[error("[send] socket not in TX mode")]
     NotTx,
     #[error("[send] ring in use")]
@@ -56,8 +52,6 @@ pub enum NethunsSendError {
 /// Error type for [super::NethunsSocket::flush]
 #[derive(Error, Debug)]
 pub enum NethunsFlushError {
-    #[error("[flush] you must execute bind(...) before using the socket")]
-    NonBinded,
     #[error("[flush] socket not in TX mode")]
     NotTx,
     #[error("[flush] ring in use")]

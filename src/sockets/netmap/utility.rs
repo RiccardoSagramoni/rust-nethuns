@@ -80,7 +80,7 @@ pub(super) fn non_empty_rx_ring(
 /// * `slot` - the newly available ring slot
 macro_rules! nethuns_blocks_free {
     ($s: expr, $slot: expr) => {
-        $s.free_ring.as_mut().unwrap().push_unchecked($slot.pkthdr.buf_idx);
+        $s.free_ring.push_unchecked($slot.pkthdr.buf_idx);
     };
 }
 pub(super) use nethuns_blocks_free;
@@ -90,7 +90,7 @@ pub(super) use nethuns_blocks_free;
 /// inside a specific ring slot.
 ///
 /// # Arguments
-/// * `$some_ring`: a NetmapRing object
+/// * `$some_ring`: an immutable reference to the `some_ring` field of NethunsSocketNetmap
 /// * `$tx_ring`: a NethunsRing object
 /// * `$pktid`: the ring slot ID
 /// FIXME better doc

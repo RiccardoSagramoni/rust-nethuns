@@ -23,8 +23,8 @@ fn main() {
         tx_qdisc_bypass: false,
         ..Default::default()
     };
-    let mut socket = NethunsSocketFactory::nethuns_socket_open(opt).unwrap();
-    socket.bind(
+    let socket = NethunsSocketFactory::nethuns_socket_open(opt).unwrap();
+    let mut socket = socket.bind(
         &env::args().nth(1).expect("Usage: ./recv_test <device_name>"), 
         NethunsQueue::Any
     ).unwrap();
