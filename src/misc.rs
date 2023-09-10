@@ -2,8 +2,8 @@ mod circular_buffer;
 
 pub(crate) use circular_buffer::*;
 
+use crate::sockets::NethunsSocket;
 use crate::types::NethunsQueue;
-use crate::NethunsSocket;
 
 
 /// Get full device name, taking into account
@@ -29,7 +29,7 @@ pub fn nethuns_dev_queue_name(
 #[inline(always)]
 pub fn nethuns_device_name(socket: &dyn NethunsSocket) -> String {
     nethuns_dev_queue_name(
-        socket.socket_base().devname.to_str().ok(),
-        socket.socket_base().queue,
+        socket.base().devname.to_str().ok(),
+        socket.base().queue,
     )
 }

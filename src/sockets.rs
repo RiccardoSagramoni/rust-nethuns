@@ -19,8 +19,8 @@ use self::errors::{
     Import the structs defined for the required I/O framework.
     
     Every framework-specific implementation must provide:
-    - A struct which implements the `NethunsSocket` trait, which will
-        be built by the `NethunsSocketFactory` factory.
+    - A struct which implements the `BindableNethunsSocket` trait.
+    - A struct which implements the `NethunsSocket` trait.
     - A struct named `Pkthdr` which must implement the `PkthdrTrait` trait.
     TODO: move it to mod documentation
 */
@@ -28,7 +28,7 @@ cfg_if::cfg_if! {
     if #[cfg(feature="netmap")] {
         mod netmap;
         
-        use netmap::nethuns_socket::NethunsSocketNetmap;
+        use netmap::bindable_socket::BindableNethunsSocketNetmap;
         
         pub use netmap::pkthdr::Pkthdr;
     }
@@ -38,24 +38,36 @@ cfg_if::cfg_if! {
 }
 
 
-/// Trait which defines the public API for Nethuns sockets.
-pub trait NethunsSocket: Debug {
-    /// Tries to open a new Nethuns socket.
-    ///
-    /// # Arguments
-    /// * `opt`: The options for the socket.
-    ///
-    /// # Returns
-    /// * `Ok(Box<dyn NethunsSocket>)` - A new nethuns socket, if no error occurred.
-    /// * `Err(NethunsOpenError::InvalidOptions)` - If at least one of the options holds a invalid value.
-    /// * `Err(NethunsOpenError::Error)` - If an unexpected error occurs.
-    fn open(
-        opt: NethunsSocketOptions,
-    ) -> Result<Box<dyn NethunsSocket>, NethunsOpenError>
-    where
-        Self: Sized;
-    
-    
+/// Open a new Nethuns socket, by calling the `open` function
+/// of the struct belonging to the I/O framework selected at compile time.
+///
+/// # Arguments
+/// * `opt`: The options for the socket.
+///
+/// # Returns
+/// * `Ok(Box<dyn BindableNethunsSocket>)` - A new nethuns socket, in no error occurs.
+/// * `Err(NethunsOpenError::InvalidOptions)` - If at least one of the options holds a invalid value.
+/// * `Err(NethunsOpenError::Error)` - If an unexpected error occurs.
+pub fn nethuns_socket_open(
+    opt: NethunsSocketOptions,
+) -> Result<Box<dyn BindableNethunsSocket>, NethunsOpenError> {
+    cfg_if::cfg_if! {
+        if #[cfg(feature="netmap")] {
+            return BindableNethunsSocketNetmap::open(opt);
+        }
+        else {
+            std::compile_error!("The support for the specified I/O framework is not available yet. Check the documentation for more information.");
+        }
+    }
+}
+
+
+/// Trait which defines the interface for a Nethuns socket
+/// not binded to a specific device and queue.
+///
+/// In order to properly use the socket, you need to bind it first
+/// to a specific device and queue by calling [`BindableNethunsSocket::bind()`].
+pub trait BindableNethunsSocket: Debug {
     /// Bind an opened socket to a specific queue / any queue of interface/device `dev`.
     ///
     /// # Returns
@@ -64,17 +76,40 @@ pub trait NethunsSocket: Debug {
     /// * `Err(NethunsBindError::FrameworkError)` - If an error from the unsafe interaction with underlying I/O framework occurs.
     /// * `Err(NethunsBindError::Error)` - If an unexpected error occurs.
     fn bind(
-        &mut self,
+        self: Box<Self>,
         dev: &str,
         queue: NethunsQueue,
-    ) -> Result<(), NethunsBindError>;
+    ) -> Result<
+        Box<dyn NethunsSocket>,
+        (NethunsBindError, Box<dyn BindableNethunsSocket>),
+    >;
     
+    /// Get an immutable reference to the base descriptor of the socket.
+    fn base(&self) -> &NethunsSocketBase;
+    /// Get an mutable reference to the base descriptor of the socket.
+    fn base_mut(&mut self) -> &mut NethunsSocketBase;
     
+    /// Check if the socket is in RX mode
+    #[inline(always)]
+    fn rx(&self) -> bool {
+        self.base().rx_ring.is_some()
+    }
+    
+    /// Check if the socket is in TX mode
+    #[inline(always)]
+    fn tx(&self) -> bool {
+        self.base().tx_ring.is_some()
+    }
+}
+
+
+/// Trait which defines the interface for a Nethuns socket after binding.
+/// This socket is usable for RX and/or TX, depending from its configuration.
+pub trait NethunsSocket: Debug {
     /// Get the next unprocessed received packet.
     ///
     /// # Returns
     /// * `Ok(RecvPacket)` - The unprocessed received packet, if no error occurred.
-    /// * `Err(NethunsRecvError::NonBinded)` - If the socket is not bound to a device. Make sure to call `bind(...)` first.
     /// * `Err(NethunsRecvError::NotRx)` -  If the socket is not configured in RX mode. Check the configuration parameters passed to `open(...)`.
     /// * `Err(NethunsRecvError::InUse)` - If the slot at the head of the RX ring is currently in use, i.e. the corresponding received packet is not released yet.
     /// * `Err(NethunsRecvError::NoPacketsAvailable)` - If there are no new packets available in the RX ring.
@@ -88,7 +123,6 @@ pub trait NethunsSocket: Debug {
     ///
     /// # Returns
     /// * `Ok(())` - On success.
-    /// * `Err(NethunsSendError::NonBinded)` - If the socket is not bound to a device. Make sure to call `bind(...)` first.
     /// * `Err(NethunsSendError::NotTx)` -  If the socket is not configured in TX mode. Check the configuration parameters passed to `open(...)`.
     /// * `Err(NethunsSendError::InUse)` - If the slot at the tail of the TX ring is not released yet and it's currently in use by the application.
     fn send(&mut self, packet: &[u8]) -> Result<(), NethunsSendError>;
@@ -98,7 +132,6 @@ pub trait NethunsSocket: Debug {
     ///
     /// # Returns
     /// * `Ok(())` - On success.
-    /// * `Err(NethunsFlushError::NonBinded)` - If the socket is not bound to a device. Make sure to call `bind(...)` first.
     /// * `Err(NethunsFlushError::NotTx)` -  If the socket is not configured in TX mode. Check the configuration parameters passed to `open(...)`.
     /// * `Err(NethunsFlushError::FrameworkError)` - If an error from the unsafe interaction with underlying I/O framework occurs.
     /// * `Err(NethunsFlushError::Error)` - If an unexpected error occurs.
@@ -119,13 +152,26 @@ pub trait NethunsSocket: Debug {
     
     
     /// Get an immutable reference to the base socket descriptor.
-    fn socket_base(&self) -> &NethunsSocketBase;
+    fn base(&self) -> &NethunsSocketBase;
     /// Get a mutable reference to the base socket descriptor.
-    fn socket_base_mut(&mut self) -> &mut NethunsSocketBase;
+    fn base_mut(&mut self) -> &mut NethunsSocketBase;
+    
+    
+    /// Check if the socket is in TX mode
+    #[inline(always)]
+    fn tx(&self) -> bool {
+        self.base().tx_ring.is_some()
+    }
+    
+    /// Check if the socket is in RX mode
+    #[inline(always)]
+    fn rx(&self) -> bool {
+        self.base().rx_ring.is_some()
+    }
     
     
     /// Get the file descriptor of the socket.
-    fn fd(&self) -> Option<libc::c_int>;
+    fn fd(&self) -> libc::c_int;
     
     
     /// Get a mutable reference to the buffer inside
@@ -139,7 +185,7 @@ pub trait NethunsSocket: Debug {
     ///
     /// # Returns
     /// * `Some(&mut [u8])` - buffer reference.
-    /// * `None` - if the socket is not bound or not in TX mode.
+    /// * `None` - if the socket is not in TX mode.
     fn get_packet_buffer_ref(&self, pktid: usize) -> Option<&mut [u8]>;
     
     
@@ -157,35 +203,6 @@ pub trait NethunsSocket: Debug {
     /// Get some statistics about the socket
     /// or `None` on error.
     fn stats(&self) -> Option<NethunsStat>;
-}
-
-
-/// Factory to build objects which implements the trait NethunsSocket
-pub struct NethunsSocketFactory();
-
-impl NethunsSocketFactory {
-    /// Tries to open a new Nethuns socket, by calling the `open` function
-    /// of the struct belonging to the I/O framework selected at compile time.
-    ///
-    /// # Arguments
-    /// * `opt`: The options for the socket.
-    ///
-    /// # Returns
-    /// * `Ok(Box<dyn NethunsSocket>)` - A new nethuns socket, in no error occurs.
-    /// * `Err(NethunsOpenError::InvalidOptions)` - If at least one of the options holds a invalid value.
-    /// * `Err(NethunsOpenError::Error)` - If an unexpected error occurs.
-    pub fn nethuns_socket_open(
-        opt: NethunsSocketOptions,
-    ) -> Result<Box<dyn NethunsSocket>, NethunsOpenError> {
-        cfg_if::cfg_if! {
-            if #[cfg(feature="netmap")] {
-                return NethunsSocketNetmap::open(opt);
-            }
-            else {
-                std::compile_error!("The support for the specified I/O framework is not available yet. Check the documentation for more information.");
-            }
-        }
-    }
 }
 
 
@@ -221,7 +238,12 @@ mod test {
     fn assert_nethuns_socket_trait() {
         cfg_if::cfg_if! {
             if #[cfg(feature="netmap")] {
-                assert!(is_trait!(super::NethunsSocketNetmap, super::NethunsSocket));
+                assert!(
+                    is_trait!(
+                        super::netmap::nethuns_socket::NethunsSocketNetmap,
+                        super::NethunsSocket
+                    )
+                );
             }
             else {
                 std::compile_error!("The support for the specified I/O framework is not available yet. Check the documentation for more information.");

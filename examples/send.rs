@@ -1,15 +1,16 @@
-use bus::{Bus, BusReader};
-use nethuns::sockets::ring::txring_get_size;
-use nethuns::types::{
-    NethunsCaptureDir, NethunsCaptureMode, NethunsQueue, NethunsSocketMode,
-    NethunsSocketOptions,
-};
-use nethuns::{NethunsSocket, NethunsSocketFactory};
 use std::io::Write;
 use std::sync::mpsc::TryRecvError;
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, SystemTime};
 use std::{env, thread};
+
+use bus::{Bus, BusReader};
+use nethuns::sockets::ring::txring_get_size;
+use nethuns::sockets::{nethuns_socket_open, NethunsSocket};
+use nethuns::types::{
+    NethunsCaptureDir, NethunsCaptureMode, NethunsQueue, NethunsSocketMode,
+    NethunsSocketOptions,
+};
 
 
 const HELP_BRIEF: &str = "\
@@ -435,7 +436,7 @@ fn fill_tx_ring(
     payload: &[u8],
 ) -> Result<Box<dyn NethunsSocket>, anyhow::Error> {
     // Open socket
-    let mut socket = NethunsSocketFactory::nethuns_socket_open(opt)?;
+    let socket = nethuns_socket_open(opt)?;
     
     // Bind socket
     let queue = if args.num_sockets > 1 {
@@ -443,17 +444,17 @@ fn fill_tx_ring(
     } else {
         NethunsQueue::Any
     };
-    socket.bind(&args.interface, queue)?;
+    let socket = socket.bind(&args.interface, queue).map_err(|(e, _)| e)?;
     
     // fill the slots in the tx ring (optimized send only)
     if args.zerocopy {
-        let size = txring_get_size(&*socket).expect("bind(...) not called");
+        let size = txring_get_size(&*socket).expect("socket not in tx mode");
         
         for j in 0..size {
             // tell me where to copy the j-th packet to be transmitted
             let mut pkt = socket
                 .get_packet_buffer_ref(j as _)
-                .expect("bind(...) not called");
+                .expect("socket not in tx mode");
             
             // copy the packet
             pkt.write_all(payload)?;

@@ -3,10 +3,9 @@ use std::cmp;
 use std::rc::Rc;
 use std::sync::atomic::{AtomicU8, Ordering};
 
-use super::Pkthdr;
+use super::{NethunsSocket, Pkthdr};
 
 use crate::misc::CircularCloneBuffer;
-use crate::NethunsSocket;
 
 
 /// Ring abstraction for Nethuns sockets.
@@ -181,7 +180,7 @@ pub(super) use nethuns_ring_free_slots;
 /// Get size of the RX ring.
 #[inline(always)]
 pub fn rxring_get_size(socket: &dyn NethunsSocket) -> Option<usize> {
-    let rx_ring = match &socket.socket_base().rx_ring {
+    let rx_ring = match &socket.base().rx_ring {
         Some(r) => r,
         None => return None,
     };
@@ -192,7 +191,7 @@ pub fn rxring_get_size(socket: &dyn NethunsSocket) -> Option<usize> {
 /// Get size of the TX ring.
 #[inline(always)]
 pub fn txring_get_size(socket: &dyn NethunsSocket) -> Option<usize> {
-    let tx_ring = match &socket.socket_base().tx_ring {
+    let tx_ring = match &socket.base().tx_ring {
         Some(r) => r,
         None => return None,
     };
