@@ -35,7 +35,7 @@ impl<T: Clone> CircularCloneBuffer<T> {
     /// * `builder` - a function which generates a new item.
     ///
     /// # Panics
-    /// If size is equals to zero.
+    /// If size is equals to 0.
     #[inline(always)]
     pub fn new(size: usize, builder: &dyn Fn() -> T) -> Self {
         assert!(size > 0);
@@ -71,6 +71,7 @@ impl<T: Clone> CircularCloneBuffer<T> {
     
     /// Return a clone instance of the item specified by the `head` index
     /// and advance the `head` index of one position.
+    /// 
     /// **It doesn't check if the buffer is empty.**
     #[inline(always)]
     pub fn pop_unchecked(&mut self) -> T {

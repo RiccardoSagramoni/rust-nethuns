@@ -2,8 +2,8 @@
 
 ## WIP: files
 ```
-├── api.h OK
-├── define.h OK
+├── api.h MERGED (in lib.rs for API and misc.rs for utility functions)
+├── define.h MERGED (in vlan.rs)
 ├── global.c OK
 ├── global.h OK
 ├── misc
@@ -12,16 +12,16 @@
 │   └── macro.h OK
 ├── nethuns.c OK
 ├── nethuns.h OK
-├── queue.h NOT NECESSARY (use rtrb crate)
+├── queue.h NOT NECESSARY (use `rtrb` crate)
 ├── sockets
 │   ├── base.h DOING (only pcap_* structs TODO) <==
 │   ├── file.inc TODO <==
-│   ├── netmap.c DONE
+│   ├── netmap.c OK
 │   ├── netmap.h DOING (only pcap_* functions TODO) <==
 │   ├── netmap_pkthdr.h OK
-│   ├── ring.h DONE
+│   ├── ring.h OK
 │   ├── types.h OK (in sockets.rs with traits)
-├── stub.h DONE (included in sockets.rs and vlan.rs)
+├── stub.h OK (included in sockets.rs and vlan.rs)
 ├── types.h OK
 ├── version.c.in NOT NECESSARY?
 └── vlan.h OK

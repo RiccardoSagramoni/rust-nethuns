@@ -30,7 +30,7 @@ cfg_if::cfg_if! {
         
         use netmap::bindable_socket::BindableNethunsSocketNetmap;
         
-        pub use netmap::pkthdr::Pkthdr;
+        use netmap::pkthdr::Pkthdr;
     }
     else {
         std::compile_error!("The support for the specified I/O framework is not available yet. Check the documentation for more information.");

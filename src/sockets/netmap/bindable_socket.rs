@@ -19,7 +19,7 @@ use super::super::NethunsSocket;
 
 
 #[derive(Debug)]
-pub(crate) struct BindableNethunsSocketNetmap {
+pub struct BindableNethunsSocketNetmap {
     base: NethunsSocketBase,
 }
 

@@ -26,7 +26,7 @@ use super::utility::nethuns_get_buf_addr_netmap;
 
 
 #[derive(Debug)]
-pub(crate) struct NethunsSocketNetmap {
+pub struct NethunsSocketNetmap {
     base: NethunsSocketBase,
     p: NmPortDescriptor,
     some_ring: NetmapRing, // ?? a cosa serve?

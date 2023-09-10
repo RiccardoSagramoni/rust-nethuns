@@ -1,4 +1,3 @@
-mod define;
 mod global;
 mod nethuns;
 
