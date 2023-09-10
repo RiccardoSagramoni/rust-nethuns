@@ -38,8 +38,12 @@ cfg_if::cfg_if! {
 }
 
 
+/// Trait which defines the interface for a Nethuns socket 
+/// not binded to a specific device and queue.
+/// 
+/// In order to properly use the socket, you need to bind it first
+/// to a specific device and queue by calling [`BindableNethunsSocket::bind()`].
 pub trait BindableNethunsSocket: Debug {
-    /// TODO
     /// Tries to open a new Nethuns socket.
     ///
     /// # Arguments
@@ -55,7 +59,6 @@ pub trait BindableNethunsSocket: Debug {
     where
         Self: Sized;
 
-    /// TODO
     /// Bind an opened socket to a specific queue / any queue of interface/device `dev`.
     ///
     /// # Returns
@@ -72,8 +75,9 @@ pub trait BindableNethunsSocket: Debug {
         (NethunsBindError, Box<dyn BindableNethunsSocket>),
     >;
 
-    /// TODO
+    /// Get an immutable reference to the base descriptor of the socket.
     fn base(&self) -> &NethunsSocketBase;
+    /// Get an mutable reference to the base descriptor of the socket.
     fn base_mut(&mut self) -> &mut NethunsSocketBase;
 
     /// Check if the socket is in RX mode
@@ -90,7 +94,8 @@ pub trait BindableNethunsSocket: Debug {
 }
 
 
-/// Trait which defines the public API for Nethuns sockets.
+/// Trait which defines the interface for a Nethuns socket after binding. 
+/// This socket is usable for RX and/or TX, depending from its configuration.
 pub trait NethunsSocket: Debug {
     /// Get the next unprocessed received packet.
     ///
