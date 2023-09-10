@@ -1,11 +1,11 @@
 use std::time::Duration;
 use std::{env, thread};
 
+use nethuns::sockets::nethuns_socket_open;
 use nethuns::types::{
     NethunsCaptureDir, NethunsCaptureMode, NethunsQueue, NethunsSocketMode,
     NethunsSocketOptions,
 };
-use nethuns::NethunsSocketFactory;
 
 const PAYLOAD: [u8; 34] = [
     0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xf0, 0xbf, /* L`..UF.. */
@@ -29,7 +29,7 @@ fn main() {
         tx_qdisc_bypass: false,
         ..Default::default()
     };
-    let socket = NethunsSocketFactory::nethuns_socket_open(opt).unwrap();
+    let socket = nethuns_socket_open(opt).unwrap();
     let mut socket = socket
         .bind(
             &env::args()

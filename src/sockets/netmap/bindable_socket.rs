@@ -13,9 +13,9 @@ use crate::sockets::errors::{NethunsBindError, NethunsOpenError};
 use crate::sockets::ring::NethunsRing;
 use crate::sockets::BindableNethunsSocket;
 use crate::types::{NethunsQueue, NethunsSocketMode, NethunsSocketOptions};
-use crate::NethunsSocket;
 
 use super::nethuns_socket::NethunsSocketNetmap;
+use super::super::NethunsSocket;
 
 
 #[derive(Debug)]
@@ -24,8 +24,18 @@ pub(crate) struct BindableNethunsSocketNetmap {
 }
 
 
-impl BindableNethunsSocket for BindableNethunsSocketNetmap {
-    fn open(
+
+impl BindableNethunsSocketNetmap {
+    /// Open a new Nethuns socket for the `netmap` framework.
+    ///
+    /// # Arguments
+    /// * `opt`: The options for the socket.
+    ///
+    /// # Returns
+    /// * `Ok(Box<dyn BindableNethunsSocket>)` - A new nethuns socket, in no error occurs.
+    /// * `Err(NethunsOpenError::InvalidOptions)` - If at least one of the options holds a invalid value.
+    /// * `Err(NethunsOpenError::Error)` - If an unexpected error occurs.
+    pub fn open(
         opt: NethunsSocketOptions,
     ) -> Result<Box<dyn BindableNethunsSocket>, NethunsOpenError> {
         let rx = opt.mode == NethunsSocketMode::RxTx
@@ -60,8 +70,11 @@ impl BindableNethunsSocket for BindableNethunsSocketNetmap {
         
         Ok(Box::new(Self { base }))
     }
-    
-    
+}
+
+
+
+impl BindableNethunsSocket for BindableNethunsSocketNetmap {
     fn bind(
         mut self: Box<Self>,
         dev: &str,

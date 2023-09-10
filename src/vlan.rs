@@ -4,7 +4,7 @@ use byteorder::{BigEndian, ReadBytesExt};
 use etherparse::{Ethernet2Header, SingleVlanHeader};
 
 use crate::define::{NETHUNS_ETH_P_8021AD, NETHUNS_ETH_P_8021Q};
-use crate::PkthdrTrait;
+use crate::sockets::PkthdrTrait;
 
 
 /// VLAN identifier
@@ -85,10 +85,7 @@ pub fn nethuns_vlan_tpid_(hdr: &dyn PkthdrTrait, payload: &[u8]) -> u16 {
 
 
 /// Tag control information for nethuns socket
-pub fn nethuns_vlan_tci_(
-    hdr: &dyn PkthdrTrait,
-    payload: &[u8],
-) -> u16 {
+pub fn nethuns_vlan_tci_(hdr: &dyn PkthdrTrait, payload: &[u8]) -> u16 {
     if hdr.offvlan_tpid() != 0 {
         hdr.offvlan_tci()
     } else {

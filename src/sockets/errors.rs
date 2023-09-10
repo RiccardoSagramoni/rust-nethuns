@@ -1,6 +1,6 @@
 use thiserror::Error;
 
-/// Error type for [super::BindableNethunsSocket::open]
+/// Error type for [super::nethuns_socket_open]
 #[derive(Clone, Debug, Error)]
 pub enum NethunsOpenError {
     #[error("[open] invalid options: {0}")]
@@ -12,7 +12,9 @@ pub enum NethunsOpenError {
 /// Error type for [super::BindableNethunsSocket::bind]
 #[derive(Clone, Debug, Error)]
 pub enum NethunsBindError {
-    #[error("[bind] error caused by an illegal or inappropriate argument: {0}")]
+    #[error(
+        "[bind] error caused by an illegal or inappropriate argument: {0}"
+    )]
     IllegalArgument(String),
     #[error("[bind] error of the I/O framework: {0}")]
     FrameworkError(String),

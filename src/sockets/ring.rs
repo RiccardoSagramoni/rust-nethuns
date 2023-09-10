@@ -3,10 +3,9 @@ use std::cmp;
 use std::rc::Rc;
 use std::sync::atomic::{AtomicU8, Ordering};
 
-use super::Pkthdr;
+use super::{NethunsSocket, Pkthdr};
 
 use crate::misc::CircularCloneBuffer;
-use crate::NethunsSocket;
 
 
 /// Ring abstraction for Nethuns sockets.

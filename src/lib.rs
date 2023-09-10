@@ -8,7 +8,4 @@ pub mod misc;
 pub mod sockets;
 pub mod types;
 pub mod vlan;
-
-pub use sockets::base::RecvPacket;
-pub use sockets::{BindableNethunsSocket, NethunsSocket, NethunsSocketFactory, PkthdrTrait};
 // }
