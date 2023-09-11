@@ -25,7 +25,7 @@ thiserror = "1.0.46"
 
 
 [build-dependencies]
-bindgen = { version = "0.66.1", features = ["experimental"] }
+bindgen = { version = "0.68.1", features = ["experimental"] }
 cfg-if = "1.0.0"
 
 
