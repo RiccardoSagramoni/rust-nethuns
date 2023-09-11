@@ -6,7 +6,8 @@ use c_netmap_wrapper::macros::{netmap_buf, netmap_rxring};
 use c_netmap_wrapper::nmport::NmPortDescriptor;
 use c_netmap_wrapper::ring::NetmapRing;
 
-use crate::misc::{nethuns_dev_queue_name, CircularCloneBuffer};
+use crate::misc::circular_buffer::CircularCloneBuffer;
+use crate::misc::nethuns_dev_queue_name;
 use crate::nethuns::__nethuns_set_if_promisc;
 use crate::sockets::base::NethunsSocketBase;
 use crate::sockets::errors::{NethunsBindError, NethunsOpenError};

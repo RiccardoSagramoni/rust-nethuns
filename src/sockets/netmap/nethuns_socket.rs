@@ -11,7 +11,7 @@ use c_netmap_wrapper::netmap_buf_pkt;
 use c_netmap_wrapper::nmport::NmPortDescriptor;
 use c_netmap_wrapper::ring::NetmapRing;
 
-use crate::misc::CircularCloneBuffer;
+use crate::misc::circular_buffer::CircularCloneBuffer;
 use crate::nethuns::__nethuns_clear_if_promisc;
 use crate::sockets::base::{NethunsSocketBase, RecvPacket};
 use crate::sockets::errors::{

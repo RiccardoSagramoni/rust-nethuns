@@ -9,7 +9,7 @@ use once_cell::sync::Lazy;
 /// relative to a unique device.
 #[derive(Clone, Copy, Debug, Default)]
 #[allow(dead_code)] // disable warnings due to missing implementation of XDP
-pub(crate) struct NethunsNetInfo {
+pub struct NethunsNetInfo {
     pub promisc_refcnt: i32,
     /// xdp only
     pub xdp_prog_refcnt: i32,
@@ -17,11 +17,11 @@ pub(crate) struct NethunsNetInfo {
     pub xdp_prog_id: u32,
 }
 
+
 /// Networking information of all the available Nethuns-enabled devices.
 /// Global R/W allowed in a thread-safe manner (mutex).
-pub(crate) static NETHUNS_GLOBAL: Mutex<
-    Lazy<HashMap<CString, NethunsNetInfo>>,
-> = Mutex::new(Lazy::new(HashMap::new));
+pub static NETHUNS_GLOBAL: Mutex<Lazy<HashMap<CString, NethunsNetInfo>>> =
+    Mutex::new(Lazy::new(HashMap::new));
 
 
 /// Set RLIMIT_MEMLOCK to infinity at application startup.

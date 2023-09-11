@@ -5,7 +5,7 @@ use std::sync::atomic::{AtomicU8, Ordering};
 
 use super::{NethunsSocket, Pkthdr};
 
-use crate::misc::CircularCloneBuffer;
+use crate::misc::circular_buffer::CircularCloneBuffer;
 
 
 /// Ring abstraction for Nethuns sockets.

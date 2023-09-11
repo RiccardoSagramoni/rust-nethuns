@@ -1,6 +1,4 @@
-mod circular_buffer;
-
-pub(crate) use circular_buffer::*;
+pub(crate) mod circular_buffer;
 
 use crate::sockets::NethunsSocket;
 use crate::types::NethunsQueue;
