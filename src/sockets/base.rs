@@ -44,7 +44,7 @@ pub struct NethunsSocketBase {
 
 
 /// Packet received when calling `recv()` on a `NethunsSocket` object.
-/// 
+///
 /// It's valid as long as the related `NethunsRingSlot` object is alive.
 ///
 /// You can use the `RecvPacket::try_new()` method to create a new instance.
@@ -55,7 +55,7 @@ pub struct NethunsSocketBase {
 /// - `packet`: the Ethernet packet payload.
 #[derive(Debug)]
 pub struct RecvPacket<'a> {
-    pub id: u64,
+    pub id: usize,
     pub pkthdr: Box<dyn PkthdrTrait>,
     pub packet: &'a [u8],
     
@@ -82,7 +82,7 @@ impl RecvPacket<'_> {
     /// - `packet`: A byte slice containing the received packet.
     /// - `slot`: A weak reference to the Nethuns ring slot where the packet is stored. This is required to automatically release the packet once it goes out of scope.
     pub fn new(
-        id: u64,
+        id: usize,
         pkthdr: Box<dyn PkthdrTrait>,
         packet: &'_ [u8],
         slot: Weak<RefCell<NethunsRingSlot>>,

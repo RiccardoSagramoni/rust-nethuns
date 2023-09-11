@@ -1,11 +1,11 @@
-use std::thread;
 use std::time::Duration;
+use std::{env, thread};
 
+use nethuns::sockets::nethuns_socket_open;
 use nethuns::types::{
     NethunsCaptureDir, NethunsCaptureMode, NethunsQueue, NethunsSocketMode,
     NethunsSocketOptions,
 };
-use nethuns::NethunsSocketFactory;
 
 const PAYLOAD: [u8; 34] = [
     0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xf0, 0xbf, /* L`..UF.. */
@@ -29,8 +29,15 @@ fn main() {
         tx_qdisc_bypass: false,
         ..Default::default()
     };
-    let mut socket = NethunsSocketFactory::try_new_nethuns_socket(opt).unwrap();
-    socket.bind("vi11", NethunsQueue::Any).unwrap();
+    let socket = nethuns_socket_open(opt).unwrap();
+    let mut socket = socket
+        .bind(
+            &env::args()
+                .nth(1)
+                .expect("Usage: ./send_test <device_name>"),
+            NethunsQueue::Any,
+        )
+        .unwrap();
     
     for i in 0..10 {
         for _ in 0..40 {

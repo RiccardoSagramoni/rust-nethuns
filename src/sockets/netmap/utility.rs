@@ -1,5 +1,7 @@
 //! Module containing some helper functions for [super] module
 
+use std::ptr::NonNull;
+
 use c_netmap_wrapper::macros::netmap_rxring;
 use c_netmap_wrapper::nmport::NmPortDescriptor;
 use c_netmap_wrapper::ring::NetmapRing;
@@ -37,9 +39,14 @@ pub(super) fn non_empty_rx_ring(
     
     loop {
         // Compute current ring to use
-        let ring =
-            NetmapRing::try_new(unsafe { netmap_rxring(d.nifp, ri as _) })
-                .map_err(NethunsRecvError::FrameworkError)?;
+        let ring = NetmapRing::new(
+            NonNull::new(unsafe { netmap_rxring(d.nifp, ri as _) }).ok_or(
+                NethunsRecvError::FrameworkError(
+                    "[non_empty_rx_ring] netmap_rxring returned null"
+                        .to_owned(),
+                ),
+            )?,
+        );
         
         // Check if the ring contains some received packets
         if ring.cur != ring.tail {
@@ -73,9 +80,7 @@ pub(super) fn non_empty_rx_ring(
 /// * `slot` - the newly available ring slot
 macro_rules! nethuns_blocks_free {
     ($s: expr, $slot: expr) => {
-        $s.free_ring[($s.free_tail & $s.free_mask) as usize] =
-            $slot.pkthdr.buf_idx;
-        $s.free_tail += 1;
+        $s.free_ring.push_unchecked($slot.pkthdr.buf_idx);
     };
 }
 pub(super) use nethuns_blocks_free;
@@ -85,7 +90,7 @@ pub(super) use nethuns_blocks_free;
 /// inside a specific ring slot.
 ///
 /// # Arguments
-/// * `$some_ring`: a NetmapRing object
+/// * `$some_ring`: an immutable reference to the `some_ring` field of NethunsSocketNetmap
 /// * `$tx_ring`: a NethunsRing object
 /// * `$pktid`: the ring slot ID
 /// FIXME better doc
@@ -96,7 +101,7 @@ macro_rules! nethuns_get_buf_addr_netmap {
     ($some_ring: expr, $tx_ring: expr, $pktid: expr) => {
         netmap_buf(
             $some_ring,
-            $tx_ring.get_slot($pktid as _).borrow().pkthdr.buf_idx as _,
+            $tx_ring.get_slot($pktid).borrow().pkthdr.buf_idx as _,
         ) as *mut u8
     };
 }

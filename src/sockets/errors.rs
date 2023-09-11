@@ -1,6 +1,6 @@
 use thiserror::Error;
 
-/// Error type for [super::NethunsSocket::open]
+/// Error type for [super::nethuns_socket_open]
 #[derive(Clone, Debug, Error)]
 pub enum NethunsOpenError {
     #[error("[open] invalid options: {0}")]
@@ -9,10 +9,12 @@ pub enum NethunsOpenError {
     Error(String),
 }
 
-/// Error type for [super::NethunsSocket::bind]
+/// Error type for [super::BindableNethunsSocket::bind]
 #[derive(Clone, Debug, Error)]
 pub enum NethunsBindError {
-    #[error("[bind] error caused by an illegal or inappropriate argument: {0}")]
+    #[error(
+        "[bind] error caused by an illegal or inappropriate argument: {0}"
+    )]
     IllegalArgument(String),
     #[error("[bind] error of the I/O framework: {0}")]
     FrameworkError(String),
@@ -23,8 +25,6 @@ pub enum NethunsBindError {
 /// Error type for [super::NethunsSocket::recv]
 #[derive(Debug, Error)]
 pub enum NethunsRecvError {
-    #[error("[recv] you must execute bind(...) before using the socket")]
-    NonBinded,
     #[error("[recv] socket not in RX mode")]
     NotRx,
     #[error("[recv] ring in use")]
@@ -42,8 +42,6 @@ pub enum NethunsRecvError {
 /// Error type for [super::NethunsSocket::send]
 #[derive(Error, Debug)]
 pub enum NethunsSendError {
-    #[error("[send] you must execute bind(...) before using the socket")]
-    NonBinded,
     #[error("[send] socket not in TX mode")]
     NotTx,
     #[error("[send] ring in use")]
@@ -56,8 +54,6 @@ pub enum NethunsSendError {
 /// Error type for [super::NethunsSocket::flush]
 #[derive(Error, Debug)]
 pub enum NethunsFlushError {
-    #[error("[flush] you must execute bind(...) before using the socket")]
-    NonBinded,
     #[error("[flush] socket not in TX mode")]
     NotTx,
     #[error("[flush] ring in use")]

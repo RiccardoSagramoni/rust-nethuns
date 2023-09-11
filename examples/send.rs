@@ -1,15 +1,16 @@
-use bus::{Bus, BusReader};
-use nethuns::sockets::ring::txring_get_size;
-use nethuns::types::{
-    NethunsCaptureDir, NethunsCaptureMode, NethunsQueue, NethunsSocketMode,
-    NethunsSocketOptions,
-};
-use nethuns::{NethunsSocket, NethunsSocketFactory};
 use std::io::Write;
 use std::sync::mpsc::TryRecvError;
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, SystemTime};
 use std::{env, thread};
+
+use bus::{Bus, BusReader};
+use nethuns::sockets::ring::txring_get_size;
+use nethuns::sockets::{nethuns_socket_open, NethunsSocket};
+use nethuns::types::{
+    NethunsCaptureDir, NethunsCaptureMode, NethunsQueue, NethunsSocketMode,
+    NethunsSocketOptions,
+};
 
 
 const HELP_BRIEF: &str = "\
@@ -304,7 +305,7 @@ fn st_send(
     let mut out_sockets: Vec<Box<dyn NethunsSocket>> =
         Vec::with_capacity(args.num_sockets as _);
     // One packet index per socket (pos of next slot/packet to send in tx ring)
-    let mut pktid: Vec<u64> = vec![0; args.num_sockets as _];
+    let mut pktid: Vec<usize> = vec![0; args.num_sockets as _];
     
     // Setup and fill transmission rings for each socket
     for i in 0..args.num_sockets {
@@ -389,7 +390,7 @@ fn mt_send(
     let mut socket = fill_tx_ring(args, opt, th_idx, payload)?;
     
     // Packet id (only for zero-copy transmission)
-    let mut pktid: u64 = 0;
+    let mut pktid = 0_usize;
     
     loop {
         // Check if Ctrl-C was pressed
@@ -435,7 +436,7 @@ fn fill_tx_ring(
     payload: &[u8],
 ) -> Result<Box<dyn NethunsSocket>, anyhow::Error> {
     // Open socket
-    let mut socket = NethunsSocketFactory::try_new_nethuns_socket(opt)?;
+    let socket = nethuns_socket_open(opt)?;
     
     // Bind socket
     let queue = if args.num_sockets > 1 {
@@ -443,16 +444,17 @@ fn fill_tx_ring(
     } else {
         NethunsQueue::Any
     };
-    socket.bind(&args.interface, queue)?;
+    let socket = socket.bind(&args.interface, queue).map_err(|(e, _)| e)?;
     
     // fill the slots in the tx ring (optimized send only)
     if args.zerocopy {
-        let size = txring_get_size(&*socket).expect("bind(...) not called");
+        let size = txring_get_size(&*socket).expect("socket not in tx mode");
         
         for j in 0..size {
             // tell me where to copy the j-th packet to be transmitted
-            let mut pkt =
-                socket.get_packet_buffer_ref(j as _).expect("bind(...) not called");
+            let mut pkt = socket
+                .get_packet_buffer_ref(j as _)
+                .expect("socket not in tx mode");
             
             // copy the packet
             pkt.write_all(payload)?;
@@ -475,7 +477,7 @@ fn fill_tx_ring(
 fn transmit_zc(
     args: &Args,
     socket: &mut Box<dyn NethunsSocket>,
-    pktid: &mut u64,
+    pktid: &mut usize,
     pkt_size: usize,
     totals: &Arc<Mutex<Vec<u64>>>,
     socket_idx: usize,
