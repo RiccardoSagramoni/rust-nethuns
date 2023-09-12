@@ -65,3 +65,13 @@ pub enum NethunsFlushError {
     #[error("[flush] an unexpected error occurred: {0}")]
     Error(String),
 }
+
+
+/// Error type for [super::base::NethunsSocketPcap::open]
+#[derive(Clone, Debug, Error)]
+pub enum NethunsPcapOpenError {
+    #[error("[pcap_open] invalid options: {0}")]
+    InvalidOptions(String),
+    #[error("[pcap_open] an unexpected error occurred: {0}")]
+    Error(String),
+}

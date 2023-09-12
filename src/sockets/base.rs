@@ -1,3 +1,5 @@
+pub mod pcap;
+
 use std::cell::RefCell;
 use std::ffi::CString;
 use std::rc::Weak;
