@@ -1,7 +1,10 @@
+use std::io;
+
+use core::fmt::Debug;
 use thiserror::Error;
 
 /// Error type for [super::nethuns_socket_open]
-#[derive(Clone, Debug, Error)]
+#[derive(Debug, Error)]
 pub enum NethunsOpenError {
     #[error("[open] invalid options: {0}")]
     InvalidOptions(String),
@@ -10,7 +13,7 @@ pub enum NethunsOpenError {
 }
 
 /// Error type for [super::BindableNethunsSocket::bind]
-#[derive(Clone, Debug, Error)]
+#[derive(Debug, Error)]
 pub enum NethunsBindError {
     #[error(
         "[bind] error caused by an illegal or inappropriate argument: {0}"
@@ -40,7 +43,7 @@ pub enum NethunsRecvError {
 }
 
 /// Error type for [super::NethunsSocket::send]
-#[derive(Error, Debug)]
+#[derive(Debug, Error)]
 pub enum NethunsSendError {
     #[error("[send] socket not in TX mode")]
     NotTx,
@@ -52,7 +55,7 @@ pub enum NethunsSendError {
 
 
 /// Error type for [super::NethunsSocket::flush]
-#[derive(Error, Debug)]
+#[derive(Debug, Error)]
 pub enum NethunsFlushError {
     #[error("[flush] socket not in TX mode")]
     NotTx,
@@ -67,11 +70,65 @@ pub enum NethunsFlushError {
 }
 
 
-/// Error type for [super::base::NethunsSocketPcap::open]
-#[derive(Clone, Debug, Error)]
+/// Error type for [super::base::pcap::NethunsSocketPcap::open]
+#[derive(Debug, Error)]
 pub enum NethunsPcapOpenError {
-    #[error("[pcap_open] invalid options: {0}")]
-    InvalidOptions(String),
-    #[error("[pcap_open] an unexpected error occurred: {0}")]
-    Error(String),
+    #[error("[pcap_open] could not open pcap file for writing (use built-in pcap option)")]
+    WriteModeNotSupported,
+    #[error("[pcap_open] unable to open file: {0}")]
+    FileError(#[from] io::Error),
+    #[error("[pcap_open] error while parsing pcap file: {0}")]
+    PcapError(String),
+}
+
+impl<I> From<pcap_parser::PcapError<I>> for NethunsPcapOpenError
+where
+    I: Debug + Sized,
+{
+    fn from(e: pcap_parser::PcapError<I>) -> Self {
+        NethunsPcapOpenError::PcapError(format!("{:?}", e))
+    }
+}
+
+
+/// Error type for [super::base::pcap::NethunsSocketPcap::read]
+#[derive(Debug, Error)]
+pub enum NethunsPcapReadError {
+    #[error("[pcap_read] head ring in use")]
+    InUse,
+    #[error("[pcap_read] error while parsing pcap file: {0}")]
+    PcapError(String),
+}
+
+impl<I> From<pcap_parser::PcapError<I>> for NethunsPcapReadError
+where
+    I: Debug + Sized,
+{
+    fn from(e: pcap_parser::PcapError<I>) -> Self {
+        NethunsPcapReadError::PcapError(format!("{:?}", e))
+    }
+}
+
+
+/// Error type for [super::base::pcap::NethunsSocketPcap::write]
+#[derive(Debug, Error)]
+pub enum NethunsPcapWriteError {
+    #[error("[pcap_write] operation not supported")]
+    NotSupported(),
+}
+
+
+/// Error type for [super::base::pcap::NethunsSocketPcap::store]
+#[derive(Debug, Error)]
+pub enum NethunsPcapStoreError {
+    #[error("[pcap_store] operation not supported")]
+    NotSupported(),
+}
+
+
+/// Error type for [super::base::pcap::NethunsSocketPcap::rewind]
+#[derive(Debug, Error)]
+pub enum NethunsPcapRewindError {
+    #[error("[pcap_rewind] operation not supported")]
+    NotSupported(),
 }

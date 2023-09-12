@@ -12,9 +12,6 @@ cfg_if!(
     if #[cfg(feature="NETHUNS_USE_BUILTIN_PCAP_READER")] {
         mod builtin_reader;
         pub use builtin_reader::*;
-        
-        use std::fs::File;
-        pub type PcapReaderType = File;
     } else {
         mod pcap_reader;
         pub use pcap_reader::*;
