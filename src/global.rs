@@ -31,9 +31,9 @@ pub static NETHUNS_GLOBAL: Mutex<Lazy<HashMap<CString, NethunsNetInfo>>> =
 /// (see [setrlimit(2) - Linux man page](https://linux.die.net/man/2/setrlimit)
 /// for more details).
 /// Since this usually means that we must run the tests with root privileges,
-/// this function is disabled in debug builds.
+/// this function is disabled when testing.
 #[cfg(target_os = "linux")]
-#[cfg(not(debug_assertions))] // available only in release builds
+#[cfg(not(test))]
 #[small_ctor::ctor]
 unsafe fn setrlimit() {
     let rlim = libc::rlimit {
