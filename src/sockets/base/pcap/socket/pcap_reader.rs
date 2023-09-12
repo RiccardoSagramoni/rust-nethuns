@@ -6,21 +6,21 @@ use std::{cmp, slice};
 use pcap_parser::traits::PcapReaderIterator;
 use pcap_parser::{LegacyPcapReader, PcapBlockOwned};
 
-use crate::sockets::base::pcap::socket::NSEC_TCPDUMP_MAGIC;
-use crate::sockets::base::pcap::NethunsSocketPcap;
+use crate::sockets::base::pcap::{NethunsSocketPcap, NethunsSocketPcapTrait};
 use crate::sockets::base::{NethunsSocketBase, RecvPacket};
 use crate::sockets::errors::{NethunsPcapOpenError, NethunsPcapReadError};
 use crate::sockets::ring::NethunsRing;
 use crate::sockets::PkthdrTrait;
 use crate::types::NethunsSocketOptions;
 
+use super::constants::NSEC_TCPDUMP_MAGIC;
+
 
 pub type PcapReaderType = LegacyPcapReader<File>;
 
 
-impl NethunsSocketPcap {
-    /// TODO doc
-    pub fn open(
+impl NethunsSocketPcapTrait for NethunsSocketPcap {
+    fn open(
         opt: NethunsSocketOptions,
         filename: &str,
         writing_mode: bool,
@@ -60,8 +60,7 @@ impl NethunsSocketPcap {
     }
     
     
-    /// TODO doc
-    pub fn read(&mut self) -> Result<RecvPacket, NethunsPcapReadError> {
+    fn read(&mut self) -> Result<RecvPacket, NethunsPcapReadError> {
         let rx_ring = self
             .base
             .rx_ring
@@ -112,15 +111,17 @@ impl NethunsSocketPcap {
     }
     
     
-    pub fn write(&mut self) -> Result<(), String> {
+    fn write(&mut self) -> Result<(), String> {
         Err("Not supported".to_owned())
     }
     
-    pub fn store(&mut self) -> Result<(), String> {
+    
+    fn store(&mut self) -> Result<(), String> {
         Err("Not supported".to_owned())
     }
     
-    pub fn rewind(&mut self) -> Result<(), String> {
+    
+    fn rewind(&mut self) -> Result<(), String> {
         Err("Not supported".to_owned())
     }
 }
