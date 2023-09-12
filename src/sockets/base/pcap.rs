@@ -1,8 +1,6 @@
-mod socket;
+mod constants;
 
-
-pub use socket::*;
-
+use cfg_if::cfg_if;
 
 use crate::sockets::errors::{NethunsPcapOpenError, NethunsPcapReadError};
 use crate::types::NethunsSocketOptions;
@@ -10,7 +8,7 @@ use crate::types::NethunsSocketOptions;
 use super::{NethunsSocketBase, RecvPacket};
 
 
-/// TODO
+/// TODO doc
 pub struct NethunsSocketPcap {
     base: NethunsSocketBase,
     reader: PcapReaderType,
@@ -28,6 +26,8 @@ impl NethunsSocketPcap {
     }
 }
 
+
+/// TODO doc
 pub trait NethunsSocketPcapTrait {
     /// TODO doc
     fn open(
@@ -50,3 +50,16 @@ pub trait NethunsSocketPcapTrait {
     /// TODO doc
     fn rewind(&mut self) -> Result<(), String>;
 }
+
+
+// Include the implementation of `NethunsSocketPcapTrait` 
+// according to the `NETHUNS_USE_BUILTIN_PCAP_READER` feature
+cfg_if!(
+    if #[cfg(feature="NETHUNS_USE_BUILTIN_PCAP_READER")] {
+        mod reader_builtin;
+        use reader_builtin::*;
+    } else {
+        mod reader_pcap;
+        use reader_pcap::*;
+    }
+);
