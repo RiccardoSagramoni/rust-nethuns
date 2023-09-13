@@ -10,7 +10,7 @@ use crate::sockets::base::pcap::{NethunsSocketPcap, NethunsSocketPcapTrait};
 use crate::sockets::base::{NethunsSocketBase, RecvPacket};
 use crate::sockets::errors::{
     NethunsPcapOpenError, NethunsPcapReadError, NethunsPcapRewindError,
-    NethunsPcapWriteError,
+    NethunsPcapStoreError, NethunsPcapWriteError,
 };
 use crate::sockets::ring::NethunsRing;
 use crate::sockets::PkthdrTrait;
@@ -135,8 +135,8 @@ impl NethunsSocketPcapTrait for NethunsSocketPcap {
     
     fn store(
         &mut self,
-        pkthdr: &dyn PkthdrTrait,
-        packet: &[u8],
+        _pkthdr: &dyn PkthdrTrait,
+        _packet: &[u8],
     ) -> Result<u32, NethunsPcapStoreError> {
         Err(NethunsPcapStoreError::NotSupported)
     }

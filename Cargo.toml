@@ -39,11 +39,10 @@ rtrb = "0.2.3"
 
 [features]
 default = [
-    "netmap",
+    "netmap",            # FIXME remove from default features
     "libc/extra_traits",
     "rustix/net",
-    "NETHUNS_USE_BUILTIN_PCAP_READER",
-] # FIXME remove netmap and NETHUNS_USE_BUILTIN_PCAP_READER from default features
+]
 netmap = ["dep:c_netmap_wrapper"]
 libpcap = []
 xdp = []
