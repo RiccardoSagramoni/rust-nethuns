@@ -1,3 +1,5 @@
+pub mod pcap;
+
 use std::cell::RefCell;
 use std::ffi::CString;
 use std::rc::Weak;
@@ -20,8 +22,8 @@ type NethunsFilter = dyn Fn(&dyn PkthdrTrait, &[u8]) -> i32;
 /// This data structure is common to all the implementation of a "nethuns socket",
 /// for the supported underlying I/O frameworks. Thus, it's independent from
 /// low-level implementation of the sockets.
-#[derive(Derivative)]
-#[derivative(Debug, Default)]
+#[derive(Default, Derivative)]
+#[derivative(Debug)]
 pub struct NethunsSocketBase {
     /// Configuration options
     pub opt: NethunsSocketOptions,

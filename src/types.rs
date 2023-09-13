@@ -1,4 +1,3 @@
-use derivative::Derivative;
 use derive_builder::Builder;
 
 
@@ -39,8 +38,7 @@ pub enum NethunsSocketMode {
 
 
 /// Options for the nethuns socket.
-#[derive(Builder, Clone, Debug, Derivative, PartialEq, PartialOrd)]
-#[derivative(Default)]
+#[derive(Builder, Clone, Debug, Default, PartialEq, PartialOrd)]
 #[builder(pattern = "owned", default)]
 pub struct NethunsSocketOptions {
     pub numblocks: u32,

@@ -8,22 +8,22 @@
 ├── global.h OK
 ├── misc
 │   ├── compiler.h CAN'T
-│   ├── hashmap.h NOT NECESSARY
+│   ├── hashmap.h NOT NECESSARY (use `std::collections::HashMap`)
 │   └── macro.h OK
 ├── nethuns.c OK
 ├── nethuns.h OK
 ├── queue.h NOT NECESSARY (use `rtrb` crate)
 ├── sockets
-│   ├── base.h DOING (only pcap_* structs TODO) <==
-│   ├── file.inc TODO <==
+│   ├── base.h OK
+│   ├── file.inc MERGED (in pcap.rs)
 │   ├── netmap.c OK
-│   ├── netmap.h DOING (only pcap_* functions TODO) <==
+│   ├── netmap.h OK
 │   ├── netmap_pkthdr.h OK
 │   ├── ring.h OK
 │   ├── types.h OK (in sockets.rs with traits)
 ├── stub.h OK (included in sockets.rs and vlan.rs)
 ├── types.h OK
-├── version.c.in NOT NECESSARY?
+├── version.c.in NOT NECESSARY (Rust already has a versioning system)
 └── vlan.h OK
 ```
 

@@ -13,7 +13,7 @@ use crate::misc::circular_buffer::CircularCloneBuffer;
 pub struct NethunsRing {
     pktsize: usize,
     
-    pub(super) rings: CircularCloneBuffer<Rc<RefCell<NethunsRingSlot>>>,
+    pub(crate) rings: CircularCloneBuffer<Rc<RefCell<NethunsRingSlot>>>,
 }
 
 
