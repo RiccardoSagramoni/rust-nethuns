@@ -118,7 +118,11 @@ where
 #[derive(Debug, Error)]
 pub enum NethunsPcapWriteError {
     #[error("[pcap_write] operation not supported")]
-    NotSupported(),
+    NotSupported,
+    #[error("[pcap_write] error while using file: {0}")]
+    FileError(#[from] io::Error),
+    #[error("[pcap_write] could not write {0}")]
+    WriteError(String),
 }
 
 
@@ -126,7 +130,11 @@ pub enum NethunsPcapWriteError {
 #[derive(Debug, Error)]
 pub enum NethunsPcapStoreError {
     #[error("[pcap_store] operation not supported")]
-    NotSupported(),
+    NotSupported,
+    #[error("[pcap_store] error while using file: {0}")]
+    FileError(#[from] io::Error),
+    #[error("[pcap_store] could not write {0}")]
+    WriteError(String),
 }
 
 
@@ -134,5 +142,7 @@ pub enum NethunsPcapStoreError {
 #[derive(Debug, Error)]
 pub enum NethunsPcapRewindError {
     #[error("[pcap_rewind] operation not supported")]
-    NotSupported(),
+    NotSupported,
+    #[error("[pcap_rewind] error while using file: {0}")]
+    FileError(#[from] io::Error),
 }

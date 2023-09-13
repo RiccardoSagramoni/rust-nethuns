@@ -8,12 +8,16 @@ use pcap_parser::{LegacyPcapReader, PcapBlockOwned};
 
 use crate::sockets::base::pcap::{NethunsSocketPcap, NethunsSocketPcapTrait};
 use crate::sockets::base::{NethunsSocketBase, RecvPacket};
-use crate::sockets::errors::{NethunsPcapOpenError, NethunsPcapReadError};
+use crate::sockets::errors::{
+    NethunsPcapOpenError, NethunsPcapReadError, NethunsPcapRewindError,
+    NethunsPcapWriteError,
+};
 use crate::sockets::ring::NethunsRing;
 use crate::sockets::PkthdrTrait;
 use crate::types::NethunsSocketOptions;
 
 use super::constants::NSEC_TCPDUMP_MAGIC;
+use super::nethuns_pcap_pkthdr;
 
 
 // Define the type of the default pcap reader
@@ -120,17 +124,25 @@ impl NethunsSocketPcapTrait for NethunsSocketPcap {
     }
     
     
-    fn write(&mut self) -> Result<(), String> {
-        Err("Not supported".to_owned())
+    fn write(
+        &mut self,
+        _header: &nethuns_pcap_pkthdr,
+        _packet: &[u8],
+    ) -> Result<usize, NethunsPcapWriteError> {
+        Err(NethunsPcapWriteError::NotSupported)
     }
     
     
-    fn store(&mut self) -> Result<(), String> {
-        Err("Not supported".to_owned())
+    fn store(
+        &mut self,
+        pkthdr: &dyn PkthdrTrait,
+        packet: &[u8],
+    ) -> Result<u32, NethunsPcapStoreError> {
+        Err(NethunsPcapStoreError::NotSupported)
     }
     
     
-    fn rewind(&mut self) -> Result<(), String> {
-        Err("Not supported".to_owned())
+    fn rewind(&mut self) -> Result<u64, NethunsPcapRewindError> {
+        Err(NethunsPcapRewindError::NotSupported)
     }
 }

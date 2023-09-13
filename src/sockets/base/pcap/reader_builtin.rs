@@ -1,54 +1,32 @@
 use std::fs::{File, OpenOptions};
-use std::io::{prelude::*, SeekFrom};
+use std::io::prelude::*;
+use std::io::SeekFrom;
 use std::rc::Rc;
 use std::sync::atomic;
 use std::{cmp, mem, slice};
 
-use derivative::Derivative;
 use pcap_sys::pcap_file_header;
 
-use crate::sockets::PkthdrTrait;
 use crate::sockets::base::pcap::constants::{
     KUZNETZOV_TCPDUMP_MAGIC, NSEC_TCPDUMP_MAGIC, TCPDUMP_MAGIC,
 };
 use crate::sockets::base::{NethunsSocketBase, RecvPacket};
-use crate::sockets::errors::{NethunsPcapOpenError, NethunsPcapReadError};
+use crate::sockets::errors::{
+    NethunsPcapOpenError, NethunsPcapReadError, NethunsPcapRewindError,
+    NethunsPcapStoreError, NethunsPcapWriteError,
+};
 use crate::sockets::ring::NethunsRing;
+use crate::sockets::PkthdrTrait;
 use crate::types::NethunsSocketOptions;
 
-use super::{NethunsSocketPcap, NethunsSocketPcapTrait};
+use super::{
+    nethuns_pcap_patched_pkthdr, nethuns_pcap_pkthdr, NethunsSocketPcap,
+    NethunsSocketPcapTrait,
+};
 
 
 // Define the type of the built-in pcap reader
 pub type PcapReaderType = File;
-
-
-#[allow(non_camel_case_types)]
-#[repr(C)]
-#[derive(Debug, Derivative)]
-#[derivative(Default)]
-struct nethuns_pcap_pkthdr {
-    #[derivative(Default(
-        value = "pcap_sys::timeval { tv_sec: 0, tv_usec: 0 }"
-    ))]
-    /// timestamp
-    ts: pcap_sys::timeval,
-    /// length of portion present
-    caplen: u32,
-    /// length of this packet (off wire)
-    len: u32,
-}
-
-
-#[allow(non_camel_case_types)]
-#[repr(C)]
-#[derive(Debug, Default)]
-struct nethuns_pcap_patched_pkthdr {
-    hdr: nethuns_pcap_pkthdr,
-    index: i32,
-    protocol: libc::c_ushort,
-    pkt_type: libc::c_uchar,
-}
 
 
 impl NethunsSocketPcapTrait for NethunsSocketPcap {
@@ -124,19 +102,8 @@ impl NethunsSocketPcapTrait for NethunsSocketPcap {
                 linktype: 1, // DLT_EN10MB
             };
             
-            let bytes = file.write(unsafe { any_as_u8_slice(&file_header) })?;
-            if bytes != mem::size_of::<pcap_file_header>() {
-                return Err(
-                        NethunsPcapOpenError::PcapError(
-                            format!(
-                                "unable to write pcap file header: writen {bytes} bytes instead of {} bytes", mem::size_of::<pcap_file_header>()
-                            )
-                        )
-                    );
-            }
-            
+            file.write_all(unsafe { any_as_u8_slice(&file_header) })?;
             file.flush()?;
-            
             file
         };
         
@@ -177,7 +144,7 @@ impl NethunsSocketPcapTrait for NethunsSocketPcap {
         
         if self.reader.read(header_slice)? != header_slice.len() {
             return Err(NethunsPcapReadError::PcapError(
-                "could not read packet header".to_owned()
+                "could not read packet header".to_owned(),
             ));
         }
         
@@ -186,8 +153,8 @@ impl NethunsSocketPcapTrait for NethunsSocketPcap {
         
         if self.reader.read(&mut slot.packet)? != bytes as _ {
             return Err(NethunsPcapReadError::PcapError(
-                "could not read packet".to_owned()
-            ))
+                "could not read packet".to_owned(),
+            ));
         }
         
         slot.pkthdr.tstamp_set_sec(header.hdr.ts.tv_sec as _);
@@ -218,22 +185,66 @@ impl NethunsSocketPcapTrait for NethunsSocketPcap {
     }
     
     
-    fn write(&mut self) -> Result<(), String> {
-        todo!()
+    fn write(
+        &mut self,
+        header: &nethuns_pcap_pkthdr,
+        packet: &[u8],
+    ) -> Result<usize, NethunsPcapWriteError> {
+        self.reader.write_all(unsafe { any_as_u8_slice(header) })?;
+        self.reader.write_all(packet)?;
+        self.reader.flush()?;
+        Ok(packet.len())
     }
     
     
-    fn store(&mut self) -> Result<(), String> {
-        todo!()
+    fn store(
+        &mut self,
+        pkthdr: &dyn PkthdrTrait,
+        packet: &[u8],
+    ) -> Result<u32, NethunsPcapStoreError> {
+        let has_vlan_offload = pkthdr.offvlan_tpid();
+        let header = nethuns_pcap_pkthdr {
+            ts: pcap_sys::timeval {
+                tv_sec: pkthdr.tstamp_sec() as _,
+                tv_usec: pkthdr.tstamp_usec() as _,
+            },
+            caplen: cmp::min(
+                packet.len() as _,
+                pkthdr.snaplen() + 4 * has_vlan_offload as u32,
+            ),
+            len: pkthdr.len() + 4 * has_vlan_offload as u32,
+        };
+        
+        self.reader.write_all(unsafe { any_as_u8_slice(&header) })?;
+        
+        let mut clen: u32 = header.caplen;
+        
+        if has_vlan_offload != 0 {
+            let h8021q: [u16; 2] =
+                [pkthdr.offvlan_tpid().to_be(), pkthdr.offvlan_tci().to_be()];
+            self.reader.write_all(&packet[..12])?;
+            self.reader.write_all(unsafe { any_as_u8_slice(&h8021q) })?;
+            clen = header.caplen - 16;
+            self.reader.write_all(&packet[12..(clen + 12) as _])?;
+        } else {
+            self.reader.write_all(&packet[..header.caplen as _])?;
+        }
+        
+        self.reader.flush()?;
+        Ok(clen)
     }
     
     
-    fn rewind(&mut self) -> Result<(), String> {
-        todo!()
+    fn rewind(&mut self) -> Result<u64, NethunsPcapRewindError> {
+        self.reader
+            .seek(SeekFrom::Start(mem::size_of::<pcap_file_header>() as _))
+            .map_err(NethunsPcapRewindError::from)
     }
 }
 
 
+// the any_as_u8_slice function is marked unsafe because any padding bytes in the struct may be uninitialized memory (giving undefined behavior)
+/// TODO doc
 unsafe fn any_as_u8_slice<T: Sized>(p: &T) -> &[u8] {
     ::core::slice::from_raw_parts(
         (p as *const T) as *const u8,
@@ -241,6 +252,7 @@ unsafe fn any_as_u8_slice<T: Sized>(p: &T) -> &[u8] {
     )
 }
 
+/// TODO doc
 unsafe fn any_as_u8_slice_mut<T: Sized>(p: &mut T) -> &mut [u8] {
     ::core::slice::from_raw_parts_mut(
         (p as *mut T) as *mut u8,
