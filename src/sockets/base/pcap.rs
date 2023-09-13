@@ -3,14 +3,17 @@ mod constants;
 use cfg_if::cfg_if;
 use derivative::Derivative;
 
+use crate::sockets::errors::{
+    NethunsPcapOpenError, NethunsPcapReadError, NethunsPcapRewindError,
+    NethunsPcapStoreError, NethunsPcapWriteError,
+};
 use crate::sockets::PkthdrTrait;
-use crate::sockets::errors::{NethunsPcapOpenError, NethunsPcapReadError, NethunsPcapWriteError, NethunsPcapRewindError, NethunsPcapStoreError};
 use crate::types::NethunsSocketOptions;
 
 use super::{NethunsSocketBase, RecvPacket};
 
 
-/// TODO doc
+/// Nethuns socket for packet capture (PCAP).
 pub struct NethunsSocketPcap {
     base: NethunsSocketBase,
     reader: PcapReaderType,
@@ -19,19 +22,37 @@ pub struct NethunsSocketPcap {
 }
 
 impl NethunsSocketPcap {
+    pub fn base(&self) -> &NethunsSocketBase {
+        &self.base
+    }
     pub fn snaplen(&self) -> u32 {
         self.snaplen
     }
-    
     pub fn magic(&self) -> u32 {
         self.magic
     }
 }
 
 
-/// TODO doc
+/// Public interface for [NethunsSocketPcap].
+/// 
+/// Depending on the `NETHUNS_USE_BUILTIN_PCAP_READER` feature,
+/// the implementation of this trait will use the standard pcap reader 
+/// (STANDARD_PCAP_READER) or a custom built-in pcap reader (BUILTIN_PCAP_READER).
 pub trait NethunsSocketPcapTrait {
-    /// TODO doc
+    /// Open the socket for reading captured packets from a file.
+    /// 
+    /// # Arguments
+    /// * `opt`: socket options
+    /// * `filename`: name of the pcap file
+    /// * `writing_mode`: whether to open the file for writing
+    /// 
+    /// # Returns
+    /// * `Ok(NethunsSocketPcap)` - a new nethuns socket for pcap, in no error occurs.
+    /// * `Err(NethunsPcapOpenError::WriteModeNotSupported)` - if writing mode is not supported (STANDARD_PCAP_READER only).
+    /// * `Err(NethunsPcapOpenError::PcapError)` - if an error occurs while parsing the pcap file (STANDARD_PCAP_READER only).
+    /// * `Err(NethunsPcapOpenError::FileError)` - if an error occurs while accessing the file (BUILTIN_PCAP_READER only).
+    /// * `Err(NethunsPcapOpenError::MagicNotSupported)` - if the format of the pcap file is not supported (BUILTIN_PCAP_READER only).
     fn open(
         opt: NethunsSocketOptions,
         filename: &str,
@@ -40,20 +61,57 @@ pub trait NethunsSocketPcapTrait {
     where
         Self: Sized;
     
-    /// TODO doc
+    
+    /// Read a packet from the socket.
+    /// 
+    /// # Returns
+    /// * `Ok(RecvPacket)` - the packet read from the socket.
+    /// * `Err(NethunsPcapReadError::InUse)` - if the ring buffer of the nethuns base socket is full.
+    /// * `Err(NethunsPcapOpenError::PcapError)` - if an error occurs while parsing the pcap file (STANDARD_PCAP_READER only).
+    /// * `Err(NethunsPcapOpenError::FileError)` - if an error occurs while accessing the file (BUILTIN_PCAP_READER only).
     fn read(&mut self) -> Result<RecvPacket, NethunsPcapReadError>;
     
-    /// TODO doc
+    
+    /// Write a packet already in pcap format to a pcap file.
+    /// 
+    /// # Arguments
+    /// * `header`: pcap header of the packet
+    /// * `packet`: packet to write
+    /// 
+    /// # Returns
+    /// * `Ok(usize)` - the number of bytes written to the pcap file.
+    /// * `Err(NethunsPcapWriteError::NotSupported)` - if the `NETHUNS_USE_BUILTIN_PCAP_READER` feature is not enabled (STANDARD_PCAP_READER only).
+    /// * `Err(NethunsPcapWriteError::FileError)` - if an I/O error occurs while accessing the file (BUILTIN_PCAP_READER only).
     fn write(
         &mut self,
         header: &nethuns_pcap_pkthdr,
         packet: &[u8],
     ) -> Result<usize, NethunsPcapWriteError>;
     
-    /// TODO doc
-    fn store(&mut self, pkthdr: &dyn PkthdrTrait, packet: &[u8]) -> Result<u32, NethunsPcapStoreError>;
     
-    /// TODO doc
+    /// Store a packet received from a [crate::sockets::NethunsSocket] into a pcap file.
+    /// 
+    /// # Arguments
+    /// * `pkthdr`: packet header
+    /// * `packet`: packet to store
+    /// 
+    /// # Returns
+    /// * `Ok(u32)` - the number of bytes written to the pcap file.
+    /// * `Err(NethunsPcapWriteError::NotSupported)` - if the `NETHUNS_USE_BUILTIN_PCAP_READER` feature is not enabled (STANDARD_PCAP_READER only).
+    /// * `Err(NethunsPcapWriteError::FileError)` - if an I/O error occurs while accessing the file (BUILTIN_PCAP_READER only).
+    fn store(
+        &mut self,
+        pkthdr: &dyn PkthdrTrait,
+        packet: &[u8],
+    ) -> Result<u32, NethunsPcapStoreError>;
+    
+    
+    /// Rewind the reader to the beginning of the pcap file.
+    /// 
+    /// # Returns
+    /// * `Ok(u64)` - the new position from the start of the file.
+    /// * `Err(NethunsPcapRewindError::NotSupported)` - if the `NETHUNS_USE_BUILTIN_PCAP_READER` feature is not enabled (STANDARD_PCAP_READER only).
+    /// * `Err(NethunsPcapRewindError::FileError)` - if an I/O error occurs while accessing the file (BUILTIN_PCAP_READER only).
     fn rewind(&mut self) -> Result<u64, NethunsPcapRewindError>;
 }
 
@@ -71,8 +129,9 @@ cfg_if!(
 );
 
 
+/// Pcap packet header
 #[allow(non_camel_case_types)]
-#[repr(C)]
+#[repr(C)] // needed for safe transmutation to &[u8] and for compatibility with C programs
 #[derive(Debug, Derivative)]
 #[derivative(Default)]
 pub struct nethuns_pcap_pkthdr {
@@ -88,8 +147,9 @@ pub struct nethuns_pcap_pkthdr {
 }
 
 
+/// Patched pcap packet header for the Kuznetzov's implementation of TCPDUMP format
 #[allow(non_camel_case_types)]
-#[repr(C)]
+#[repr(C)] // needed for safe transmutation to &[u8] and for compatibility with C programs
 #[derive(Debug, Default)]
 pub struct nethuns_pcap_patched_pkthdr {
     pub hdr: nethuns_pcap_pkthdr,

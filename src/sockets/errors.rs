@@ -73,14 +73,18 @@ pub enum NethunsFlushError {
 /// Error type for [super::base::pcap::NethunsSocketPcap::open]
 #[derive(Debug, Error)]
 pub enum NethunsPcapOpenError {
-    #[error("[pcap_open] could not open pcap file for writing (use built-in pcap option)")]
+    // STANDARD_PCAP_READER
+    #[error("[pcap_open] could not open pcap file for writing (enable `NETHUNS_USE_BUILTIN_PCAP_READER` feature to use builtin pcap reader)")]
     WriteModeNotSupported,
-    #[error("[pcap_open] error while using file: {0}")]
-    FileError(#[from] io::Error),
     #[error("[pcap_open] error while parsing pcap file: {0}")]
     PcapError(String),
+    
+    // BUILTIN_PCAP_READER
     #[error("[pcap_open] magic pcap_file_header not supported ({0:02x})")]
     MagicNotSupported(u32),
+    #[error("[pcap_open] error while using file: {0}")]
+    FileError(#[from] io::Error),
+    
 }
 
 impl<I> From<pcap_parser::PcapError<I>> for NethunsPcapOpenError
@@ -98,9 +102,13 @@ where
 pub enum NethunsPcapReadError {
     #[error("[pcap_read] head ring in use")]
     InUse,
+    
+    // STANDARD_PCAP_READER
     #[error("[pcap_read] error while parsing pcap file: {0}")]
     PcapError(String),
-    #[error("[pcap_open] error while using file: {0}")]
+    
+    // BUILTIN_PCAP_READER
+    #[error("[pcap_open] error during access to file: {0}")]
     FileError(#[from] io::Error),
 }
 
@@ -117,32 +125,37 @@ where
 /// Error type for [super::base::pcap::NethunsSocketPcap::write]
 #[derive(Debug, Error)]
 pub enum NethunsPcapWriteError {
+    // STANDARD_PCAP_READER
     #[error("[pcap_write] operation not supported")]
     NotSupported,
-    #[error("[pcap_write] error while using file: {0}")]
+    
+    // BUILTIN_PCAP_READER
+    #[error("[pcap_write] error during access to file: {0}")]
     FileError(#[from] io::Error),
-    #[error("[pcap_write] could not write {0}")]
-    WriteError(String),
 }
 
 
 /// Error type for [super::base::pcap::NethunsSocketPcap::store]
 #[derive(Debug, Error)]
 pub enum NethunsPcapStoreError {
+    // STANDARD_PCAP_READER
     #[error("[pcap_store] operation not supported")]
     NotSupported,
-    #[error("[pcap_store] error while using file: {0}")]
+    
+    // BUILTIN_PCAP_READER
+    #[error("[pcap_store] error during access to file: {0}")]
     FileError(#[from] io::Error),
-    #[error("[pcap_store] could not write {0}")]
-    WriteError(String),
 }
 
 
 /// Error type for [super::base::pcap::NethunsSocketPcap::rewind]
 #[derive(Debug, Error)]
 pub enum NethunsPcapRewindError {
+    // STANDARD_PCAP_READER
     #[error("[pcap_rewind] operation not supported")]
     NotSupported,
+    
+    // BUILTIN_PCAP_READER
     #[error("[pcap_rewind] error while using file: {0}")]
     FileError(#[from] io::Error),
 }
