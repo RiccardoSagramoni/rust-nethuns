@@ -1,10 +1,13 @@
 use std::fs::{File, OpenOptions};
-use std::io::prelude::*;
-use std::{cmp, mem};
+use std::io::{prelude::*, SeekFrom};
+use std::rc::Rc;
+use std::sync::atomic;
+use std::{cmp, mem, slice};
 
-use libc::TCA_DUMP_INVISIBLE;
+use derivative::Derivative;
 use pcap_sys::pcap_file_header;
 
+use crate::sockets::PkthdrTrait;
 use crate::sockets::base::pcap::constants::{
     KUZNETZOV_TCPDUMP_MAGIC, NSEC_TCPDUMP_MAGIC, TCPDUMP_MAGIC,
 };
@@ -18,6 +21,34 @@ use super::{NethunsSocketPcap, NethunsSocketPcapTrait};
 
 // Define the type of the built-in pcap reader
 pub type PcapReaderType = File;
+
+
+#[allow(non_camel_case_types)]
+#[repr(C)]
+#[derive(Debug, Derivative)]
+#[derivative(Default)]
+struct nethuns_pcap_pkthdr {
+    #[derivative(Default(
+        value = "pcap_sys::timeval { tv_sec: 0, tv_usec: 0 }"
+    ))]
+    /// timestamp
+    ts: pcap_sys::timeval,
+    /// length of portion present
+    caplen: u32,
+    /// length of this packet (off wire)
+    len: u32,
+}
+
+
+#[allow(non_camel_case_types)]
+#[repr(C)]
+#[derive(Debug, Default)]
+struct nethuns_pcap_patched_pkthdr {
+    hdr: nethuns_pcap_pkthdr,
+    index: i32,
+    protocol: libc::c_ushort,
+    pkt_type: libc::c_uchar,
+}
 
 
 impl NethunsSocketPcapTrait for NethunsSocketPcap {
@@ -125,7 +156,65 @@ impl NethunsSocketPcapTrait for NethunsSocketPcap {
     
     
     fn read(&mut self) -> Result<RecvPacket, NethunsPcapReadError> {
-        todo!()
+        let rx_ring = self
+            .base
+            .rx_ring
+            .as_mut()
+            .expect("[read] rx_ring should have been set during `open`");
+        
+        let caplen = self.base.opt.packetsize;
+        let rc_slot = rx_ring.get_slot(rx_ring.rings.head());
+        if rc_slot.borrow().inuse.load(atomic::Ordering::Acquire) != 0 {
+            return Err(NethunsPcapReadError::InUse);
+        }
+        
+        let mut header = nethuns_pcap_patched_pkthdr::default();
+        let header_slice = if self.magic == KUZNETZOV_TCPDUMP_MAGIC {
+            unsafe { any_as_u8_slice_mut(&mut header.hdr) }
+        } else {
+            unsafe { any_as_u8_slice_mut(&mut header) }
+        };
+        
+        if self.reader.read(header_slice)? != header_slice.len() {
+            return Err(NethunsPcapReadError::PcapError(
+                "could not read packet header".to_owned()
+            ));
+        }
+        
+        let mut slot = rc_slot.borrow_mut();
+        let bytes = cmp::min(caplen, header.hdr.caplen);
+        
+        if self.reader.read(&mut slot.packet)? != bytes as _ {
+            return Err(NethunsPcapReadError::PcapError(
+                "could not read packet".to_owned()
+            ))
+        }
+        
+        slot.pkthdr.tstamp_set_sec(header.hdr.ts.tv_sec as _);
+        
+        if self.magic == NSEC_TCPDUMP_MAGIC {
+            slot.pkthdr.tstamp_set_nsec(header.hdr.ts.tv_usec as _);
+        } else {
+            slot.pkthdr.tstamp_set_usec(header.hdr.ts.tv_usec as _);
+        }
+        
+        slot.pkthdr.set_len(header.hdr.len);
+        slot.pkthdr.set_snaplen(bytes);
+        
+        if header.hdr.caplen > caplen {
+            let skip = header.hdr.caplen as i64 - caplen as i64;
+            self.reader.seek(SeekFrom::Current(skip))?;
+        }
+        
+        slot.inuse.store(1, atomic::Ordering::Release);
+        rx_ring.rings.advance_head();
+        
+        Ok(RecvPacket::new(
+            rx_ring.rings.head() as _,
+            Box::new(slot.pkthdr),
+            unsafe { slice::from_raw_parts(slot.packet.as_ptr(), bytes as _) },
+            Rc::downgrade(&rc_slot),
+        ))
     }
     
     

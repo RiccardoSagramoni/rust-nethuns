@@ -100,6 +100,8 @@ pub enum NethunsPcapReadError {
     InUse,
     #[error("[pcap_read] error while parsing pcap file: {0}")]
     PcapError(String),
+    #[error("[pcap_open] error while using file: {0}")]
+    FileError(#[from] io::Error),
 }
 
 impl<I> From<pcap_parser::PcapError<I>> for NethunsPcapReadError
