@@ -75,10 +75,12 @@ pub enum NethunsFlushError {
 pub enum NethunsPcapOpenError {
     #[error("[pcap_open] could not open pcap file for writing (use built-in pcap option)")]
     WriteModeNotSupported,
-    #[error("[pcap_open] unable to open file: {0}")]
+    #[error("[pcap_open] error while using file: {0}")]
     FileError(#[from] io::Error),
     #[error("[pcap_open] error while parsing pcap file: {0}")]
     PcapError(String),
+    #[error("[pcap_open] magic pcap_file_header not supported ({0:02x})")]
+    MagicNotSupported(u32),
 }
 
 impl<I> From<pcap_parser::PcapError<I>> for NethunsPcapOpenError

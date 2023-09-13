@@ -16,6 +16,7 @@ use crate::types::NethunsSocketOptions;
 use super::constants::NSEC_TCPDUMP_MAGIC;
 
 
+// Define the type of the default pcap reader
 pub type PcapReaderType = LegacyPcapReader<File>;
 
 
@@ -43,8 +44,12 @@ impl NethunsSocketPcapTrait for NethunsSocketPcap {
         
         let mut reader = LegacyPcapReader::new(65536, File::open(filename)?)?;
         let header = match reader.next() {
-            Ok((_, block)) => match block {
-                PcapBlockOwned::LegacyHeader(header) => header,
+            Ok((offset, block)) => match block {
+                PcapBlockOwned::LegacyHeader(header) => {
+                    let header = header.clone();
+                    reader.consume(offset);
+                    header
+                }
                 // The first read block should be the header of the pcap file
                 _ => unreachable!(),
             },
@@ -73,29 +78,33 @@ impl NethunsSocketPcapTrait for NethunsSocketPcap {
             return Err(NethunsPcapReadError::InUse);
         }
         
-        let pcap_packet = match self.reader.next() {
-            Ok((_, block)) => match block {
-                PcapBlockOwned::Legacy(packet) => packet,
-                // The first read block should be the header of the pcap file
+        let bytes: u32;
+        let mut slot = rc_slot.borrow_mut();
+        
+        match self.reader.next() {
+            Ok((offset, block)) => match block {
+                PcapBlockOwned::Legacy(packet) => {
+                    bytes = cmp::min(caplen, packet.caplen);
+                    
+                    slot.pkthdr.tstamp_set_sec(packet.ts_sec);
+                    
+                    if self.magic == NSEC_TCPDUMP_MAGIC {
+                        slot.pkthdr.tstamp_set_nsec(packet.ts_usec)
+                    } else {
+                        slot.pkthdr.tstamp_set_usec(packet.ts_usec)
+                    }
+                    
+                    slot.pkthdr.set_len(packet.origlen);
+                    slot.pkthdr.set_snaplen(bytes);
+                    
+                    slot.packet.copy_from_slice(&packet.data[..bytes as _]);
+                    self.reader.consume(offset);
+                }
+                // We should have read a packet
                 _ => unreachable!(),
             },
             Err(e) => return Err(NethunsPcapReadError::from(e)),
         };
-        
-        let bytes = cmp::min(caplen, pcap_packet.caplen);
-        let mut slot = rc_slot.borrow_mut();
-        slot.pkthdr.tstamp_set_sec(pcap_packet.ts_sec);
-        
-        if self.magic == NSEC_TCPDUMP_MAGIC {
-            slot.pkthdr.tstamp_set_nsec(pcap_packet.ts_usec)
-        } else {
-            slot.pkthdr.tstamp_set_usec(pcap_packet.ts_usec)
-        }
-        
-        slot.pkthdr.set_len(pcap_packet.origlen);
-        slot.pkthdr.set_snaplen(bytes);
-        
-        slot.packet.copy_from_slice(&pcap_packet.data[..bytes as _]);
         
         slot.inuse.store(1, atomic::Ordering::Release);
         rx_ring.rings.advance_head();
