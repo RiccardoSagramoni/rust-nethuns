@@ -4,7 +4,7 @@ use std::sync::atomic;
 use std::{cmp, slice};
 
 use pcap_parser::traits::PcapReaderIterator;
-use pcap_parser::{LegacyPcapReader, PcapBlockOwned};
+use pcap_parser::{LegacyPcapReader, PcapBlockOwned, PcapError};
 
 use crate::sockets::base::pcap::{NethunsSocketPcap, NethunsSocketPcapTrait};
 use crate::sockets::base::{NethunsSocketBase, RecvPacket};
@@ -85,30 +85,37 @@ impl NethunsSocketPcapTrait for NethunsSocketPcap {
         let bytes: u32;
         let mut slot = rc_slot.borrow_mut();
         
-        match self.reader.next() {
-            Ok((offset, block)) => match block {
-                PcapBlockOwned::Legacy(packet) => {
-                    bytes = cmp::min(caplen, packet.caplen);
-                    
-                    slot.pkthdr.tstamp_set_sec(packet.ts_sec);
-                    
-                    if self.magic == NSEC_TCPDUMP_MAGIC {
-                        slot.pkthdr.tstamp_set_nsec(packet.ts_usec)
-                    } else {
-                        slot.pkthdr.tstamp_set_usec(packet.ts_usec)
+        loop {
+            match self.reader.next() {
+                Ok((offset, block)) => match block {
+                    PcapBlockOwned::Legacy(packet) => {
+                        bytes = cmp::min(caplen, packet.caplen);
+                        
+                        slot.pkthdr.tstamp_set_sec(packet.ts_sec);
+                        
+                        if self.magic == NSEC_TCPDUMP_MAGIC {
+                            slot.pkthdr.tstamp_set_nsec(packet.ts_usec)
+                        } else {
+                            slot.pkthdr.tstamp_set_usec(packet.ts_usec)
+                        }
+                        
+                        slot.pkthdr.set_len(packet.origlen);
+                        slot.pkthdr.set_snaplen(bytes);
+                        
+                        slot.packet.copy_from_slice(&packet.data[..bytes as _]);
+                        self.reader.consume(offset);
+                        break;
                     }
-                    
-                    slot.pkthdr.set_len(packet.origlen);
-                    slot.pkthdr.set_snaplen(bytes);
-                    
-                    slot.packet.copy_from_slice(&packet.data[..bytes as _]);
-                    self.reader.consume(offset);
+                    // We should have read a packet
+                    _ => unreachable!(),
+                },
+                Err(PcapError::Incomplete) => {
+                    self.reader.refill()?;
+                    continue;
                 }
-                // We should have read a packet
-                _ => unreachable!(),
-            },
-            Err(e) => return Err(NethunsPcapReadError::from(e)),
-        };
+                Err(e) => return Err(NethunsPcapReadError::from(e)),
+            };
+        }
         
         slot.inuse.store(1, atomic::Ordering::Release);
         rx_ring.rings.advance_head();

@@ -108,8 +108,10 @@ pub enum NethunsPcapReadError {
     PcapError(String),
     
     // BUILTIN_PCAP_READER
-    #[error("[pcap_open] error during access to file: {0}")]
-    FileError(#[from] io::Error),
+    #[error("[pcap_read] error during access to file: {0}")]
+    FileError(io::Error),
+    #[error("[pcap_read] end of file")]
+    Eof
 }
 
 impl<I> From<pcap_parser::PcapError<I>> for NethunsPcapReadError
@@ -117,7 +119,19 @@ where
     I: Debug + Sized,
 {
     fn from(e: pcap_parser::PcapError<I>) -> Self {
-        NethunsPcapReadError::PcapError(format!("{:?}", e))
+        match e {
+            pcap_parser::PcapError::Eof => NethunsPcapReadError::Eof,
+            _ => NethunsPcapReadError::PcapError(format!("{:?}", e))
+        }
+    }
+}
+
+impl From<io::Error> for NethunsPcapReadError {
+    fn from(e: io::Error) -> Self {
+        match e.kind() {
+            io::ErrorKind::UnexpectedEof => NethunsPcapReadError::Eof,
+            _ => NethunsPcapReadError::FileError(e),
+        }
     }
 }
 
