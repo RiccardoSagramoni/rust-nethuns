@@ -34,12 +34,12 @@ Unable to rewrite in Rust
 
 ## WIP: Framework API (stub.h)
 
-- [ ] `nethuns_pcap_open(...)`
-- [ ] `nethuns_pcap_close(...)`
-- [ ] `nethuns_pcap_read(...)`
-- [ ] `nethuns_pcap_write(...)`
-- [ ] `nethuns_pcap_store(...)`
-- [ ] `nethuns_pcap_rewind(...)`
+- [X] `nethuns_pcap_open(...)`
+- [X] `nethuns_pcap_close(...)`
+- [X] `nethuns_pcap_read(...)`
+- [X] `nethuns_pcap_write(...)`
+- [X] `nethuns_pcap_store(...)`
+- [X] `nethuns_pcap_rewind(...)`
 
 - [X] `nethuns_open(...)`
 - [X] `nethuns_close(...)`
