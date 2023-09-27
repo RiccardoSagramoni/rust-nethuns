@@ -22,15 +22,14 @@ pub unsafe fn netmap_txring(
     nifp: *mut netmap_if,
     index: usize,
 ) -> *mut netmap_ring {
-    assert!(!nifp.is_null());
+    debug_assert!(!nifp.is_null());
     
-    let offset = unsafe {
-        let ring_ofs_ptr = (*nifp).ring_ofs.as_ptr();
-        assert!(!ring_ofs_ptr.is_null());
-        let ring_ofs_ptr = ring_ofs_ptr.add(index);
-        *ring_ofs_ptr
-    };
-    unsafe { __netmap_offset!(netmap_ring, nifp, offset) }
+    let ring_ofs_ptr = (*nifp).ring_ofs.as_ptr();
+    debug_assert!(!ring_ofs_ptr.is_null());
+    
+    let ring_ofs_ptr = ring_ofs_ptr.add(index);
+    let offset = *ring_ofs_ptr;
+    __netmap_offset!(netmap_ring, nifp, offset)
 }
 
 

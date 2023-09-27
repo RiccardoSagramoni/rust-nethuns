@@ -40,6 +40,7 @@ pub(super) fn non_empty_rx_ring(
     loop {
         // Compute current ring to use
         let ring = NetmapRing::new(
+            // [SAFETY]: `d.nifp` is ALWAYS guaranteed to be non-null
             NonNull::new(unsafe { netmap_rxring(d.nifp, ri as _) }).ok_or(
                 NethunsRecvError::FrameworkError(
                     "[non_empty_rx_ring] netmap_rxring returned null"

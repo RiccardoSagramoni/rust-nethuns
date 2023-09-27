@@ -84,7 +84,6 @@ pub enum NethunsPcapOpenError {
     MagicNotSupported(u32),
     #[error("[pcap_open] error while using file: {0}")]
     FileError(#[from] io::Error),
-    
 }
 
 impl<I> From<pcap_parser::PcapError<I>> for NethunsPcapOpenError
@@ -111,7 +110,7 @@ pub enum NethunsPcapReadError {
     #[error("[pcap_read] error during access to file: {0}")]
     FileError(io::Error),
     #[error("[pcap_read] end of file")]
-    Eof
+    Eof,
 }
 
 impl<I> From<pcap_parser::PcapError<I>> for NethunsPcapReadError
@@ -121,7 +120,7 @@ where
     fn from(e: pcap_parser::PcapError<I>) -> Self {
         match e {
             pcap_parser::PcapError::Eof => NethunsPcapReadError::Eof,
-            _ => NethunsPcapReadError::PcapError(format!("{:?}", e))
+            _ => NethunsPcapReadError::PcapError(format!("{:?}", e)),
         }
     }
 }
