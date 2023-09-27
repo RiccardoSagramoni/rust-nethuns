@@ -55,15 +55,15 @@ fn dump_packet(pkt: &RecvPacket) {
         pkt.pkthdr.len(), 
         pkt.pkthdr.offvlan_tci(), 
         pkt.pkthdr.offvlan_tpid(),
-        nethuns_vlan_tci(pkt.packet),
-        nethuns_vlan_tpid(pkt.packet),
-        nethuns_vlan_tci_(pkt.pkthdr.as_ref(), pkt.packet),
-        nethuns_vlan_tpid_(pkt.pkthdr.as_ref(), pkt.packet),
-        nethuns_vlan_vid(nethuns_vlan_tci_(pkt.pkthdr.as_ref(), pkt.packet)),
+        nethuns_vlan_tci(pkt.packet.borrow_packet()),
+        nethuns_vlan_tpid(pkt.packet.borrow_packet()),
+        nethuns_vlan_tci_(pkt.pkthdr.as_ref(), pkt.packet.borrow_packet()),
+        nethuns_vlan_tpid_(pkt.pkthdr.as_ref(), pkt.packet.borrow_packet()),
+        nethuns_vlan_vid(nethuns_vlan_tci_(pkt.pkthdr.as_ref(), pkt.packet.borrow_packet())),
         pkt.pkthdr.rxhash()
     );
     
-    if let Ok(eth) = Ethernet2Header::from_slice(pkt.packet) {
+    if let Ok(eth) = Ethernet2Header::from_slice(pkt.packet.borrow_packet()) {
         println!("{:?}", eth.0);
     }
 }

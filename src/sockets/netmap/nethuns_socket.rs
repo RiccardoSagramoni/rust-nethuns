@@ -1,3 +1,4 @@
+use std::cell::RefCell;
 use std::ffi::CStr;
 use std::ptr::NonNull;
 use std::rc::Rc;
@@ -13,7 +14,7 @@ use c_netmap_wrapper::ring::NetmapRing;
 
 use crate::misc::circular_buffer::CircularCloneBuffer;
 use crate::nethuns::__nethuns_clear_if_promisc;
-use crate::sockets::base::{NethunsSocketBase, RecvPacket};
+use crate::sockets::base::NethunsSocketBase;
 use crate::sockets::errors::{
     NethunsFlushError, NethunsRecvError, NethunsSendError,
 };
@@ -22,6 +23,7 @@ use crate::sockets::ring::{nethuns_ring_free_slots, NethunsRingSlot};
 use crate::sockets::NethunsSocket;
 use crate::types::NethunsStat;
 
+use super::super::base::{RecvPacket, RecvPacketDataBuilder};
 use super::utility::nethuns_get_buf_addr_netmap;
 
 
@@ -127,11 +129,21 @@ impl NethunsSocket for NethunsSocketNetmap {
             
             rx_ring.rings.advance_head();
             
+            let pkthdr = Box::new(slot.pkthdr);
+            mem::drop(slot);
+            
+            let packet_data = RecvPacketDataBuilder {
+                slot: rc_slot,
+                packet_builder: |slot: &Rc<RefCell<NethunsRingSlot>>| unsafe {
+                    bind_packet_lifetime_to_slot(pkt, slot)
+                },
+            }
+            .build();
+            
             return Ok(RecvPacket::new(
                 rx_ring.rings.head() as _,
-                Box::new(slot.pkthdr),
-                pkt,
-                Rc::downgrade(&rc_slot),
+                pkthdr,
+                packet_data,
             ));
         }
         
@@ -354,4 +366,14 @@ impl Drop for NethunsSocketNetmap {
             };
         }
     }
+}
+
+
+/// TODO
+#[inline(always)]
+unsafe fn bind_packet_lifetime_to_slot<'a>(
+    pkt: &[u8],
+    _slot: &'a Rc<RefCell<NethunsRingSlot>>,
+) -> &'a [u8] {
+    mem::transmute(pkt)
 }

@@ -2,10 +2,11 @@ pub mod pcap;
 
 use std::cell::RefCell;
 use std::ffi::CString;
-use std::rc::Weak;
+use std::rc::Rc;
 use std::sync::atomic;
 
 use derivative::Derivative;
+use ouroboros::self_referencing;
 
 use crate::types::{NethunsQueue, NethunsSocketOptions};
 
@@ -56,25 +57,34 @@ pub struct NethunsSocketBase {
 /// - `pkthdr`: the packet header metadata. Its internal format depends on the selected I/O framework.
 /// - `packet`: the Ethernet packet payload.
 #[derive(Debug)]
-pub struct RecvPacket<'a> {
+pub struct RecvPacket {
     pub id: usize,
     pub pkthdr: Box<dyn PkthdrTrait>,
-    pub packet: &'a [u8],
-    
-    slot: Weak<RefCell<NethunsRingSlot>>,
+    pub packet: RecvPacketData,
 }
 
-impl Drop for RecvPacket<'_> {
+
+#[self_referencing(pub_extras)]
+#[derive(Debug)]
+pub struct RecvPacketData {
+    slot: Rc<RefCell<NethunsRingSlot>>,
+    #[borrows(slot)]
+    pub packet: &'this [u8],
+}
+
+impl Drop for RecvPacket {
     /// Release the buffer obtained by calling `recv()`.
     fn drop(&mut self) {
-        if let Some(rc) = self.slot.upgrade() {
-            // Unset the `inuse` flag of the related ring slot
-            rc.borrow_mut().inuse.store(0, atomic::Ordering::Release);
-        }
+        // Unset the `inuse` flag of the related ring slot
+        self.packet.borrow_slot()
+            .borrow_mut()
+            .inuse
+            .store(0, atomic::Ordering::Release);
     }
 }
 
-impl RecvPacket<'_> {
+
+impl RecvPacket {
     /// Create a new `RecvPacket` instance.
     ///
     /// # Arguments
@@ -86,14 +96,12 @@ impl RecvPacket<'_> {
     pub fn new(
         id: usize,
         pkthdr: Box<dyn PkthdrTrait>,
-        packet: &'_ [u8],
-        slot: Weak<RefCell<NethunsRingSlot>>,
-    ) -> RecvPacket<'_> {
+        packet: RecvPacketData,
+    ) -> RecvPacket {
         RecvPacket {
             id,
             pkthdr,
             packet,
-            slot,
         }
     }
 }

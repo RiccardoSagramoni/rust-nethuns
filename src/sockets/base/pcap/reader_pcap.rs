@@ -1,22 +1,26 @@
+use std::cell::RefCell;
 use std::fs::File;
 use std::rc::Rc;
 use std::sync::atomic;
-use std::{cmp, slice};
+use std::{cmp, mem};
 
 use pcap_parser::traits::PcapReaderIterator;
 use pcap_parser::{LegacyPcapReader, PcapBlockOwned, PcapError};
 
 use crate::sockets::base::pcap::{NethunsSocketPcap, NethunsSocketPcapTrait};
-use crate::sockets::base::{NethunsSocketBase, RecvPacket};
+use crate::sockets::base::{
+    NethunsSocketBase, RecvPacket, RecvPacketDataBuilder,
+};
 use crate::sockets::errors::{
     NethunsPcapOpenError, NethunsPcapReadError, NethunsPcapRewindError,
     NethunsPcapStoreError, NethunsPcapWriteError,
 };
-use crate::sockets::ring::NethunsRing;
+use crate::sockets::ring::{NethunsRing, NethunsRingSlot};
 use crate::sockets::PkthdrTrait;
 use crate::types::NethunsSocketOptions;
 
 use super::constants::NSEC_TCPDUMP_MAGIC;
+use super::helper::get_packet_ref;
 use super::nethuns_pcap_pkthdr;
 
 
@@ -120,13 +124,21 @@ impl NethunsSocketPcapTrait for NethunsSocketPcap {
         slot.inuse.store(1, atomic::Ordering::Release);
         rx_ring.rings.advance_head();
         
-        let slot = rc_slot.borrow();
+        let pkthdr = Box::new(slot.pkthdr);
+        mem::drop(slot);
+        
+        let packet_data = RecvPacketDataBuilder {
+            slot: rc_slot,
+            packet_builder: |s: &Rc<RefCell<NethunsRingSlot>>| unsafe {
+                get_packet_ref(s, s.borrow().packet.as_ref(), bytes as _)
+            },
+        }
+        .build();
         
         Ok(RecvPacket::new(
             rx_ring.rings.head() as _,
-            Box::new(slot.pkthdr),
-            unsafe { slice::from_raw_parts(slot.packet.as_ptr(), bytes as _) },
-            Rc::downgrade(&rc_slot),
+            pkthdr,
+            packet_data,
         ))
     }
     
