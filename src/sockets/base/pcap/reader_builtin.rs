@@ -1,24 +1,28 @@
+use std::cell::RefCell;
 use std::fs::{File, OpenOptions};
 use std::io::prelude::*;
 use std::io::SeekFrom;
 use std::rc::Rc;
 use std::sync::atomic;
-use std::{cmp, mem, slice};
+use std::{cmp, mem};
 
 use pcap_sys::pcap_file_header;
 
 use crate::sockets::base::pcap::constants::{
     KUZNETZOV_TCPDUMP_MAGIC, NSEC_TCPDUMP_MAGIC, TCPDUMP_MAGIC,
 };
-use crate::sockets::base::{NethunsSocketBase, RecvPacket};
+use crate::sockets::base::{
+    NethunsSocketBase, RecvPacket, RecvPacketDataBuilder,
+};
 use crate::sockets::errors::{
     NethunsPcapOpenError, NethunsPcapReadError, NethunsPcapRewindError,
     NethunsPcapStoreError, NethunsPcapWriteError,
 };
-use crate::sockets::ring::NethunsRing;
+use crate::sockets::ring::{NethunsRing, NethunsRingSlot};
 use crate::sockets::PkthdrTrait;
 use crate::types::NethunsSocketOptions;
 
+use super::helper::get_packet_ref;
 use super::{
     nethuns_pcap_patched_pkthdr, nethuns_pcap_pkthdr, NethunsSocketPcap,
     NethunsSocketPcapTrait,
@@ -77,7 +81,7 @@ impl NethunsSocketPcapTrait for NethunsSocketPcap {
             
             file
         } else {
-            // Create a new file in pcap format and 
+            // Create a new file in pcap format and
             // write the file header according to the TCPDUMP standard.
             let mut file = OpenOptions::new()
                 .write(true)
@@ -119,11 +123,10 @@ impl NethunsSocketPcapTrait for NethunsSocketPcap {
     
     
     fn read(&mut self) -> Result<RecvPacket, NethunsPcapReadError> {
-        let rx_ring = self
-            .base
-            .rx_ring
-            .as_mut()
-            .expect("[pcap_read] rx_ring should have been set during `open`");
+        let rx_ring =
+            self.base.rx_ring.as_mut().expect(
+                "[pcap_read] rx_ring should have been set during `open`",
+            );
         
         let caplen = self.base.opt.packetsize;
         let rc_slot = rx_ring.get_slot(rx_ring.rings.head());
@@ -167,11 +170,21 @@ impl NethunsSocketPcapTrait for NethunsSocketPcap {
         slot.inuse.store(1, atomic::Ordering::Release);
         rx_ring.rings.advance_head();
         
+        let pkthdr = Box::new(slot.pkthdr);
+        mem::drop(slot);
+        
+        let packet_data = RecvPacketDataBuilder {
+            slot: rc_slot,
+            packet_builder: |s: &Rc<RefCell<NethunsRingSlot>>| {
+                get_packet_ref(s, s.borrow().packet.as_ref(), bytes as _)
+            },
+        }
+        .build();
+        
         Ok(RecvPacket::new(
             rx_ring.rings.head() as _,
-            Box::new(slot.pkthdr),
-            unsafe { slice::from_raw_parts(slot.packet.as_ptr(), bytes as _) },
-            Rc::downgrade(&rc_slot),
+            pkthdr,
+            packet_data,
         ))
     }
     
@@ -241,28 +254,28 @@ impl NethunsSocketPcapTrait for NethunsSocketPcap {
 
 
 /// Convert any reference to a slice of `u8`.
-/// 
+///
 /// # Safety
-/// This function is unsafe because any padding bytes in the struct 
-/// may be uninitialized memory (giving undefined behavior). 
-/// The struct should have been created with the `#[repr(C)]` attribute 
+/// This function is unsafe because any padding bytes in the struct
+/// may be uninitialized memory (giving undefined behavior).
+/// The struct should have been created with the `#[repr(C)]` attribute
 /// for safe behavior and compatibility with C.
-unsafe fn any_as_u8_slice<T: Sized>(p: &T) -> &[u8] {
-    ::core::slice::from_raw_parts(
+unsafe fn any_as_u8_slice<'a, T: Sized>(p: &'a T) -> &[u8] {
+    ::core::slice::from_raw_parts::<'a, _>(
         (p as *const T) as *const u8,
         ::core::mem::size_of::<T>(),
     )
 }
 
 /// Convert any reference to a mutable slice of `u8`.
-/// 
+///
 /// # Safety
-/// This function is unsafe because any padding bytes in the struct 
-/// may be uninitialized memory (giving undefined behavior). 
-/// The struct should have been created with the `#[repr(C)]` attribute 
+/// This function is unsafe because any padding bytes in the struct
+/// may be uninitialized memory (giving undefined behavior).
+/// The struct should have been created with the `#[repr(C)]` attribute
 /// for safe behavior and compatibility with C.
-unsafe fn any_as_u8_slice_mut<T: Sized>(p: &mut T) -> &mut [u8] {
-    ::core::slice::from_raw_parts_mut(
+unsafe fn any_as_u8_slice_mut<'a, T: Sized>(p: &'a mut T) -> &mut [u8] {
+    ::core::slice::from_raw_parts_mut::<'a, _>(
         (p as *mut T) as *mut u8,
         ::core::mem::size_of::<T>(),
     )
