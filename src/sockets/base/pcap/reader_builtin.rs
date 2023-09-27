@@ -175,7 +175,7 @@ impl NethunsSocketPcapTrait for NethunsSocketPcap {
         
         let packet_data = RecvPacketDataBuilder {
             slot: rc_slot,
-            packet_builder: |s: &Rc<RefCell<NethunsRingSlot>>| {
+            packet_builder: |s: &Rc<RefCell<NethunsRingSlot>>| unsafe {
                 get_packet_ref(s, s.borrow().packet.as_ref(), bytes as _)
             },
         }
