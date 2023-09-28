@@ -14,7 +14,9 @@ use c_netmap_wrapper::ring::NetmapRing;
 
 use crate::misc::circular_buffer::CircularCloneBuffer;
 use crate::nethuns::__nethuns_clear_if_promisc;
-use crate::sockets::base::NethunsSocketBase;
+use crate::sockets::base::{
+    NethunsSocketBase, RecvPacket, RecvPacketDataBuilder,
+};
 use crate::sockets::errors::{
     NethunsFlushError, NethunsRecvError, NethunsSendError,
 };
@@ -23,7 +25,6 @@ use crate::sockets::ring::{nethuns_ring_free_slots, NethunsRingSlot};
 use crate::sockets::NethunsSocket;
 use crate::types::NethunsStat;
 
-use super::super::base::{RecvPacket, RecvPacketDataBuilder};
 use super::utility::nethuns_get_buf_addr_netmap;
 
 
@@ -34,24 +35,24 @@ pub struct NethunsSocketNetmap {
     /// Port descriptor
     p: NmPortDescriptor,
     
-    /// Wrapper of a raw pointer to any [netmap_ring](c_netmap_wrapper::bindings::netmap_ring) object 
-    /// allocated by the kernel in the userspace. 
+    /// Wrapper of a raw pointer to any [netmap_ring](c_netmap_wrapper::bindings::netmap_ring) object
+    /// allocated by the kernel in the userspace.
     /// This is required to know the address of the ring buffer.
     some_ring: NetmapRing,
     
     /// Circular array of available buffers for I/O.
-    /// 
-    /// When a netmap port is opened, its `netmap_rings` are already filled 
-    /// with a buffer in each netmap_slot, but it is possible to request 
-    /// that other "free" buffers not already associated with netmap_slots 
+    ///
+    /// When a netmap port is opened, its `netmap_rings` are already filled
+    /// with a buffer in each netmap_slot, but it is possible to request
+    /// that other "free" buffers not already associated with netmap_slots
     /// be allocated as well.
-    /// Our library allocates these free buffers and places them in the [`free_ring`](Self::free_ring). 
-    /// On the receiving end, new packets are written by the network interface 
-    /// into the buffers associated with the netmap_slots; 
-    /// [`recv()`](NethunsSocket::recv()) extracts one of these buffers to pass it to 
-    /// the user, and it puts a new buffer extracted from the free_ring 
-    /// in the `netmap_slot`, so that it can be given back to 
-    /// netmap to receive more packets. 
+    /// Our library allocates these free buffers and places them in the [`free_ring`](Self::free_ring).
+    /// On the receiving end, new packets are written by the network interface
+    /// into the buffers associated with the netmap_slots;
+    /// [`recv()`](NethunsSocket::recv()) extracts one of these buffers to pass it to
+    /// the user, and it puts a new buffer extracted from the free_ring
+    /// in the `netmap_slot`, so that it can be given back to
+    /// netmap to receive more packets.
     free_ring: CircularCloneBuffer<u32>,
 }
 // fields rx and tx removed because redundant with
