@@ -220,6 +220,7 @@ impl BindableNethunsSocket for BindableNethunsSocketNetmap {
                 tx_ring.get_slot(i).borrow_mut().pkthdr.buf_idx = scan;
                 scan = unsafe {
                     let ptr = netmap_buf(&some_ring, scan as _) as *const u32;
+                    debug_assert!(!ptr.is_null());
                     ptr.read_unaligned()
                 }
             }
@@ -230,7 +231,7 @@ impl BindableNethunsSocket for BindableNethunsSocketNetmap {
                 free_ring.push_unchecked(scan);
                 scan = unsafe {
                     let ptr = netmap_buf(&some_ring, scan as _) as *const u32;
-                    assert!(!ptr.is_null());
+                    debug_assert!(!ptr.is_null());
                     ptr.read_unaligned()
                 };
             }
