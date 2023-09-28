@@ -22,6 +22,28 @@ fn main() {
         .nth(1)
         .expect("Usage: ./recv_test <device_name>");
     
+    // Create socket
+    let opt = NethunsSocketOptions {
+        numblocks: 1,
+        numpackets: 5000,
+        packetsize: 2048,
+        timeout_ms: 0,
+        dir: NethunsCaptureDir::InOut,
+        capture: NethunsCaptureMode::Default,
+        mode: NethunsSocketMode::RxTx,
+        promisc: true,
+        rxhash: false,
+        tx_qdisc_bypass: true,
+        ..Default::default()
+    };
+    
+    let socket = nethuns_socket_open(opt).unwrap();
+    let mut socket = socket.bind(&dev, NethunsQueue::Any).unwrap();
+    
+    // TODO Set filter
+    // socket.base_mut().filter = Some(Box::new(simple_filter));
+    
+    
     // Stats counter
     let total = Arc::new(Mutex::<u64>::new(0));
     // Define bus for SPMC communication between threads
@@ -40,26 +62,6 @@ fn main() {
     let mut bus_rx = bus.add_rx();
     set_sigint_handler(bus);
     
-    // Create socket
-    let opt = NethunsSocketOptions {
-        numblocks: 1,
-        numpackets: 65536,
-        packetsize: 2048,
-        timeout_ms: 0,
-        dir: NethunsCaptureDir::InOut,
-        capture: NethunsCaptureMode::Default,
-        mode: NethunsSocketMode::RxTx,
-        promisc: true,
-        rxhash: false,
-        tx_qdisc_bypass: true,
-        ..Default::default()
-    };
-    
-    let socket = nethuns_socket_open(opt).unwrap();
-    let mut socket = socket.bind(&dev, NethunsQueue::Any).unwrap();
-    
-    // Set filter
-    socket.base_mut().filter = Some(Box::new(simple_filter));
     
     let mut total2: u64 = 0;
     loop {
@@ -124,9 +126,8 @@ fn meter(total: Arc<Mutex<u64>>, mut rx: BusReader<()>) {
 
 /// Filter for nethuns socket
 fn simple_filter(pkthdr: &dyn PkthdrTrait, packet: &[u8]) -> bool {
-    println!("filter context: packet (Rust)");
+    // println!("filter context: packet (Rust)");
     // dump_packet(pkthdr, packet);
-    panic!();
     true
 }
 

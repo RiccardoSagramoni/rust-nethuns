@@ -129,6 +129,7 @@ impl NethunsSocket for NethunsSocketNetmap {
         slot.pkthdr.ts = netmap_ring.ts;
         slot.pkthdr.caplen = cur_netmap_slot.len as _;
         slot.pkthdr.len = cur_netmap_slot.len as _;
+        mem::drop(slot);
         
         // Assign a new buffer to the netmap `cur` slot and set the relative flag
         cur_netmap_slot.buf_idx = self.free_ring.pop_unchecked();
@@ -141,12 +142,13 @@ impl NethunsSocket for NethunsSocketNetmap {
         // Filter the packet
         if match &self.base.filter {
             None => false,
-            Some(filter) => !filter(&slot.pkthdr, pkt),
+            Some(filter) => !filter(&rc_slot.borrow().pkthdr, pkt),
         } {
             nethuns_ring_free_slots!(self, rx_ring, nethuns_blocks_free);
             return Err(NethunsRecvError::PacketFiltered);
         }
         
+        let mut slot = rc_slot.borrow_mut();
         slot.pkthdr.caplen =
             cmp::min(self.base.opt.packetsize, slot.pkthdr.caplen);
         
