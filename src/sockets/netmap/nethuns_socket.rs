@@ -114,8 +114,8 @@ impl NethunsSocket for NethunsSocketNetmap {
         cur_netmap_slot.flags |= NS_BUF_CHANGED as u16;
         
         // Move `cur` and `head` indexes ahead of one position
-        netmap_ring.cur = netmap_ring.nm_ring_next(i);
-        netmap_ring.head = netmap_ring.nm_ring_next(i);
+        netmap_ring.cur = unsafe { netmap_ring.nm_ring_next(i) };
+        netmap_ring.head = unsafe { netmap_ring.nm_ring_next(i) };
         
         // Filter the packet
         if match &self.base.filter {
@@ -163,11 +163,13 @@ impl NethunsSocket for NethunsSocketNetmap {
             return Err(NethunsSendError::InUse);
         }
         
-        let dst = nethuns_get_buf_addr_netmap!(
-            &self.some_ring,
-            tx_ring,
-            tx_ring.rings.tail()
-        );
+        let dst = unsafe {
+            nethuns_get_buf_addr_netmap!(
+                &self.some_ring,
+                tx_ring,
+                tx_ring.rings.tail()
+            )
+        };
         unsafe {
             nm_pkt_copy(packet.as_ptr() as _, dst as _, packet.len() as _)
         };
@@ -225,7 +227,7 @@ impl NethunsSocket for NethunsSocketNetmap {
                 // remember the nethuns slot in the netmap slot ptr field
                 netmap_slot.ptr = &*slot as *const NethunsRingSlot as _;
                 
-                ring.cur = ring.nm_ring_next(ring.head);
+                ring.cur = unsafe { ring.nm_ring_next(ring.head) };
                 ring.head = ring.cur;
                 head += 1;
                 tx_ring.rings.advance_head();
@@ -256,9 +258,10 @@ impl NethunsSocket for NethunsSocketNetmap {
                 )?
             );
             
-            let stop = ring.nm_ring_next(ring.tail);
-            let mut scan = ring
-                .nm_ring_next(prev_tails[i - self.p.first_tx_ring as usize]);
+            let stop = unsafe { ring.nm_ring_next(ring.tail) };
+            let mut scan = unsafe {
+                ring.nm_ring_next(prev_tails[i - self.p.first_tx_ring as usize])
+            };
             
             while scan != stop {
                 let mut netmap_slot = ring
@@ -269,7 +272,7 @@ impl NethunsSocket for NethunsSocketNetmap {
                 mem::swap(&mut netmap_slot.buf_idx, &mut slot.pkthdr.buf_idx);
                 slot.inuse.store(0, atomic::Ordering::Release);
                 
-                scan = ring.nm_ring_next(scan);
+                scan = unsafe { ring.nm_ring_next(scan) };
             }
         }
         
@@ -347,7 +350,9 @@ impl Drop for NethunsSocketNetmap {
         if let Some(ring) = &self.base.tx_ring {
             for i in 0..ring.size() {
                 let idx = ring.get_slot(i).borrow().pkthdr.buf_idx;
-                let next = netmap_buf(&self.some_ring, idx as _) as *mut u32;
+                let next = unsafe {
+                    netmap_buf(&self.some_ring, idx as _) as *mut u32
+                };
                 assert!(!next.is_null());
                 unsafe {
                     *next = (*self.p.nifp).ni_bufs_head;
@@ -358,7 +363,8 @@ impl Drop for NethunsSocketNetmap {
         
         while !self.free_ring.is_empty() {
             let idx = self.free_ring.pop_unchecked();
-            let next = netmap_buf(&self.some_ring, idx as _) as *mut u32;
+            let next =
+                unsafe { netmap_buf(&self.some_ring, idx as _) as *mut u32 };
             debug_assert!(!next.is_null());
             unsafe {
                 *next = (*self.p.nifp).ni_bufs_head;
