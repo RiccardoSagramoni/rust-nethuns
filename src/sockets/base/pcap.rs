@@ -1,7 +1,6 @@
 mod constants;
 
 use cfg_if::cfg_if;
-use derivative::Derivative;
 
 use crate::sockets::errors::{
     NethunsPcapOpenError, NethunsPcapReadError, NethunsPcapRewindError,
@@ -35,18 +34,18 @@ impl NethunsSocketPcap {
 
 
 /// Public interface for [NethunsSocketPcap].
-/// 
+///
 /// Depending on the `NETHUNS_USE_BUILTIN_PCAP_READER` feature,
-/// the implementation of this trait will use the standard pcap reader 
+/// the implementation of this trait will use the standard pcap reader
 /// (STANDARD_PCAP_READER) or a custom built-in pcap reader (BUILTIN_PCAP_READER).
 pub trait NethunsSocketPcapTrait {
     /// Open the socket for reading captured packets from a file.
-    /// 
+    ///
     /// # Arguments
     /// * `opt`: socket options
     /// * `filename`: name of the pcap file
     /// * `writing_mode`: whether to open the file for writing
-    /// 
+    ///
     /// # Returns
     /// * `Ok(NethunsSocketPcap)` - a new nethuns socket for pcap, in no error occurs.
     /// * `Err(NethunsPcapOpenError::WriteModeNotSupported)` - if writing mode is not supported (STANDARD_PCAP_READER only).
@@ -63,7 +62,7 @@ pub trait NethunsSocketPcapTrait {
     
     
     /// Read a packet from the socket.
-    /// 
+    ///
     /// # Returns
     /// * `Ok(RecvPacket)` - the packet read from the socket.
     /// * `Err(NethunsPcapReadError::InUse)` - if the ring buffer of the nethuns base socket is full.
@@ -73,11 +72,11 @@ pub trait NethunsSocketPcapTrait {
     
     
     /// Write a packet already in pcap format to a pcap file.
-    /// 
+    ///
     /// # Arguments
     /// * `header`: pcap header of the packet
     /// * `packet`: packet to write
-    /// 
+    ///
     /// # Returns
     /// * `Ok(usize)` - the number of bytes written to the pcap file.
     /// * `Err(NethunsPcapWriteError::NotSupported)` - if the `NETHUNS_USE_BUILTIN_PCAP_READER` feature is not enabled (STANDARD_PCAP_READER only).
@@ -90,11 +89,11 @@ pub trait NethunsSocketPcapTrait {
     
     
     /// Store a packet received from a [crate::sockets::NethunsSocket] into a pcap file.
-    /// 
+    ///
     /// # Arguments
     /// * `pkthdr`: packet header
     /// * `packet`: packet to store
-    /// 
+    ///
     /// # Returns
     /// * `Ok(u32)` - the number of bytes written to the pcap file.
     /// * `Err(NethunsPcapWriteError::NotSupported)` - if the `NETHUNS_USE_BUILTIN_PCAP_READER` feature is not enabled (STANDARD_PCAP_READER only).
@@ -107,7 +106,7 @@ pub trait NethunsSocketPcapTrait {
     
     
     /// Rewind the reader to the beginning of the pcap file.
-    /// 
+    ///
     /// # Returns
     /// * `Ok(u64)` - the new position from the start of the file.
     /// * `Err(NethunsPcapRewindError::NotSupported)` - if the `NETHUNS_USE_BUILTIN_PCAP_READER` feature is not enabled (STANDARD_PCAP_READER only).
@@ -132,14 +131,10 @@ cfg_if!(
 /// Pcap packet header
 #[allow(non_camel_case_types)]
 #[repr(C)] // needed for safe transmutation to &[u8] and for compatibility with C programs
-#[derive(Debug, Derivative)]
-#[derivative(Default)]
+#[derive(Clone, Copy, Debug, Default)]
 pub struct nethuns_pcap_pkthdr {
-    #[derivative(Default(
-        value = "pcap_sys::timeval { tv_sec: 0, tv_usec: 0 }"
-    ))]
     /// timestamp
-    pub ts: pcap_sys::timeval,
+    pub ts: nethuns_pcap_timeval,
     /// length of portion present
     pub caplen: u32,
     /// length of this packet (off wire)
@@ -150,10 +145,19 @@ pub struct nethuns_pcap_pkthdr {
 /// Patched pcap packet header for the Kuznetzov's implementation of TCPDUMP format
 #[allow(non_camel_case_types)]
 #[repr(C)] // needed for safe transmutation to &[u8] and for compatibility with C programs
-#[derive(Debug, Default)]
+#[derive(Clone, Copy, Debug, Default)]
 pub struct nethuns_pcap_patched_pkthdr {
     pub hdr: nethuns_pcap_pkthdr,
     pub index: i32,
     pub protocol: libc::c_ushort,
     pub pkt_type: libc::c_uchar,
+}
+
+
+#[allow(non_camel_case_types)]
+#[repr(C)] // needed for safe transmutation to &[u8] and for compatibility with C programs
+#[derive(Clone, Copy, Debug, Default)]
+pub struct nethuns_pcap_timeval {
+    pub tv_sec: i64,
+    pub tv_usec: i64,
 }
