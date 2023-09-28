@@ -12,6 +12,7 @@ use c_netmap_wrapper::netmap_buf_pkt;
 use c_netmap_wrapper::nmport::NmPortDescriptor;
 use c_netmap_wrapper::ring::NetmapRing;
 
+use crate::misc::bind_packet_lifetime_to_slot;
 use crate::misc::circular_buffer::CircularCloneBuffer;
 use crate::nethuns::__nethuns_clear_if_promisc;
 use crate::sockets::base::{
@@ -60,7 +61,7 @@ pub struct NethunsSocketNetmap {
 
 
 impl NethunsSocketNetmap {
-    /// TODO
+    /// Create a new `NethunsSocketNetmap` object.
     pub(super) fn new(
         base: NethunsSocketBase,
         p: NmPortDescriptor,
@@ -93,7 +94,6 @@ impl NethunsSocket for NethunsSocketNetmap {
         mem::drop(slot);
         
         if self.free_ring.is_empty() {
-            // TODO make nethuns_blocks_free a function
             nethuns_ring_free_slots!(self, rx_ring, nethuns_blocks_free);
             
             if self.free_ring.is_empty() {
@@ -140,36 +140,36 @@ impl NethunsSocket for NethunsSocketNetmap {
         
         // Filter the packet
         if match &self.base.filter {
-            None => true,
-            Some(filter) => filter(&slot.pkthdr, pkt) != 0,
+            None => false,
+            Some(filter) => !filter(&slot.pkthdr, pkt),
         } {
-            slot.pkthdr.caplen =
-                cmp::min(self.base.opt.packetsize, slot.pkthdr.caplen);
-            
-            slot.inuse.store(1, atomic::Ordering::Release);
-            
-            rx_ring.rings.advance_head();
-            
-            let pkthdr = Box::new(slot.pkthdr);
-            mem::drop(slot);
-            
-            let packet_data = RecvPacketDataBuilder {
-                slot: rc_slot,
-                packet_builder: |slot: &Rc<RefCell<NethunsRingSlot>>| unsafe {
-                    bind_packet_lifetime_to_slot(pkt, slot)
-                },
-            }
-            .build();
-            
-            return Ok(RecvPacket::new(
-                rx_ring.rings.head() as _,
-                pkthdr,
-                packet_data,
-            ));
+            nethuns_ring_free_slots!(self, rx_ring, nethuns_blocks_free);
+            return Err(NethunsRecvError::PacketFiltered);
         }
         
-        nethuns_ring_free_slots!(self, rx_ring, nethuns_blocks_free);
-        Err(NethunsRecvError::PacketFiltered)
+        slot.pkthdr.caplen =
+            cmp::min(self.base.opt.packetsize, slot.pkthdr.caplen);
+        
+        slot.inuse.store(1, atomic::Ordering::Release);
+        
+        rx_ring.rings.advance_head();
+        
+        let pkthdr = Box::new(slot.pkthdr);
+        mem::drop(slot);
+        
+        let packet_data = RecvPacketDataBuilder {
+            slot: rc_slot,
+            packet_builder: |slot: &Rc<RefCell<NethunsRingSlot>>| unsafe {
+                bind_packet_lifetime_to_slot(pkt, slot)
+            },
+        }
+        .build();
+        
+        Ok(RecvPacket::new(
+            rx_ring.rings.head() as _,
+            pkthdr,
+            packet_data,
+        ))
     }
     
     
@@ -393,14 +393,4 @@ impl Drop for NethunsSocketNetmap {
             };
         }
     }
-}
-
-
-/// TODO
-#[inline(always)]
-unsafe fn bind_packet_lifetime_to_slot<'a>(
-    pkt: &[u8],
-    _slot: &'a Rc<RefCell<NethunsRingSlot>>,
-) -> &'a [u8] {
-    mem::transmute(pkt)
 }

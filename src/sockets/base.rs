@@ -14,8 +14,9 @@ use super::ring::{NethunsRing, NethunsRingSlot};
 use super::PkthdrTrait;
 
 
-/// Closure type for the filtering of received packets
-type NethunsFilter = dyn Fn(&dyn PkthdrTrait, &[u8]) -> i32;
+/// Closure type for the filtering of received packets. 
+/// Returns true if the packet should be received, false if it should be discarded.
+type NethunsFilter = dyn Fn(&dyn PkthdrTrait, &[u8]) -> bool;
 
 
 /// Base structure for a `NethunsSocket`.
@@ -38,7 +39,7 @@ pub struct NethunsSocketBase {
     pub queue: NethunsQueue,
     /// Index of the interface
     pub ifindex: libc::c_int,
-    /// Closure used for filtering received packets
+    /// Closure used for filtering received packets. 
     #[derivative(Debug = "ignore")]
     pub filter: Option<Box<NethunsFilter>>,
 }

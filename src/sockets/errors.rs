@@ -34,7 +34,7 @@ pub enum NethunsRecvError {
     InUse,
     #[error("[recv] no packets have been received")]
     NoPacketsAvailable,
-    #[error("[recv] filtered")] // TODO improve
+    #[error("[recv] the received packet has been filtered out")]
     PacketFiltered,
     #[error("[recv] error of the I/O framework: {0}")]
     FrameworkError(String),

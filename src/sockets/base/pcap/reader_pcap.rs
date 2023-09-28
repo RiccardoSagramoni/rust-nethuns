@@ -7,6 +7,7 @@ use std::{cmp, mem};
 use pcap_parser::traits::PcapReaderIterator;
 use pcap_parser::{LegacyPcapReader, PcapBlockOwned, PcapError};
 
+use crate::misc::bind_packet_lifetime_to_slot;
 use crate::sockets::base::pcap::{NethunsSocketPcap, NethunsSocketPcapTrait};
 use crate::sockets::base::{
     NethunsSocketBase, RecvPacket, RecvPacketDataBuilder,
@@ -20,7 +21,6 @@ use crate::sockets::PkthdrTrait;
 use crate::types::NethunsSocketOptions;
 
 use super::constants::NSEC_TCPDUMP_MAGIC;
-use super::helper::get_packet_ref;
 use super::nethuns_pcap_pkthdr;
 
 
@@ -130,7 +130,7 @@ impl NethunsSocketPcapTrait for NethunsSocketPcap {
         let packet_data = RecvPacketDataBuilder {
             slot: rc_slot,
             packet_builder: |s: &Rc<RefCell<NethunsRingSlot>>| unsafe {
-                get_packet_ref(s, s.borrow().packet.as_ref(), bytes as _)
+                bind_packet_lifetime_to_slot(&s.borrow().packet[..bytes as _], s)
             },
         }
         .build();
