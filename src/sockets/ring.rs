@@ -49,7 +49,7 @@ impl NethunsRing {
         &self,
         rc_slot: &Rc<RefCell<NethunsRingSlot>>,
     ) -> Option<usize> {
-        // FIXME: this is inefficient. How can we improve it?
+        // FIXME: this is inefficient. Can we improve it?
         self.rings
             .iter()
             .take(self.rings.size())
@@ -130,7 +130,7 @@ impl NethunsRing {
 #[derive(Debug, Default)]
 pub struct NethunsRingSlot {
     pub pkthdr: Pkthdr,
-    pub id: usize, // FIXME: purpose??
+    pub id: usize,
     /// In-use flag => `0`: not in use; `1`: in use (a thread is reading a packet); `2`: in-flight (a thread is sending a packet)
     pub inuse: AtomicU8,
     pub len: usize,
@@ -154,11 +154,11 @@ impl NethunsRingSlot {
 /// Free all the currently unused slots in the ring.
 ///
 /// # Arguments
-/// * `s` - A reference to the `NethunsSocket` object.
+/// * `socket` - A reference to the `NethunsSocket` object.
 /// * `ring` - A reference to the `NethunsRing` object.
-/// * `free_macro` - The name of the macro to call to free the slots.
+/// * `free_macro` - The name of the macro to call to free the slots. It must exposed the following interface: `free_macro(socket, slot, block_id)`
 macro_rules! nethuns_ring_free_slots {
-    ($s: expr, $ring: expr, $free_macro: ident) => {
+    ($socket: expr, $ring: expr, $free_macro: ident) => {
         loop {
             let rc_slot = $ring.get_slot($ring.rings.tail());
             let slot = rc_slot.borrow();
@@ -169,7 +169,7 @@ macro_rules! nethuns_ring_free_slots {
                 break;
             }
             
-            $free_macro!($s, slot);
+            $free_macro!($socket, slot, slot.id);
             $ring.rings.advance_tail();
         }
     };

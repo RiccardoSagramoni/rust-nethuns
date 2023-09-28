@@ -30,8 +30,28 @@ use super::utility::nethuns_get_buf_addr_netmap;
 #[derive(Debug)]
 pub struct NethunsSocketNetmap {
     base: NethunsSocketBase,
+    
+    /// Port descriptor
     p: NmPortDescriptor,
-    some_ring: NetmapRing, // ?? a cosa serve?
+    
+    /// Wrapper of a raw pointer to any [netmap_ring](c_netmap_wrapper::bindings::netmap_ring) object 
+    /// allocated by the kernel in the userspace. 
+    /// This is required to know the address of the ring buffer.
+    some_ring: NetmapRing,
+    
+    /// Circular array of available buffers for I/O.
+    /// 
+    /// When a netmap port is opened, its `netmap_rings` are already filled 
+    /// with a buffer in each netmap_slot, but it is possible to request 
+    /// that other "free" buffers not already associated with netmap_slots 
+    /// be allocated as well.
+    /// Our library allocates these free buffers and places them in the [`free_ring`](Self::free_ring). 
+    /// On the receiving end, new packets are written by the network interface 
+    /// into the buffers associated with the netmap_slots; 
+    /// [`recv()`](NethunsSocket::recv()) extracts one of these buffers to pass it to 
+    /// the user, and it puts a new buffer extracted from the free_ring 
+    /// in the `netmap_slot`, so that it can be given back to 
+    /// netmap to receive more packets. 
     free_ring: CircularCloneBuffer<u32>,
 }
 // fields rx and tx removed because redundant with
@@ -76,7 +96,7 @@ impl NethunsSocket for NethunsSocketNetmap {
             nethuns_ring_free_slots!(self, rx_ring, nethuns_blocks_free);
             
             if self.free_ring.is_empty() {
-                return Err(NethunsRecvError::NoPacketsAvailable); // FIXME better error
+                return Err(NethunsRecvError::NoPacketsAvailable);
             }
         }
         
@@ -222,7 +242,7 @@ impl NethunsSocket for NethunsSocketNetmap {
                     .get_slot(ring.head as _)
                     .map_err(NethunsFlushError::FrameworkError)?;
                 mem::swap(&mut netmap_slot.buf_idx, &mut slot.pkthdr.buf_idx);
-                netmap_slot.len = slot.len as _; // FIXME integer overflow?
+                netmap_slot.len = slot.len as _;
                 netmap_slot.flags = NS_BUF_CHANGED as _;
                 // remember the nethuns slot in the netmap slot ptr field
                 netmap_slot.ptr = &*slot as *const NethunsRingSlot as _;

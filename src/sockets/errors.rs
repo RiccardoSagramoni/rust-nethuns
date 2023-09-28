@@ -3,7 +3,7 @@ use std::io;
 use core::fmt::Debug;
 use thiserror::Error;
 
-/// Error type for [super::nethuns_socket_open]
+/// Error type for [crate::sockets::nethuns_socket_open]
 #[derive(Debug, Error)]
 pub enum NethunsOpenError {
     #[error("[open] invalid options: {0}")]
@@ -12,7 +12,7 @@ pub enum NethunsOpenError {
     Error(String),
 }
 
-/// Error type for [super::BindableNethunsSocket::bind]
+/// Error type for [crate::sockets::BindableNethunsSocket::bind]
 #[derive(Debug, Error)]
 pub enum NethunsBindError {
     #[error(
@@ -25,7 +25,7 @@ pub enum NethunsBindError {
     Error(String),
 }
 
-/// Error type for [super::NethunsSocket::recv]
+/// Error type for [crate::sockets::NethunsSocket::recv]
 #[derive(Debug, Error)]
 pub enum NethunsRecvError {
     #[error("[recv] socket not in RX mode")]
@@ -42,7 +42,7 @@ pub enum NethunsRecvError {
     Error(String),
 }
 
-/// Error type for [super::NethunsSocket::send]
+/// Error type for [crate::sockets::NethunsSocket::send]
 #[derive(Debug, Error)]
 pub enum NethunsSendError {
     #[error("[send] socket not in TX mode")]
@@ -54,7 +54,7 @@ pub enum NethunsSendError {
 }
 
 
-/// Error type for [super::NethunsSocket::flush]
+/// Error type for [crate::sockets::NethunsSocket::flush]
 #[derive(Debug, Error)]
 pub enum NethunsFlushError {
     #[error("[flush] socket not in TX mode")]
@@ -70,7 +70,7 @@ pub enum NethunsFlushError {
 }
 
 
-/// Error type for [super::base::pcap::NethunsSocketPcapTrait::open]
+/// Error type for [crate::sockets::base::pcap::NethunsSocketPcapTrait::open]
 #[derive(Debug, Error)]
 pub enum NethunsPcapOpenError {
     // STANDARD_PCAP_READER
@@ -96,7 +96,7 @@ where
 }
 
 
-/// Error type for [super::base::pcap::NethunsSocketPcapTrait::read]
+/// Error type for [crate::sockets::base::pcap::NethunsSocketPcapTrait::read]
 #[derive(Debug, Error)]
 pub enum NethunsPcapReadError {
     #[error("[pcap_read] head ring in use")]
@@ -135,7 +135,7 @@ impl From<io::Error> for NethunsPcapReadError {
 }
 
 
-/// Error type for [super::base::pcap::NethunsSocketPcapTrait::write]
+/// Error type for [crate::sockets::base::pcap::NethunsSocketPcapTrait::write]
 #[derive(Debug, Error)]
 pub enum NethunsPcapWriteError {
     // STANDARD_PCAP_READER
@@ -148,7 +148,7 @@ pub enum NethunsPcapWriteError {
 }
 
 
-/// Error type for [super::base::pcap::NethunsSocketPcapTrait::store]
+/// Error type for [crate::sockets::base::pcap::NethunsSocketPcapTrait::store]
 #[derive(Debug, Error)]
 pub enum NethunsPcapStoreError {
     // STANDARD_PCAP_READER
@@ -161,7 +161,7 @@ pub enum NethunsPcapStoreError {
 }
 
 
-/// Error type for [super::base::pcap::NethunsSocketPcapTrait::rewind]
+/// Error type for [crate::sockets::base::pcap::NethunsSocketPcapTrait::rewind]
 #[derive(Debug, Error)]
 pub enum NethunsPcapRewindError {
     // STANDARD_PCAP_READER

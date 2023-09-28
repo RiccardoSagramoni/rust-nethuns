@@ -1,4 +1,4 @@
-//! Module containing some helper functions for [super] module
+//! Module containing some helper functions for [netmap](super) module
 
 use std::ptr::NonNull;
 
@@ -77,11 +77,13 @@ pub(super) fn non_empty_rx_ring(
 /// *free_macro* parameter.
 ///
 /// # Arguments
-/// * `s` - the nethuns socket
+/// * `socket` - the nethuns socket
 /// * `slot` - the newly available ring slot
+/// * `block_id` - *unused*
 macro_rules! nethuns_blocks_free {
-    ($s: expr, $slot: expr) => {
-        $s.free_ring.push_unchecked($slot.pkthdr.buf_idx);
+    ($socket: expr, $slot: expr, $block_id: expr) => {
+        $block_id; // trigger compile check for id field
+        $socket.free_ring.push_unchecked($slot.pkthdr.buf_idx);
     };
 }
 pub(super) use nethuns_blocks_free;
@@ -92,9 +94,8 @@ pub(super) use nethuns_blocks_free;
 ///
 /// # Arguments
 /// * `$some_ring`: an immutable reference to the `some_ring` field of NethunsSocketNetmap
-/// * `$tx_ring`: a NethunsRing object
-/// * `$pktid`: the ring slot ID
-/// FIXME better doc
+/// * `$tx_ring`: the NethunsRing object which represents the transmissione ring
+/// * `$pktid`: the ring slot id
 ///
 /// # Returns
 /// A `*mut u8` raw pointer pointing to the requested buffer
