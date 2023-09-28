@@ -88,8 +88,8 @@ impl NetmapRing {
     /// Get a slot by its index.
     pub fn get_slot(&self, index: usize) -> Result<NetmapSlot, String> {
         // [SAFETY] Check for out-of-bounds
-        if index < self.num_slots as _ {
-            return Err("[get_slot] index out of bounds".to_owned());
+        if index >= self.num_slots as _ {
+            return Err(format!("[get_slot] index {index} out of bounds ({})", self.num_slots));
         }
         
         let slot_array = std::ptr::addr_of!(self.slot) as *mut netmap_slot;
