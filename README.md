@@ -8,22 +8,22 @@
 ├── global.h OK
 ├── misc
 │   ├── compiler.h CAN'T
-│   ├── hashmap.h NOT NECESSARY
+│   ├── hashmap.h NOT NECESSARY (use `std::collections::HashMap`)
 │   └── macro.h OK
 ├── nethuns.c OK
 ├── nethuns.h OK
 ├── queue.h NOT NECESSARY (use `rtrb` crate)
 ├── sockets
-│   ├── base.h DOING (only pcap_* structs TODO) <==
-│   ├── file.inc TODO <==
+│   ├── base.h OK
+│   ├── file.inc MERGED (in pcap.rs)
 │   ├── netmap.c OK
-│   ├── netmap.h DOING (only pcap_* functions TODO) <==
+│   ├── netmap.h OK
 │   ├── netmap_pkthdr.h OK
 │   ├── ring.h OK
 │   ├── types.h OK (in sockets.rs with traits)
 ├── stub.h OK (included in sockets.rs and vlan.rs)
 ├── types.h OK
-├── version.c.in NOT NECESSARY?
+├── version.c.in NOT NECESSARY (Rust already has a versioning system)
 └── vlan.h OK
 ```
 
@@ -34,12 +34,12 @@ Unable to rewrite in Rust
 
 ## WIP: Framework API (stub.h)
 
-- [ ] `nethuns_pcap_open(...)`
-- [ ] `nethuns_pcap_close(...)`
-- [ ] `nethuns_pcap_read(...)`
-- [ ] `nethuns_pcap_write(...)`
-- [ ] `nethuns_pcap_store(...)`
-- [ ] `nethuns_pcap_rewind(...)`
+- [X] `nethuns_pcap_open(...)`
+- [X] `nethuns_pcap_close(...)`
+- [X] `nethuns_pcap_read(...)`
+- [X] `nethuns_pcap_write(...)`
+- [X] `nethuns_pcap_store(...)`
+- [X] `nethuns_pcap_rewind(...)`
 
 - [X] `nethuns_open(...)`
 - [X] `nethuns_close(...)`

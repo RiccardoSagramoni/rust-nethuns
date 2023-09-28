@@ -1,5 +1,3 @@
-// TODO documentazione (soprattuto per la Safety)
-
 use std::ops::Deref;
 
 use crate::bindings::{netmap_if, netmap_ring};
@@ -17,35 +15,54 @@ pub(crate) use __netmap_offset;
 
 
 /// Equivalent to `NETMAP_TXRING`
+/// 
+/// # Safety
+/// `nifp` must be a pointer to a valid `netmap_if` object
+/// and `index` must be a valid index for a ring slot.
+/// 
+/// # Panics
+/// If `nifp` is null or `index` is out-of-bounds
 #[inline(always)]
 pub unsafe fn netmap_txring(
     nifp: *mut netmap_if,
     index: usize,
 ) -> *mut netmap_ring {
     assert!(!nifp.is_null());
+    assert!(index < unsafe { (*nifp).ni_tx_rings as _ });
     
-    let offset = unsafe {
-        let ring_ofs_ptr = (*nifp).ring_ofs.as_ptr();
-        assert!(!ring_ofs_ptr.is_null());
-        let ring_ofs_ptr = ring_ofs_ptr.add(index);
-        *ring_ofs_ptr
+    let offset = {
+        let ptr = (*nifp).ring_ofs.as_ptr();
+        assert!(!ptr.is_null());
+        
+        let ptr = ptr.add(index);
+        *ptr
     };
-    unsafe { __netmap_offset!(netmap_ring, nifp, offset) }
+    
+    __netmap_offset!(netmap_ring, nifp, offset)
 }
 
 
 /// Equivalent to `NETMAP_RXRING`
+///
+/// # Safety
+/// `nifp` must be a pointer to a valid `netmap_if` object
+/// and `index` must be a valid index for a ring slot.
+/// 
+/// # Panics
+/// If `nifp` is null or `index` is out-of-bounds
 #[inline(always)]
 pub unsafe fn netmap_rxring(
     nifp: *mut netmap_if,
     index: usize,
 ) -> *mut netmap_ring {
     assert!(!nifp.is_null());
+    assert!(index < unsafe { (*nifp).ni_rx_rings as _ });
     
     let offset = unsafe {
-        let ptr = (*nifp)
-            .ring_ofs
-            .as_ptr()
+        let ptr = (*nifp).ring_ofs.as_ptr();
+        assert!(!ptr.is_null());
+        
+        let ptr = ptr
             .add(index)
             .add((*nifp).ni_tx_rings as _)
             .add((*nifp).ni_host_tx_rings as _);
@@ -56,17 +73,21 @@ pub unsafe fn netmap_rxring(
 
 
 /// Equivalent to `NETMAP_BUF`
+///
+/// # Safety
+/// `index` must be a valid index for a buffer in the netmap ring
 #[inline(always)]
-pub fn netmap_buf(ring: &NetmapRing, index: usize) -> *const libc::c_char {
-    unsafe {
-        (ring.deref() as *const _ as *const libc::c_char)
-            .add(ring.buf_ofs as _)
-            .add(index * ring.nr_buf_size as usize)
-    }
+pub unsafe fn netmap_buf(
+    ring: &NetmapRing,
+    index: usize,
+) -> *const libc::c_char {
+    (ring.deref() as *const _ as *const libc::c_char)
+        .add(ring.buf_ofs as _)
+        .add(index * ring.nr_buf_size as usize)
 }
 
 /// Returns a buffer which contains a packet as a slice of `u8`.
-/// 
+///
 /// This macro is **unsafe**.
 ///
 /// # Safety

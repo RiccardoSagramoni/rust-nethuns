@@ -208,7 +208,7 @@ impl BindableNethunsSocket for BindableNethunsSocketNetmap {
         });
         
         
-        // TODO comment
+        // Create a new circular array for the free I/O buffers
         let mut free_ring =
             CircularCloneBuffer::new(nm_port_d.reg.nr_extra_bufs as _, &|| 0);
         

@@ -1,9 +1,12 @@
+pub mod pcap;
+
 use std::cell::RefCell;
 use std::ffi::CString;
-use std::rc::Weak;
+use std::rc::Rc;
 use std::sync::atomic;
 
 use derivative::Derivative;
+use ouroboros::self_referencing;
 
 use crate::types::{NethunsQueue, NethunsSocketOptions};
 
@@ -11,8 +14,9 @@ use super::ring::{NethunsRing, NethunsRingSlot};
 use super::PkthdrTrait;
 
 
-/// Closure type for the filtering of received packets
-type NethunsFilter = dyn Fn(&dyn PkthdrTrait, &[u8]) -> i32;
+/// Closure type for the filtering of received packets. 
+/// Returns true if the packet should be received, false if it should be discarded.
+type NethunsFilter = dyn Fn(&dyn PkthdrTrait, &[u8]) -> bool;
 
 
 /// Base structure for a `NethunsSocket`.
@@ -20,8 +24,8 @@ type NethunsFilter = dyn Fn(&dyn PkthdrTrait, &[u8]) -> i32;
 /// This data structure is common to all the implementation of a "nethuns socket",
 /// for the supported underlying I/O frameworks. Thus, it's independent from
 /// low-level implementation of the sockets.
-#[derive(Derivative)]
-#[derivative(Debug, Default)]
+#[derive(Default, Derivative)]
+#[derivative(Debug)]
 pub struct NethunsSocketBase {
     /// Configuration options
     pub opt: NethunsSocketOptions,
@@ -35,7 +39,7 @@ pub struct NethunsSocketBase {
     pub queue: NethunsQueue,
     /// Index of the interface
     pub ifindex: libc::c_int,
-    /// Closure used for filtering received packets
+    /// Closure used for filtering received packets. 
     #[derivative(Debug = "ignore")]
     pub filter: Option<Box<NethunsFilter>>,
 }
@@ -54,25 +58,34 @@ pub struct NethunsSocketBase {
 /// - `pkthdr`: the packet header metadata. Its internal format depends on the selected I/O framework.
 /// - `packet`: the Ethernet packet payload.
 #[derive(Debug)]
-pub struct RecvPacket<'a> {
+pub struct RecvPacket {
     pub id: usize,
     pub pkthdr: Box<dyn PkthdrTrait>,
-    pub packet: &'a [u8],
-    
-    slot: Weak<RefCell<NethunsRingSlot>>,
+    pub packet: RecvPacketData,
 }
 
-impl Drop for RecvPacket<'_> {
+
+#[self_referencing(pub_extras)]
+#[derive(Debug)]
+pub struct RecvPacketData {
+    slot: Rc<RefCell<NethunsRingSlot>>,
+    #[borrows(slot)]
+    pub packet: &'this [u8],
+}
+
+impl Drop for RecvPacket {
     /// Release the buffer obtained by calling `recv()`.
     fn drop(&mut self) {
-        if let Some(rc) = self.slot.upgrade() {
-            // Unset the `inuse` flag of the related ring slot
-            rc.borrow_mut().inuse.store(0, atomic::Ordering::Release);
-        }
+        // Unset the `inuse` flag of the related ring slot
+        self.packet.borrow_slot()
+            .borrow_mut()
+            .inuse
+            .store(0, atomic::Ordering::Release);
     }
 }
 
-impl RecvPacket<'_> {
+
+impl RecvPacket {
     /// Create a new `RecvPacket` instance.
     ///
     /// # Arguments
@@ -84,14 +97,12 @@ impl RecvPacket<'_> {
     pub fn new(
         id: usize,
         pkthdr: Box<dyn PkthdrTrait>,
-        packet: &'_ [u8],
-        slot: Weak<RefCell<NethunsRingSlot>>,
-    ) -> RecvPacket<'_> {
+        packet: RecvPacketData,
+    ) -> RecvPacket {
         RecvPacket {
             id,
             pkthdr,
             packet,
-            slot,
         }
     }
 }

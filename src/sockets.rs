@@ -1,4 +1,13 @@
+//! This module exposes the data structures required 
+//! to interact with the specified I/O framework.
+//!
+//! Every framework-specific implementation must provide:
+//! - A struct which implements the `BindableNethunsSocket` trait.
+//! - A struct which implements the `NethunsSocket` trait.
+//! - A struct named `Pkthdr` which must implement the `PkthdrTrait` trait.
+
 pub mod base;
+
 pub mod errors;
 pub mod ring;
 
@@ -15,15 +24,6 @@ use self::errors::{
 };
 
 
-/*
-    Import the structs defined for the required I/O framework.
-    
-    Every framework-specific implementation must provide:
-    - A struct which implements the `BindableNethunsSocket` trait.
-    - A struct which implements the `NethunsSocket` trait.
-    - A struct named `Pkthdr` which must implement the `PkthdrTrait` trait.
-    TODO: move it to mod documentation
-*/
 cfg_if::cfg_if! {
     if #[cfg(feature="netmap")] {
         mod netmap;
@@ -113,7 +113,7 @@ pub trait NethunsSocket: Debug {
     /// * `Err(NethunsRecvError::NotRx)` -  If the socket is not configured in RX mode. Check the configuration parameters passed to `open(...)`.
     /// * `Err(NethunsRecvError::InUse)` - If the slot at the head of the RX ring is currently in use, i.e. the corresponding received packet is not released yet.
     /// * `Err(NethunsRecvError::NoPacketsAvailable)` - If there are no new packets available in the RX ring.
-    /// * `Err(NethunsRecvError::PacketFiltered)` - If the packet is filtered out by the `filter` function specified during socket configuration. TODO improve
+    /// * `Err(NethunsRecvError::PacketFiltered)` - If the packet is filtered out by the `filter` function specified during socket configuration.
     /// * `Err(NethunsRecvError::FrameworkError)` - If an error from the unsafe interaction with underlying I/O framework occurs.
     /// * `Err(NethunsRecvError::Error)` - If an unexpected error occurs.
     fn recv(&mut self) -> Result<RecvPacket, NethunsRecvError>;

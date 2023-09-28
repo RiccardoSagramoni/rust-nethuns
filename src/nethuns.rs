@@ -2,7 +2,6 @@ use std::ffi::CStr;
 use std::mem;
 use std::os::fd::AsRawFd;
 
-use num_traits::AsPrimitive;
 use rustix::net;
 
 use crate::global::{NethunsNetInfo, NETHUNS_GLOBAL};
@@ -18,14 +17,11 @@ use crate::global::{NethunsNetInfo, NETHUNS_GLOBAL};
 /// * `Err(String)` - If an error occurs.
 pub fn __nethuns_set_if_promisc(devname: &CStr) -> Result<(), String> {
     // Get the active flag word of the device.
-    let mut flags = nethuns_ioctl_if(
-        devname,
-        IoctlRequestCode::SIOCGIFFLAGS,
-        0,
-    )
-    .map_err(|e| {
-        format!("[__nethuns_set_if_promisc] nethuns_ioctl_if failed: {e}")
-    })?;
+    let mut flags = nethuns_ioctl_if(devname, None)
+        .map_err(|e| {
+            format!("[__nethuns_set_if_promisc] nethuns_ioctl_if failed: {e}")
+        })?
+        .expect("Unexpected None value for flags");
     
     if let Ok(mut mutex_guard) = NETHUNS_GLOBAL.lock() {
         // Retrieve the global information for the interface
@@ -57,9 +53,7 @@ pub fn __nethuns_set_if_promisc(devname: &CStr) -> Result<(), String> {
         let do_promisc = (flags & libc::IFF_PROMISC as u32) == 0;
         if do_promisc {
             flags |= libc::IFF_PROMISC as u32;
-            if let Err(e) =
-                nethuns_ioctl_if(devname, IoctlRequestCode::SIOCSIFFLAGS, flags)
-            {
+            if let Err(e) = nethuns_ioctl_if(devname, Some(flags)) {
                 info.promisc_refcnt -= 1;
                 return Err(format!(
                     "[__nethuns_set_if_promisc] nethuns_ioctl_if failed: {e}"
@@ -89,15 +83,11 @@ pub fn __nethuns_set_if_promisc(devname: &CStr) -> Result<(), String> {
 /// * `Err(String)` - If an error occurs.
 pub fn __nethuns_clear_if_promisc(devname: &CStr) -> Result<(), String> {
     // Get the active flag word of the device.
-    let mut flags = nethuns_ioctl_if(
-        devname,
-        IoctlRequestCode::SIOCGIFFLAGS,
-        0,
-    )
-    .map_err(|e| {
-        format!("[__nethuns_set_if_promisc] nethuns_ioctl_if failed: {e}")
-    })?;
-    
+    let mut flags = nethuns_ioctl_if(devname, None)
+        .map_err(|e| {
+            format!("[__nethuns_set_if_promisc] nethuns_ioctl_if failed: {e}")
+        })?
+        .expect("Unexpected None value for flags");
     
     if let Ok(mut mutex_guard) = NETHUNS_GLOBAL.lock() {
         let mut do_clear = false;
@@ -115,9 +105,7 @@ pub fn __nethuns_clear_if_promisc(devname: &CStr) -> Result<(), String> {
         // disable the promiscuous mode by calling `ioctl`
         if do_clear {
             flags &= !(libc::IFF_PROMISC as u32);
-            if let Err(e) =
-                nethuns_ioctl_if(devname, IoctlRequestCode::SIOCSIFFLAGS, flags)
-            {
+            if let Err(e) = nethuns_ioctl_if(devname, Some(flags)) {
                 return Err(format!(
                     "[__nethuns_clear_if_promisc] nethuns_ioctl_if failed: {e}"
                 ));
@@ -135,19 +123,16 @@ pub fn __nethuns_clear_if_promisc(devname: &CStr) -> Result<(), String> {
 ///
 /// # Arguments
 /// * `devname`: Name of the interface/device.
-/// * `what`: The request code for the `ioctl` system call.
-/// * `flags`: The new flag word to set for the device, if the request code is SIOCSIFFLAGS. Otherwise this parameter is unused.
+/// * `flags`: If you want to **get**get the current flag word from the interface, pass `None`. If you want to **set** the flag word, pass `Some(flag)`.
 ///
 /// # Returns
-/// * `Ok(u32)` - If the operation was successful. If the caller passed `IoctlRequestCode::SIOCGIFFLAGS`, the return value will be the flag word of the device. Otherwise, it will be equals to the parameter `flags`.
+/// * `Ok(Some(_))` - If the operation was successful and the caller passed `None` as `flags` parameter.
+/// * `Ok(None)` - If the operation was successful and the caller passed `Some(_)` as `flags` parameter.
 /// * `Err(String)` - If an error occurs.
 fn nethuns_ioctl_if(
     devname: &CStr,
-    what: IoctlRequestCode,
-    flags: u32,
-) -> Result<u32, String> {
-    // TODO refactor code: remove what parameter and make flags optional
-    
+    flags: Option<u32>,
+) -> Result<Option<u32>, String> {
     // Open a new socket so that we can use `ioctl`
     let socket =
         net::socket(net::AddressFamily::INET, net::SocketType::DGRAM, None)
@@ -169,21 +154,29 @@ fn nethuns_ioctl_if(
     
     // If the caller asked to set the flags of the device,
     // configure the `ifreq` object with the new flags
-    if what == IoctlRequestCode::SIOCSIFFLAGS {
+    if let Some(flags) = flags {
         ifr.ifr_ifru.ifru_flags = flags as _;
     }
+    
+    // Select request code for the required operation
+    let request_code = match flags {
+        // Set the active flag word of the device
+        Some(_) => libc::SIOCSIFFLAGS,
+        // Get the active flag word of the device
+        None => libc::SIOCGIFFLAGS,
+    };
     
     // Call `ioctl` with the request code and the `ifreq` object.
     // If the request code is SIOSCGIFFLAGS, the system call will
     // retrieve the new flag word from the `ifreq` object.
     // If the request code is SIOCGIFFLAGS, the system call will
     // leave the current flag word in the `ifreq` object.
-    let ret = unsafe { libc::ioctl(socket.as_raw_fd(), what.as_(), &ifr) };
+    let ret = unsafe { libc::ioctl(socket.as_raw_fd(), request_code, &ifr) };
     if ret < 0 {
         return Err(format!(
-            "[nethuns_ioctl_if] ioctl({:?}, {:?}, {:?}) failed with errno {}",
+            "[nethuns_ioctl_if] ioctl({:?}, {}, {:?}) failed with errno {}",
             socket,
-            what,
+            request_code,
             ifr,
             errno::errno()
         ));
@@ -191,42 +184,8 @@ fn nethuns_ioctl_if(
     
     // If the caller asked to get the flags of the device,
     // returned them, otherwise return the same flags that were passed.
-    Ok(if what == IoctlRequestCode::SIOCGIFFLAGS {
-        unsafe { ifr.ifr_ifru.ifru_flags as u32 }
-    } else {
-        flags
+    Ok(match flags {
+        Some(_) => None,
+        None => Some(unsafe { ifr.ifr_ifru.ifru_flags } as u32),
     })
-}
-
-
-/// Request code for the `ioctl` system call
-#[allow(clippy::upper_case_acronyms)]
-#[derive(Clone, Copy, Debug, PartialEq, PartialOrd)]
-enum IoctlRequestCode {
-    /// Get the active flag word of the device
-    SIOCGIFFLAGS,
-    /// Set the active flag word of the device
-    SIOCSIFFLAGS,
-}
-
-impl AsPrimitive<u64> for IoctlRequestCode {
-    fn as_(self) -> u64 {
-        match self {
-            Self::SIOCGIFFLAGS => libc::SIOCGIFFLAGS,
-            Self::SIOCSIFFLAGS => libc::SIOCSIFFLAGS,
-        }
-    }
-}
-
-
-#[cfg(test)]
-mod test {
-    use super::IoctlRequestCode;
-    use num_traits::AsPrimitive;
-    
-    #[test]
-    fn test_socket_configuration_flag() {
-        assert_eq!(IoctlRequestCode::SIOCGIFFLAGS.as_(), libc::SIOCGIFFLAGS);
-        assert_eq!(IoctlRequestCode::SIOCSIFFLAGS.as_(), libc::SIOCSIFFLAGS);
-    }
 }
