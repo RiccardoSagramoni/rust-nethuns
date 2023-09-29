@@ -12,18 +12,16 @@ use crate::nethuns::__nethuns_set_if_promisc;
 use crate::sockets::base::NethunsSocketBase;
 use crate::sockets::errors::{NethunsBindError, NethunsOpenError};
 use crate::sockets::ring::NethunsRing;
-use crate::sockets::BindableNethunsSocket;
+use crate::sockets::{BindableNethunsSocket, NethunsSocket};
 use crate::types::{NethunsQueue, NethunsSocketMode, NethunsSocketOptions};
 
 use super::nethuns_socket::NethunsSocketNetmap;
-use super::super::NethunsSocket;
 
 
 #[derive(Debug)]
 pub struct BindableNethunsSocketNetmap {
     base: NethunsSocketBase,
 }
-
 
 
 impl BindableNethunsSocketNetmap {
@@ -74,13 +72,15 @@ impl BindableNethunsSocketNetmap {
 }
 
 
-
 impl BindableNethunsSocket for BindableNethunsSocketNetmap {
     fn bind(
         mut self: Box<Self>,
         dev: &str,
         queue: NethunsQueue,
-    ) -> Result<Box<dyn NethunsSocket>, (NethunsBindError, Box<dyn BindableNethunsSocket>)> {
+    ) -> Result<
+        Box<dyn NethunsSocket>,
+        (NethunsBindError, Box<dyn BindableNethunsSocket>),
+    > {
         // Prepare flag and prefix for device name
         let flags = if !self.tx() {
             "/R".to_owned()
@@ -200,7 +200,7 @@ impl BindableNethunsSocket for BindableNethunsSocketNetmap {
                         NethunsBindError::FrameworkError(
                             "failed to initialize some_ring: netmap_rxring returned null"
                                 .to_owned()
-                        ), 
+                        ),
                         self
                     ))
                 }
@@ -262,7 +262,9 @@ impl BindableNethunsSocket for BindableNethunsSocketNetmap {
             unsafe { libc::if_nametoindex(self.base.devname.as_ptr()) } as _;
         
         // Build the socket struct and return it
-        let socket = NethunsSocketNetmap::new(self.base, nm_port_d, some_ring, free_ring);
+        let socket = NethunsSocketNetmap::new(
+            self.base, nm_port_d, some_ring, free_ring,
+        );
         
         thread::sleep(time::Duration::from_secs(2));
         Ok(Box::new(socket))

@@ -3,6 +3,8 @@ use std::mem;
 use std::num::Wrapping;
 use std::slice::Iter;
 
+use derivative::Derivative;
+
 
 /// An optimized circular buffer for items which implements [`Clone`] trait.
 ///
@@ -17,8 +19,10 @@ use std::slice::Iter;
 /// Thus, this buffer more appropriate for reference-counting pointer
 /// ([`std::rc::Rc`], [`std::sync::Arc`]) and primitive types (which implement
 /// the [`Copy`] trait).
-#[derive(Debug, Default)]
+#[derive(Default, Derivative)]
+#[derivative(Debug)]
 pub struct CircularCloneBuffer<T: Clone> {
+    #[derivative(Debug = "ignore")]
     buffer: Vec<T>,
     head: Wrapping<usize>,
     tail: Wrapping<usize>,
@@ -71,7 +75,7 @@ impl<T: Clone> CircularCloneBuffer<T> {
     
     /// Return a clone instance of the item specified by the `head` index
     /// and advance the `head` index of one position.
-    /// 
+    ///
     /// **It doesn't check if the buffer is empty.**
     #[inline(always)]
     pub fn pop_unchecked(&mut self) -> T {
