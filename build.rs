@@ -11,7 +11,7 @@ fn main() {
 /// I/O framework.
 fn assert_io_framework_mutual_exclusivity() {
     let mut found: u8 = 0;
-
+    
     cfg_if::cfg_if! {
         if #[cfg(feature="netmap")] {
             found += 1;
@@ -32,7 +32,7 @@ fn assert_io_framework_mutual_exclusivity() {
             found += 1;
         }
     };
-
+    
     if found == 0 {
         panic!("Error: no I/O framework found");
     }

@@ -1,11 +1,11 @@
 use std::ops::DerefMut;
 use std::sync::mpsc::TryRecvError;
 use std::sync::{Arc, Mutex};
-use std::time::{SystemTime, Duration};
-use std::{env, thread, mem};
+use std::time::{Duration, SystemTime};
+use std::{env, mem, thread};
 
 use bus::{Bus, BusReader};
-use etherparse::Ethernet2Header;
+use nethuns::sockets::errors::NethunsRecvError;
 use nethuns::sockets::{nethuns_socket_open, PkthdrTrait};
 use nethuns::types::{
     NethunsCaptureDir, NethunsCaptureMode, NethunsQueue, NethunsSocketMode,
@@ -15,6 +15,7 @@ use nethuns::vlan::{
     nethuns_vlan_tci, nethuns_vlan_tci_, nethuns_vlan_tpid, nethuns_vlan_tpid_,
     nethuns_vlan_vid,
 };
+use rand::Rng;
 
 fn main() {
     // Parse args
@@ -40,8 +41,8 @@ fn main() {
     let socket = nethuns_socket_open(opt).unwrap();
     let mut socket = socket.bind(&dev, NethunsQueue::Any).unwrap();
     
-    // TODO Set filter
-    // socket.base_mut().filter = Some(Box::new(simple_filter));
+    // Set filter
+    socket.base_mut().filter = Some(Box::new(simple_filter));
     
     
     // Stats counter
@@ -73,11 +74,8 @@ fn main() {
         
         match socket.recv() {
             Ok(_) => {
-                total
-                    .lock()
-                    .expect("lock failed")
-                    .checked_add(1)
-                    .expect("overflow occurred");
+                let mut total = total.lock().expect("lock failed");
+                *total += 1;
                 
                 total2 += 1;
                 
@@ -85,6 +83,10 @@ fn main() {
                     total2 = 0;
                     socket.dump_rings();
                 }
+            }
+            Err(NethunsRecvError::NoPacketsAvailable)
+            | Err(NethunsRecvError::PacketFiltered) => {
+                continue;
             }
             Err(e) => {
                 eprintln!("[ERROR]: {}", e);
@@ -126,23 +128,25 @@ fn meter(total: Arc<Mutex<u64>>, mut rx: BusReader<()>) {
 
 /// Filter for nethuns socket
 fn simple_filter(pkthdr: &dyn PkthdrTrait, packet: &[u8]) -> bool {
-    // println!("filter context: packet (Rust)");
-    // dump_packet(pkthdr, packet);
-    true
+    // Filter packets with a very small probability
+    if rand::thread_rng().gen_bool(0.00001) {
+        eprintln!("Rejected packet: {}", dump_packet(pkthdr, packet));
+        false
+    } else {
+        true
+    }
 }
 
 
-fn dump_packet(pkthdr: &dyn PkthdrTrait, packet: &[u8]) {
-    print!(
-        concat!(
-            "{}:{} snap:{} len:{} offload{{tci:{:X} tpid:{:X}}} ",
-            "packet{{tci:{:X} pid:{:X}}} => [tci:{:X} tpid:{:X} vid:{:X}] rxhash:0x{:X} | "
-        ),
-        pkthdr.tstamp_sec(), 
-        pkthdr.tstamp_nsec(), 
-        pkthdr.snaplen(), 
-        pkthdr.len(), 
-        pkthdr.offvlan_tci(), 
+fn dump_packet(pkthdr: &dyn PkthdrTrait, packet: &[u8]) -> String {
+    let mut builder = string_builder::Builder::new(1024);
+    builder.append(format!(
+        "{}:{} snap:{} len:{} offload{{tci:{:X} tpid:{:X}}} packet{{tci:{:X} pid:{:X}}} => [tci:{:X} tpid:{:X} vid:{:X}] rxhash:0x{:X} | ",
+        pkthdr.tstamp_sec(),
+        pkthdr.tstamp_nsec(),
+        pkthdr.snaplen(),
+        pkthdr.len(),
+        pkthdr.offvlan_tci(),
         pkthdr.offvlan_tpid(),
         nethuns_vlan_tci(packet),
         nethuns_vlan_tpid(packet),
@@ -150,12 +154,12 @@ fn dump_packet(pkthdr: &dyn PkthdrTrait, packet: &[u8]) {
         nethuns_vlan_tpid_(pkthdr, packet),
         nethuns_vlan_vid(nethuns_vlan_tci_(pkthdr, packet)),
         pkthdr.rxhash()
-    );
-    
+    ));
     for byte in packet.iter().take(34) {
-        print!("{:02X} ", byte);
+        builder.append(format!("{:02X} ", byte));
     }
-    println!();
+    builder.append("\n");
+    builder.string().unwrap()
 }
 
 
