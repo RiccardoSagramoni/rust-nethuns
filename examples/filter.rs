@@ -42,7 +42,7 @@ fn main() {
     let mut socket = socket.bind(&dev, NethunsQueue::Any).unwrap();
     
     // Set filter
-    socket.base_mut().filter = Some(Box::new(simple_filter));
+    socket.base_mut().set_filter(Some(Box::new(simple_filter)));
     
     
     // Stats counter

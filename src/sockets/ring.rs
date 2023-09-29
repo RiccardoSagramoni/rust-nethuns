@@ -129,13 +129,13 @@ impl NethunsRing {
 /// Ring slot of a Nethuns socket.
 #[derive(Debug, Default)]
 pub struct NethunsRingSlot {
-    pub pkthdr: Pkthdr,
-    pub id: usize,
+    pub(super) pkthdr: Pkthdr,
+    pub(super) id: usize,
     /// In-use flag => `0`: not in use; `1`: in use (a thread is reading a packet); `2`: in-flight (a thread is sending a packet)
-    pub inuse: AtomicU8,
-    pub len: usize,
+    pub(super) inuse: AtomicU8,
+    pub(super) len: usize,
     
-    pub packet: Vec<u8>,
+    pub(super) packet: Vec<u8>,
 }
 
 
@@ -180,7 +180,7 @@ pub(super) use nethuns_ring_free_slots;
 /// Get size of the RX ring.
 #[inline(always)]
 pub fn rxring_get_size(socket: &dyn NethunsSocket) -> Option<usize> {
-    let rx_ring = match &socket.base().rx_ring {
+    let rx_ring = match &socket.base().rx_ring() {
         Some(r) => r,
         None => return None,
     };
@@ -191,7 +191,7 @@ pub fn rxring_get_size(socket: &dyn NethunsSocket) -> Option<usize> {
 /// Get size of the TX ring.
 #[inline(always)]
 pub fn txring_get_size(socket: &dyn NethunsSocket) -> Option<usize> {
-    let tx_ring = match &socket.base().tx_ring {
+    let tx_ring = match &socket.base().tx_ring() {
         Some(r) => r,
         None => return None,
     };

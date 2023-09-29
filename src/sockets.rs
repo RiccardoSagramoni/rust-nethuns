@@ -1,4 +1,4 @@
-//! This module exposes the data structures required 
+//! This module exposes the data structures required
 //! to interact with the specified I/O framework.
 //!
 //! Every framework-specific implementation must provide:
@@ -92,13 +92,13 @@ pub trait BindableNethunsSocket: Debug {
     /// Check if the socket is in RX mode
     #[inline(always)]
     fn rx(&self) -> bool {
-        self.base().rx_ring.is_some()
+        self.base().rx_ring().is_some()
     }
     
     /// Check if the socket is in TX mode
     #[inline(always)]
     fn tx(&self) -> bool {
-        self.base().tx_ring.is_some()
+        self.base().tx_ring().is_some()
     }
 }
 
@@ -160,13 +160,13 @@ pub trait NethunsSocket: Debug {
     /// Check if the socket is in TX mode
     #[inline(always)]
     fn tx(&self) -> bool {
-        self.base().tx_ring.is_some()
+        self.base().tx_ring().is_some()
     }
     
     /// Check if the socket is in RX mode
     #[inline(always)]
     fn rx(&self) -> bool {
-        self.base().rx_ring.is_some()
+        self.base().rx_ring().is_some()
     }
     
     
