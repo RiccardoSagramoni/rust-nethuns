@@ -51,8 +51,8 @@ fn main() {
 
 
 fn dump_packet(pkt: &RecvPacket) {
-    let pkthdr = &pkt.pkthdr;
-    let packet = pkt.packet.borrow_packet();
+    let pkthdr = pkt.pkthdr();
+    let packet = pkt.packet().borrow_packet();
     
     print!(
         concat!(
@@ -70,7 +70,7 @@ fn dump_packet(pkt: &RecvPacket) {
         nethuns_vlan_tci_(pkthdr.as_ref(), packet),
         nethuns_vlan_tpid_(pkthdr.as_ref(), packet),
         nethuns_vlan_vid(nethuns_vlan_tci_(pkthdr.as_ref(), packet)),
-        pkt.pkthdr.rxhash()
+        pkthdr.rxhash()
     );
     
     if let Ok(eth) = Ethernet2Header::from_slice(packet) {

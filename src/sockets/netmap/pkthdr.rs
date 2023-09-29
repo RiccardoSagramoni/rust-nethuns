@@ -1,16 +1,18 @@
 use c_netmap_wrapper::bindings::timeval;
+use getset::CopyGetters;
 
 use crate::sockets::PkthdrTrait;
 
 
 /// Packet header containing metadata
 #[repr(C)]
-#[derive(Clone, Copy, Debug, Default, PartialEq)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, CopyGetters)]
+#[getset(get_copy = "pub")]
 pub struct Pkthdr {
-    pub ts: timeval,
-    pub len: u32,
-    pub caplen: u32,
-    pub buf_idx: u32,
+    pub(super) ts: timeval,
+    pub(super) len: u32,
+    pub(super) caplen: u32,
+    pub(super) buf_idx: u32,
 }
 
 

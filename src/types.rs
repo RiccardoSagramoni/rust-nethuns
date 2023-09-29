@@ -1,4 +1,5 @@
 use derive_builder::Builder;
+use getset::Getters;
 
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, PartialOrd)]
@@ -66,17 +67,18 @@ pub struct NethunsSocketOptions {
 
 
 /// Statistics for the nethuns socket.
-#[derive(Clone, Copy, Debug, Default, PartialEq, PartialOrd)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, PartialOrd, Getters)]
+#[getset(get = "pub")]
 pub struct NethunsStat {
-    pub rx_packets: u64,
-    pub tx_packets: u64,
-    pub rx_dropped: u64,
-    pub rx_if_dropped: u64,
+    rx_packets: u64,
+    tx_packets: u64,
+    rx_dropped: u64,
+    rx_if_dropped: u64,
     /// xdp only
-    pub rx_invalid: u64,
+    rx_invalid: u64,
     /// xdp only
-    pub tx_invalid: u64,
-    pub freeze: u64,
+    tx_invalid: u64,
+    freeze: u64,
 }
 
 

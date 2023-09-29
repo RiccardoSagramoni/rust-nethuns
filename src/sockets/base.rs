@@ -6,6 +6,7 @@ use std::rc::Rc;
 use std::sync::atomic;
 
 use derivative::Derivative;
+use getset::{CopyGetters, Getters, Setters};
 use ouroboros::self_referencing;
 
 use crate::types::{NethunsQueue, NethunsSocketOptions};
@@ -14,7 +15,7 @@ use super::ring::{NethunsRing, NethunsRingSlot};
 use super::PkthdrTrait;
 
 
-/// Closure type for the filtering of received packets. 
+/// Closure type for the filtering of received packets.
 /// Returns true if the packet should be received, false if it should be discarded.
 type NethunsFilter = dyn Fn(&dyn PkthdrTrait, &[u8]) -> bool;
 
@@ -24,24 +25,34 @@ type NethunsFilter = dyn Fn(&dyn PkthdrTrait, &[u8]) -> bool;
 /// This data structure is common to all the implementation of a "nethuns socket",
 /// for the supported underlying I/O frameworks. Thus, it's independent from
 /// low-level implementation of the sockets.
-#[derive(Default, Derivative)]
+#[derive(Default, Derivative, Getters, Setters, CopyGetters)]
 #[derivative(Debug)]
+#[getset(get = "pub")]
 pub struct NethunsSocketBase {
     /// Configuration options
-    pub opt: NethunsSocketOptions,
+    pub(super) opt: NethunsSocketOptions,
+    
     /// Rings used for transmission
-    pub tx_ring: Option<NethunsRing>,
+    pub(super) tx_ring: Option<NethunsRing>,
+    
     /// Rings used for reception
-    pub rx_ring: Option<NethunsRing>,
+    pub(super) rx_ring: Option<NethunsRing>,
+    
     /// Name of the binded device
-    pub devname: CString,
+    pub(super) devname: CString,
+    
     /// Queue binded to the socket
-    pub queue: NethunsQueue,
+    #[getset(get_copy = "pub with_prefix")]
+    pub(super) queue: NethunsQueue,
+    
     /// Index of the interface
-    pub ifindex: libc::c_int,
-    /// Closure used for filtering received packets. 
+    #[getset(get_copy = "pub with_prefix")]
+    pub(super) ifindex: libc::c_int,
+    
+    /// Closure used for filtering received packets.
     #[derivative(Debug = "ignore")]
-    pub filter: Option<Box<NethunsFilter>>,
+    #[getset(set = "pub")]
+    pub(super) filter: Option<Box<NethunsFilter>>,
 }
 // errbuf removed => use Result as return type
 // filter_ctx removed => use closures with move semantics
@@ -57,11 +68,12 @@ pub struct NethunsSocketBase {
 /// - `id`: the id of the packet.
 /// - `pkthdr`: the packet header metadata. Its internal format depends on the selected I/O framework.
 /// - `packet`: the Ethernet packet payload.
-#[derive(Debug)]
+#[derive(Debug, Getters)]
+#[getset(get = "pub")]
 pub struct RecvPacket {
-    pub id: usize,
-    pub pkthdr: Box<dyn PkthdrTrait>,
-    pub packet: RecvPacketData,
+    id: usize,
+    pkthdr: Box<dyn PkthdrTrait>,
+    packet: RecvPacketData,
 }
 
 
@@ -77,7 +89,8 @@ impl Drop for RecvPacket {
     /// Release the buffer obtained by calling `recv()`.
     fn drop(&mut self) {
         // Unset the `inuse` flag of the related ring slot
-        self.packet.borrow_slot()
+        self.packet
+            .borrow_slot()
             .borrow_mut()
             .inuse
             .store(0, atomic::Ordering::Release);
@@ -99,10 +112,6 @@ impl RecvPacket {
         pkthdr: Box<dyn PkthdrTrait>,
         packet: RecvPacketData,
     ) -> RecvPacket {
-        RecvPacket {
-            id,
-            pkthdr,
-            packet,
-        }
+        RecvPacket { id, pkthdr, packet }
     }
 }
