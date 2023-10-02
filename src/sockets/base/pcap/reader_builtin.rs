@@ -171,7 +171,7 @@ impl NethunsSocketPcapTrait for NethunsSocketPcap {
         rx_ring.rings.advance_head();
         
         let pkthdr = Box::new(slot.pkthdr);
-        mem::drop(slot);
+        drop(slot);
         
         let packet_data = RecvPacketDataBuilder {
             slot: rc_slot,
@@ -261,9 +261,9 @@ impl NethunsSocketPcapTrait for NethunsSocketPcap {
 /// The struct should have been created with the `#[repr(C)]` attribute
 /// for safe behavior and compatibility with C.
 unsafe fn any_as_u8_slice<'a, T: Sized>(p: &'a T) -> &[u8] {
-    ::core::slice::from_raw_parts::<'a, _>(
+    core::slice::from_raw_parts::<'a, _>(
         (p as *const T) as *const u8,
-        ::core::mem::size_of::<T>(),
+        mem::size_of::<T>(),
     )
 }
 
@@ -275,8 +275,8 @@ unsafe fn any_as_u8_slice<'a, T: Sized>(p: &'a T) -> &[u8] {
 /// The struct should have been created with the `#[repr(C)]` attribute
 /// for safe behavior and compatibility with C.
 unsafe fn any_as_u8_slice_mut<'a, T: Sized>(p: &'a mut T) -> &mut [u8] {
-    ::core::slice::from_raw_parts_mut::<'a, _>(
+    core::slice::from_raw_parts_mut::<'a, _>(
         (p as *mut T) as *mut u8,
-        ::core::mem::size_of::<T>(),
+        mem::size_of::<T>(),
     )
 }

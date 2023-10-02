@@ -91,7 +91,7 @@ impl NethunsSocket for NethunsSocketNetmap {
         if slot.inuse.load(atomic::Ordering::Acquire) != 0 {
             return Err(NethunsRecvError::InUse);
         }
-        mem::drop(slot);
+        drop(slot);
         
         if self.free_ring.is_empty() {
             nethuns_ring_free_slots!(self, rx_ring, nethuns_blocks_free);
@@ -129,7 +129,7 @@ impl NethunsSocket for NethunsSocketNetmap {
         slot.pkthdr.ts = netmap_ring.ts;
         slot.pkthdr.caplen = cur_netmap_slot.len as _;
         slot.pkthdr.len = cur_netmap_slot.len as _;
-        mem::drop(slot);
+        drop(slot);
         
         // Assign a new buffer to the netmap `cur` slot and set the relative flag
         cur_netmap_slot.buf_idx = self.free_ring.pop_unchecked();
@@ -157,7 +157,7 @@ impl NethunsSocket for NethunsSocketNetmap {
         rx_ring.rings.advance_head();
         
         let pkthdr = Box::new(slot.pkthdr);
-        mem::drop(slot);
+        drop(slot);
         
         let packet_data = RecvPacketDataBuilder {
             slot: rc_slot,
@@ -326,8 +326,13 @@ impl NethunsSocket for NethunsSocketNetmap {
     fn base_mut(&mut self) -> &mut NethunsSocketBase {
         &mut self.base
     }
-    
-    
+
+
+    fn fd(&self) -> libc::c_int {
+        self.p.fd
+    }
+
+
     #[inline(always)]
     fn get_packet_buffer_ref(&self, pktid: usize) -> Option<&mut [u8]> {
         let tx_ring = match &self.base.tx_ring {
@@ -340,11 +345,6 @@ impl NethunsSocket for NethunsSocketNetmap {
                 self.base.opt.packetsize as _,
             )
         })
-    }
-    
-    
-    fn fd(&self) -> libc::c_int {
-        self.p.fd
     }
     
     /// NOT IMPLEMENTED IN NETMAP
