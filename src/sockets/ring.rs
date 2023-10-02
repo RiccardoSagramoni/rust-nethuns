@@ -68,6 +68,30 @@ impl NethunsRing {
         self.pktsize
     }
     
+    /// Check if the buffer is empty
+    #[inline(always)]
+    pub fn is_empty(&self) -> bool {
+        self.rings.is_empty()
+    }
+    
+    /// Check if the buffer is full
+    #[inline(always)]
+    pub fn is_full(&self) -> bool {
+        self.rings.is_full()
+    }
+    
+    /// Get the current head index
+    #[inline(always)]
+    pub fn head(&self) -> usize {
+        self.rings.head()
+    }
+    
+    /// Get the current tail index
+    #[inline(always)]
+    pub fn tail(&self) -> usize {
+        self.rings.tail()
+    }
+    
     
     /// Get the number of the consecutive available slots
     /// in the ring, starting from the given position.

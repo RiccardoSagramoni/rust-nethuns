@@ -1,6 +1,7 @@
 pub mod pcap;
 
 use std::ffi::CString;
+use std::fmt::{self, Debug, Display};
 use std::sync::{atomic, Arc, RwLock};
 
 use derivative::Derivative;
@@ -74,6 +75,16 @@ pub struct RecvPacket {
     packet: RecvPacketData,
 }
 
+impl Display for RecvPacket {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(
+            f,
+            "{{\n    id: {},\n    pkthdr: {:?},\n    packet: {}\n}}",
+            self.id, self.pkthdr, self.packet
+        )
+    }
+}
+
 
 #[self_referencing(pub_extras)]
 #[derive(Debug)]
@@ -81,6 +92,14 @@ pub struct RecvPacketData {
     slot: Arc<RwLock<NethunsRingSlot>>,
     #[borrows(slot)]
     pub packet: &'this [u8],
+}
+
+impl Display for RecvPacketData {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        self.with(|safe_self| {
+            write!(f, "{:?}", &safe_self.packet)
+        })
+    }
 }
 
 impl Drop for RecvPacket {

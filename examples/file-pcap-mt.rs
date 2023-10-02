@@ -1,12 +1,14 @@
+use std::sync::mpsc;
 use std::{env, mem, thread};
 
-use nethuns::sockets::base::RecvPacket;
 use nethuns::sockets::base::pcap::{NethunsSocketPcap, NethunsSocketPcapTrait};
+use nethuns::sockets::base::RecvPacket;
+use nethuns::sockets::errors::NethunsPcapReadError;
 use nethuns::types::{
     NethunsCaptureDir, NethunsCaptureMode, NethunsSocketMode,
     NethunsSocketOptions,
 };
-use rtrb::{RingBuffer, Consumer};
+use rtrb::{Consumer, RingBuffer};
 
 
 fn main() {
@@ -31,12 +33,39 @@ fn main() {
     
     
     // Create SPSC ring buffer
-    let (mut producer, mut consumer) = RingBuffer::<RecvPacket>::new(65536);
+    let (mut producer, consumer) = RingBuffer::<RecvPacket>::new(65536);
     
-    thread::spawn(move || {
-        consumer_body(consumer);
+    // Create channel for thread communication
+    let (tx, rx) = mpsc::channel::<()>();
+    
+    // Spawn consumer thread
+    let consumer_th = thread::spawn(move || {
+        consumer_body(consumer, rx);
     });
     
+    
+    loop {
+        match socket.read() {
+            Ok(packet) => {
+                while !producer.is_abandoned() {
+                    if !producer.is_full() {
+                        producer.push(packet).unwrap();
+                        break;
+                    }
+                }
+            }
+            Err(NethunsPcapReadError::Eof) => {
+                break;
+            }
+            Err(e) => {
+                panic!("error: {:?}", e);
+            }
+        }
+    }
+    
+    println!("head: {}\n", socket.base().rx_ring().as_ref().unwrap().head());
+    tx.send(()).expect("unable to send signal in mpsc channel");
+    consumer_th.join().expect("unable to join consumer thread");
 }
 
 
@@ -49,6 +78,15 @@ fn get_target_filename() -> String {
 }
 
 
-fn consumer_body(consumer: Consumer<RecvPacket>) {
-    
+fn consumer_body(mut consumer: Consumer<RecvPacket>, rx: mpsc::Receiver<()>) {
+    loop {
+        // Read packet
+        if let Ok(packet) = consumer.pop() {
+            println!("packet: {}\n", packet);
+        }
+        
+        if consumer.is_empty() && rx.try_recv().is_ok() {
+            return;
+        }
+    }
 }
