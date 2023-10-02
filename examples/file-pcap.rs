@@ -1,25 +1,23 @@
 use std::{env, mem};
 
 use nethuns::sockets::base::pcap::{NethunsSocketPcap, NethunsSocketPcapTrait};
+use nethuns::sockets::errors::NethunsPcapReadError;
 use nethuns::sockets::{nethuns_socket_open, PkthdrTrait};
 use nethuns::types::{
     NethunsCaptureDir, NethunsCaptureMode, NethunsQueue, NethunsSocketMode,
     NethunsSocketOptions,
 };
-use nethuns::vlan::{
-    nethuns_vlan_tci, nethuns_vlan_tci_, nethuns_vlan_tpid, nethuns_vlan_tpid_,
-    nethuns_vlan_vid,
-};
+use nethuns::vlan;
 
 
-#[derive(Debug, Copy, Clone)]
+#[derive(Debug, Copy, Clone, PartialEq, PartialOrd)]
 enum PcapMode {
     Read,
     Count,
     Capture,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, PartialOrd)]
 struct Configuration {
     mode: PcapMode,
     target_name: String,
@@ -28,11 +26,9 @@ struct Configuration {
 
 fn main() {
     let conf = parse_args();
-
+    
     match &conf.mode {
-        PcapMode::Read | PcapMode::Count => {
-            todo!()
-        }
+        PcapMode::Read | PcapMode::Count => run_read_count_mode(conf),
         PcapMode::Capture => run_capture_mode(conf),
     }
 }
@@ -46,7 +42,7 @@ fn parse_args() -> Configuration {
             args[0]
         );
     }
-
+    
     let mode = match args[1].as_str() {
         "read" => PcapMode::Read,
         "count" => PcapMode::Count,
@@ -56,11 +52,71 @@ fn parse_args() -> Configuration {
             args[0]
         ),
     };
-
+    
     Configuration {
         mode,
         target_name: mem::take(&mut args[2]),
     }
+}
+
+
+fn run_read_count_mode(conf: Configuration) {
+    let opt = NethunsSocketOptions {
+        numblocks: 1,
+        numpackets: 1024,
+        packetsize: 2048,
+        timeout_ms: 0,
+        dir: NethunsCaptureDir::InOut,
+        capture: NethunsCaptureMode::Default,
+        mode: NethunsSocketMode::RxTx,
+        promisc: false,
+        rxhash: false,
+        tx_qdisc_bypass: false,
+        ..Default::default()
+    };
+    
+    let mut socket: NethunsSocketPcap =
+        NethunsSocketPcap::open(opt, &conf.target_name, false)
+            .expect("unable to open `output` socket");
+    
+    let mut total: u64 = 0;
+    let mut errors: u64 = 0;
+    loop {
+        match socket.read() {
+            Ok(pkt) => {
+                total += 1;
+                
+                if conf.mode == PcapMode::Count {
+                    if total % 1_000_000 == 0 {
+                        eprintln!("packet: {}", total);
+                    }
+                } else {
+                    let pkthdr = pkt.pkthdr();
+                    eprintln!(
+                        "{}:{} caplen:{} len:{}: PACKET!",
+                        pkthdr.tstamp_sec(),
+                        pkthdr.tstamp_nsec(),
+                        pkthdr.snaplen(),
+                        pkthdr.len()
+                    )
+                }
+            }
+            Err(NethunsPcapReadError::Eof) => {
+                break;
+            }
+            Err(e) => {
+                errors += 1;
+                eprintln!("Error: {e}");
+                if errors % 1_000_000 == 0 {
+                    eprintln!("errors: {}", total);
+                }
+            }
+        }
+    }
+    
+    eprintln!("total packet: {total}");
+    eprintln!("total errors: {errors}");
+    eprintln!("total       : {}", total + errors);
 }
 
 
@@ -78,14 +134,14 @@ fn run_capture_mode(conf: Configuration) {
         tx_qdisc_bypass: false,
         ..Default::default()
     };
-
+    
     let mut out_socket = NethunsSocketPcap::open(
         opt.clone(),
         format!("{}.pcap", &conf.target_name).as_str(),
         true,
     )
     .expect("unable to open `output` socket");
-
+    
     let in_socket =
         nethuns_socket_open(opt).expect("unable to open `input` socket");
     let mut in_socket = in_socket
@@ -126,11 +182,11 @@ fn dump_packet(pkthdr: &dyn PkthdrTrait, packet: &[u8]) -> String {
         pkthdr.len(),
         pkthdr.offvlan_tci(),
         pkthdr.offvlan_tpid(),
-        nethuns_vlan_tci(packet),
-        nethuns_vlan_tpid(packet),
-        nethuns_vlan_tci_(pkthdr, packet),
-        nethuns_vlan_tpid_(pkthdr, packet),
-        nethuns_vlan_vid(nethuns_vlan_tci_(pkthdr, packet)),
+        vlan::nethuns_vlan_tci(packet),
+        vlan::nethuns_vlan_tpid(packet),
+        vlan::nethuns_vlan_tci_(pkthdr, packet),
+        vlan::nethuns_vlan_tpid_(pkthdr, packet),
+        vlan::nethuns_vlan_vid(vlan::nethuns_vlan_tci_(pkthdr, packet)),
         pkthdr.rxhash()
     ));
     for byte in packet.iter().take(14) {
