@@ -6,8 +6,6 @@ use std::rc::Rc;
 use std::sync::atomic;
 use std::{cmp, mem};
 
-use pcap_sys::pcap_file_header;
-
 use crate::misc::bind_packet_lifetime_to_slot;
 use crate::sockets::base::pcap::constants::{
     KUZNETZOV_TCPDUMP_MAGIC, NSEC_TCPDUMP_MAGIC, TCPDUMP_MAGIC,
@@ -25,7 +23,7 @@ use crate::types::NethunsSocketOptions;
 
 use super::{
     nethuns_pcap_patched_pkthdr, nethuns_pcap_pkthdr, NethunsSocketPcap,
-    NethunsSocketPcapTrait,
+    NethunsSocketPcapTrait, nethuns_pcap_timeval,
 };
 
 
@@ -211,7 +209,7 @@ impl NethunsSocketPcapTrait for NethunsSocketPcap {
         // header of the original packet
         let has_vlan_offload = pkthdr.offvlan_tpid();
         let header = nethuns_pcap_pkthdr {
-            ts: pcap_sys::timeval {
+            ts: nethuns_pcap_timeval {
                 tv_sec: pkthdr.tstamp_sec() as _,
                 tv_usec: pkthdr.tstamp_usec() as _,
             },
@@ -279,4 +277,25 @@ unsafe fn any_as_u8_slice_mut<'a, T: Sized>(p: &'a mut T) -> &mut [u8] {
         (p as *mut T) as *mut u8,
         ::core::mem::size_of::<T>(),
     )
+}
+
+
+/// Header of a libpcap dump file.
+/// 
+/// The first record in the file contains saved values for some of the flags used 
+/// in the printout phases of tcpdump. 
+/// Many fields here are 32 bit ints so compilers won't 
+/// insert unwanted padding; these files need to be interchangeable 
+/// across architectures.
+#[allow(non_camel_case_types)]
+#[repr(C)]
+#[derive(Debug, Default, Clone, Copy)]
+struct pcap_file_header {
+    magic: u32,
+    version_major: libc::c_ushort,
+    version_minor: libc::c_ushort,
+    thiszone: u32,
+    sigfigs: u32,
+    snaplen: u32,
+    linktype: u32,
 }
