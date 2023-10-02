@@ -63,7 +63,10 @@ fn main() {
         }
     }
     
-    println!("head: {}\n", socket.base().rx_ring().as_ref().unwrap().head());
+    println!(
+        "head: {}\n",
+        socket.base().rx_ring().as_ref().unwrap().head()
+    );
     tx.send(()).expect("unable to send signal in mpsc channel");
     consumer_th.join().expect("unable to join consumer thread");
 }

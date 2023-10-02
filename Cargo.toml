@@ -12,7 +12,7 @@ c_netmap_wrapper = { version = "0.1.0", path = "./lib/netmap", optional = true }
 cfg-if = "1.0.0"
 derivative = "2.2.0"
 derive_builder = "0.12.0"
-errno = "0.3.3"
+errno = "0.3.4"
 etherparse = "0.13.0"
 getset = "0.1.2"
 is_trait = "0.1.4"
@@ -20,7 +20,7 @@ libc = "0.2.148"
 once_cell = "1.18.0"
 ouroboros = "0.18.0"
 pcap-parser = "0.14.1"
-rustix = "0.38.14"
+rustix = "0.38.15"
 small_ctor = "0.1.1"
 thiserror = "1.0.49"
 
@@ -44,10 +44,18 @@ default = [
     "netmap",            # FIXME remove from default features
     "libc/extra_traits",
     "rustix/net",
-    "NETHUNS_USE_BUILTIN_PCAP_READER"
 ]
 netmap = ["dep:c_netmap_wrapper"]
 libpcap = []
 xdp = []
 tpacket_v3 = []
 NETHUNS_USE_BUILTIN_PCAP_READER = []
+
+
+[[example]]
+name = "file-pcap"
+required-features = ["NETHUNS_USE_BUILTIN_PCAP_READER"]
+
+[[example]]
+name = "file-pcap-mt"
+required-features = ["NETHUNS_USE_BUILTIN_PCAP_READER"]
