@@ -209,7 +209,7 @@ pub trait NethunsSocket: Debug {
 /// Trait which defines the public API for Pkthdr,
 /// which contains the packet header metadata.
 #[allow(clippy::len_without_is_empty)]
-pub trait PkthdrTrait: Debug {
+pub trait PkthdrTrait: Debug + Send + Sync {
     fn tstamp_sec(&self) -> u32;
     fn tstamp_usec(&self) -> u32;
     fn tstamp_nsec(&self) -> u32;

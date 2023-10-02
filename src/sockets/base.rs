@@ -1,9 +1,8 @@
 pub mod pcap;
 
-use std::cell::RefCell;
 use std::ffi::CString;
-use std::rc::Rc;
-use std::sync::atomic;
+use std::fmt::{self, Debug, Display};
+use std::sync::{atomic, Arc, RwLock};
 
 use derivative::Derivative;
 use getset::{CopyGetters, Getters, Setters};
@@ -76,13 +75,31 @@ pub struct RecvPacket {
     packet: RecvPacketData,
 }
 
+impl Display for RecvPacket {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(
+            f,
+            "{{\n    id: {},\n    pkthdr: {:?},\n    packet: {}\n}}",
+            self.id, self.pkthdr, self.packet
+        )
+    }
+}
+
 
 #[self_referencing(pub_extras)]
 #[derive(Debug)]
 pub struct RecvPacketData {
-    slot: Rc<RefCell<NethunsRingSlot>>,
+    slot: Arc<RwLock<NethunsRingSlot>>,
     #[borrows(slot)]
     pub packet: &'this [u8],
+}
+
+impl Display for RecvPacketData {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        self.with(|safe_self| {
+            write!(f, "{:?}", &safe_self.packet)
+        })
+    }
 }
 
 impl Drop for RecvPacket {
@@ -91,7 +108,8 @@ impl Drop for RecvPacket {
         // Unset the `inuse` flag of the related ring slot
         self.packet
             .borrow_slot()
-            .borrow_mut()
+            .write()
+            .unwrap()
             .inuse
             .store(0, atomic::Ordering::Release);
     }

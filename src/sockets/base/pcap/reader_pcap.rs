@@ -1,8 +1,6 @@
-use std::cell::RefCell;
+use std::cmp;
 use std::fs::File;
-use std::rc::Rc;
-use std::sync::atomic;
-use std::{cmp, mem};
+use std::sync::{atomic, Arc, RwLock};
 
 use pcap_parser::traits::PcapReaderIterator;
 use pcap_parser::{LegacyPcapReader, PcapBlockOwned, PcapError};
@@ -81,56 +79,72 @@ impl NethunsSocketPcapTrait for NethunsSocketPcap {
             .expect("[read] rx_ring should have been set during `open`");
         
         let caplen = self.base.opt.packetsize;
-        let rc_slot = rx_ring.get_slot(rx_ring.rings.head());
-        if rc_slot.borrow().inuse.load(atomic::Ordering::Acquire) != 0 {
+        let arc_slot = rx_ring.get_slot(rx_ring.rings.head());
+        if arc_slot
+            .read()
+            .unwrap()
+            .inuse
+            .load(atomic::Ordering::Acquire)
+            != 0
+        {
             return Err(NethunsPcapReadError::InUse);
         }
         
         let bytes: u32;
-        let mut slot = rc_slot.borrow_mut();
-        
-        loop {
-            match self.reader.next() {
-                Ok((offset, block)) => match block {
-                    PcapBlockOwned::Legacy(packet) => {
-                        bytes = cmp::min(caplen, packet.caplen);
-                        
-                        slot.pkthdr.tstamp_set_sec(packet.ts_sec);
-                        
-                        if self.magic == NSEC_TCPDUMP_MAGIC {
-                            slot.pkthdr.tstamp_set_nsec(packet.ts_usec)
-                        } else {
-                            slot.pkthdr.tstamp_set_usec(packet.ts_usec)
+        match arc_slot.write() {
+            Ok(mut slot) => {
+                loop {
+                    match self.reader.next() {
+                        Ok((offset, block)) => match block {
+                            PcapBlockOwned::Legacy(packet) => {
+                                bytes = cmp::min(caplen, packet.caplen);
+                                
+                                slot.pkthdr.tstamp_set_sec(packet.ts_sec);
+                                
+                                if self.magic == NSEC_TCPDUMP_MAGIC {
+                                    slot.pkthdr.tstamp_set_nsec(packet.ts_usec)
+                                } else {
+                                    slot.pkthdr.tstamp_set_usec(packet.ts_usec)
+                                }
+                                
+                                slot.pkthdr.set_len(packet.origlen);
+                                slot.pkthdr.set_snaplen(bytes);
+                                
+                                slot.packet.copy_from_slice(
+                                    &packet.data[..bytes as _],
+                                );
+                                self.reader.consume(offset);
+                                break;
+                            }
+                            // We should have read a packet
+                            _ => unreachable!(),
+                        },
+                        Err(PcapError::Incomplete) => {
+                            self.reader.refill()?;
+                            continue;
                         }
-                        
-                        slot.pkthdr.set_len(packet.origlen);
-                        slot.pkthdr.set_snaplen(bytes);
-                        
-                        slot.packet.copy_from_slice(&packet.data[..bytes as _]);
-                        self.reader.consume(offset);
-                        break;
-                    }
-                    // We should have read a packet
-                    _ => unreachable!(),
-                },
-                Err(PcapError::Incomplete) => {
-                    self.reader.refill()?;
-                    continue;
+                        Err(e) => return Err(NethunsPcapReadError::from(e)),
+                    };
                 }
-                Err(e) => return Err(NethunsPcapReadError::from(e)),
-            };
+                
+                slot.inuse.store(1, atomic::Ordering::Release);
+            }
+            Err(e) => {
+                panic!("`RwLock::write` failed: {:?}", e);
+            }
         }
         
-        slot.inuse.store(1, atomic::Ordering::Release);
         rx_ring.rings.advance_head();
         
-        let pkthdr = Box::new(slot.pkthdr);
-        mem::drop(slot);
+        let pkthdr = Box::new(arc_slot.read().unwrap().pkthdr);
         
         let packet_data = RecvPacketDataBuilder {
-            slot: rc_slot,
-            packet_builder: |s: &Rc<RefCell<NethunsRingSlot>>| unsafe {
-                bind_packet_lifetime_to_slot(&s.borrow().packet[..bytes as _], s)
+            slot: arc_slot,
+            packet_builder: |s: &Arc<RwLock<NethunsRingSlot>>| unsafe {
+                bind_packet_lifetime_to_slot(
+                    &s.read().unwrap().packet[..bytes as _],
+                    s,
+                )
             },
         }
         .build();

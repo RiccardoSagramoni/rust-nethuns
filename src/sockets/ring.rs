@@ -1,7 +1,6 @@
-use std::cell::RefCell;
 use std::cmp;
-use std::rc::Rc;
 use std::sync::atomic::{AtomicU8, Ordering};
+use std::sync::{Arc, RwLock};
 
 use super::{NethunsSocket, Pkthdr};
 
@@ -13,7 +12,7 @@ use crate::misc::circular_buffer::CircularCloneBuffer;
 pub struct NethunsRing {
     pktsize: usize,
     
-    pub(crate) rings: CircularCloneBuffer<Rc<RefCell<NethunsRingSlot>>>,
+    pub(crate) rings: CircularCloneBuffer<Arc<RwLock<NethunsRingSlot>>>,
 }
 
 
@@ -24,7 +23,7 @@ impl NethunsRing {
     #[inline(always)]
     pub fn new(nslots: usize, pktsize: usize) -> NethunsRing {
         let builder = || {
-            Rc::new(RefCell::new(NethunsRingSlot::default_with_packet_size(
+            Arc::new(RwLock::new(NethunsRingSlot::default_with_packet_size(
                 pktsize,
             )))
         };
@@ -38,7 +37,7 @@ impl NethunsRing {
     
     /// Get a reference to a slot in the ring, given its index.
     #[inline(always)]
-    pub fn get_slot(&self, index: usize) -> Rc<RefCell<NethunsRingSlot>> {
+    pub fn get_slot(&self, index: usize) -> Arc<RwLock<NethunsRingSlot>> {
         self.rings.get(index)
     }
     
@@ -47,13 +46,13 @@ impl NethunsRing {
     #[inline(always)]
     pub fn get_idx_slot(
         &self,
-        rc_slot: &Rc<RefCell<NethunsRingSlot>>,
+        arc_slot: &Arc<RwLock<NethunsRingSlot>>,
     ) -> Option<usize> {
         // FIXME: this is inefficient. Can we improve it?
         self.rings
             .iter()
             .take(self.rings.size())
-            .position(|slot: _| Rc::ptr_eq(slot, rc_slot))
+            .position(|slot: _| Arc::ptr_eq(slot, arc_slot))
     }
     
     
@@ -67,6 +66,30 @@ impl NethunsRing {
     #[inline(always)]
     pub fn pktsize(&self) -> usize {
         self.pktsize
+    }
+    
+    /// Check if the buffer is empty
+    #[inline(always)]
+    pub fn is_empty(&self) -> bool {
+        self.rings.is_empty()
+    }
+    
+    /// Check if the buffer is full
+    #[inline(always)]
+    pub fn is_full(&self) -> bool {
+        self.rings.is_full()
+    }
+    
+    /// Get the current head index
+    #[inline(always)]
+    pub fn head(&self) -> usize {
+        self.rings.head()
+    }
+    
+    /// Get the current tail index
+    #[inline(always)]
+    pub fn tail(&self) -> usize {
+        self.rings.tail()
     }
     
     
@@ -84,7 +107,7 @@ impl NethunsRing {
             .skip(pos)
             .take(cmp::min(self.size() - 1, 32))
         {
-            if slot.borrow().inuse.load(Ordering::Acquire) == 0 {
+            if slot.read().unwrap().inuse.load(Ordering::Acquire) == 0 {
                 total += 1;
             } else {
                 break;
@@ -97,7 +120,7 @@ impl NethunsRing {
     
     /// Get a reference to the head slot in the ring
     /// and shift the head to the following slot.
-    pub fn next_slot(&mut self) -> Rc<RefCell<NethunsRingSlot>> {
+    pub fn next_slot(&mut self) -> Arc<RwLock<NethunsRingSlot>> {
         self.rings.pop_unchecked()
     }
     
@@ -114,8 +137,8 @@ impl NethunsRing {
     /// * `false` - If the slot is already in use.
     #[inline(always)]
     pub fn nethuns_send_slot(&self, id: usize, len: usize) -> bool {
-        let rc_slot = self.get_slot(id as _);
-        let mut slot = rc_slot.borrow_mut();
+        let arc_slot = self.get_slot(id as _);
+        let mut slot = arc_slot.write().unwrap();
         if slot.inuse.load(Ordering::Acquire) != 0 {
             return false;
         }
@@ -160,8 +183,8 @@ impl NethunsRingSlot {
 macro_rules! nethuns_ring_free_slots {
     ($socket: expr, $ring: expr, $free_macro: ident) => {
         loop {
-            let rc_slot = $ring.get_slot($ring.rings.tail());
-            let slot = rc_slot.borrow();
+            let arc_slot = $ring.get_slot($ring.rings.tail());
+            let slot = arc_slot.read().unwrap();
             
             if $ring.rings.is_empty()
                 || slot.inuse.load(atomic::Ordering::Acquire) != 0

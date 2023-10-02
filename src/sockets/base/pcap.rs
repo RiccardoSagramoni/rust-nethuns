@@ -65,6 +65,7 @@ pub trait NethunsSocketPcapTrait {
     /// * `Err(NethunsPcapReadError::InUse)` - if the ring buffer of the nethuns base socket is full.
     /// * `Err(NethunsPcapOpenError::PcapError)` - if an error occurs while parsing the pcap file (STANDARD_PCAP_READER only).
     /// * `Err(NethunsPcapOpenError::FileError)` - if an error occurs while accessing the file (BUILTIN_PCAP_READER only).
+    /// * `Err(NethunsPcapOpenError::Eof)` - if the end of the file is reached.
     fn read(&mut self) -> Result<RecvPacket, NethunsPcapReadError>;
     
     

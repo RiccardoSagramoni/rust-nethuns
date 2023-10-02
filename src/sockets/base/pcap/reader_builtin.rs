@@ -1,9 +1,7 @@
-use std::cell::RefCell;
 use std::fs::{File, OpenOptions};
 use std::io::prelude::*;
 use std::io::SeekFrom;
-use std::rc::Rc;
-use std::sync::atomic;
+use std::sync::{atomic, Arc, RwLock};
 use std::{cmp, mem};
 
 use crate::misc::bind_packet_lifetime_to_slot;
@@ -127,8 +125,14 @@ impl NethunsSocketPcapTrait for NethunsSocketPcap {
             );
         
         let caplen = self.base.opt.packetsize;
-        let rc_slot = rx_ring.get_slot(rx_ring.rings.head());
-        if rc_slot.borrow().inuse.load(atomic::Ordering::Acquire) != 0 {
+        let arc_slot = rx_ring.get_slot(rx_ring.rings.head());
+        if arc_slot
+            .read()
+            .unwrap()
+            .inuse
+            .load(atomic::Ordering::Acquire)
+            != 0
+        {
             return Err(NethunsPcapReadError::InUse);
         }
         
@@ -142,40 +146,46 @@ impl NethunsSocketPcapTrait for NethunsSocketPcap {
         
         self.reader.read_exact(header_slice)?;
         
-        let mut slot = rc_slot.borrow_mut();
         let bytes = cmp::min(caplen, header.hdr.caplen);
         
-        self.reader.read_exact(&mut slot.packet[..bytes as _])?;
-        
-        // Store the information related to the new packet
-        // in a free ring slot of the base nethuns socket
-        slot.pkthdr.tstamp_set_sec(header.hdr.ts.tv_sec as _);
-        
-        if self.magic == NSEC_TCPDUMP_MAGIC {
-            slot.pkthdr.tstamp_set_nsec(header.hdr.ts.tv_usec as _);
-        } else {
-            slot.pkthdr.tstamp_set_usec(header.hdr.ts.tv_usec as _);
+        match arc_slot.write() {
+            Ok(mut slot) => {
+                self.reader.read_exact(&mut slot.packet[..bytes as _])?;
+                
+                // Store the information related to the new packet
+                // in a free ring slot of the base nethuns socket
+                slot.pkthdr.tstamp_set_sec(header.hdr.ts.tv_sec as _);
+                
+                if self.magic == NSEC_TCPDUMP_MAGIC {
+                    slot.pkthdr.tstamp_set_nsec(header.hdr.ts.tv_usec as _);
+                } else {
+                    slot.pkthdr.tstamp_set_usec(header.hdr.ts.tv_usec as _);
+                }
+                
+                slot.pkthdr.set_len(header.hdr.len);
+                slot.pkthdr.set_snaplen(bytes);
+                
+                if header.hdr.caplen > caplen {
+                    let skip = header.hdr.caplen as i64 - caplen as i64;
+                    self.reader.seek(SeekFrom::Current(skip))?;
+                }
+                
+                slot.inuse.store(1, atomic::Ordering::Release);
+                rx_ring.rings.advance_head();
+            }
+            Err(e) => {
+                panic!("`RwLock::write` failed: {:?}", e);
+            }
         }
         
-        slot.pkthdr.set_len(header.hdr.len);
-        slot.pkthdr.set_snaplen(bytes);
         
-        if header.hdr.caplen > caplen {
-            let skip = header.hdr.caplen as i64 - caplen as i64;
-            self.reader.seek(SeekFrom::Current(skip))?;
-        }
-        
-        slot.inuse.store(1, atomic::Ordering::Release);
-        rx_ring.rings.advance_head();
-        
-        let pkthdr = Box::new(slot.pkthdr);
-        drop(slot);
+        let pkthdr = Box::new(arc_slot.read().unwrap().pkthdr);
         
         let packet_data = RecvPacketDataBuilder {
-            slot: rc_slot,
-            packet_builder: |s: &Rc<RefCell<NethunsRingSlot>>| unsafe {
+            slot: arc_slot,
+            packet_builder: |s: &Arc<RwLock<NethunsRingSlot>>| unsafe {
                 bind_packet_lifetime_to_slot(
-                    &s.borrow().packet[..bytes as _],
+                    &s.read().unwrap().packet[..bytes as _],
                     s,
                 )
             },
