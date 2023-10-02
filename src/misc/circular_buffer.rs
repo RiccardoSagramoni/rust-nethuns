@@ -1,5 +1,4 @@
 use std::iter::Cycle;
-use std::mem;
 use std::num::Wrapping;
 use std::slice::Iter;
 
@@ -45,7 +44,7 @@ impl<T: Clone> CircularCloneBuffer<T> {
         assert!(size > 0);
         
         let num_items = size;
-        let size = nethuns_lpow2(size);
+        let size = size.next_power_of_two();
         
         let mut buffer = Vec::with_capacity(size);
         for _ in 0..size {
@@ -166,17 +165,6 @@ impl<T: Clone> CircularCloneBuffer<T> {
 }
 
 
-/// Compute the closest power of 2 larger or equal than `x`
-#[inline(always)]
-fn nethuns_lpow2(x: usize) -> usize {
-    if x != 0 && (x & (x - 1)) == 0 {
-        x
-    } else {
-        1 << (mem::size_of::<usize>() * 8 - x.leading_zeros() as usize)
-    }
-}
-
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -190,7 +178,7 @@ mod tests {
         assert!(!b.is_full());
         assert_eq!(b.head(), 0);
         assert_eq!(b.tail(), 0);
-        assert_eq!(b.size(), nethuns_lpow2(num_items));
+        assert_eq!(b.size(), num_items.next_power_of_two());
         
         // Push item
         let value = 12;
@@ -217,7 +205,7 @@ mod tests {
         assert_eq!(b.head(), 0);
         assert_eq!(b.tail(), 0);
         assert!(b.size() >= num_items);
-        assert_eq!(b.size(), nethuns_lpow2(num_items));
+        assert_eq!(b.size(), num_items.next_power_of_two());
         
         // Push item
         let value = 12;
@@ -238,17 +226,5 @@ mod tests {
         assert!(b.is_full());
         
         assert!(!b.push(100)); // buffer is full!
-    }
-    
-    
-    #[test]
-    fn lpow2() {
-        assert_eq!(nethuns_lpow2(0), 1);
-        assert_eq!(nethuns_lpow2(1), 1);
-        assert_eq!(nethuns_lpow2(2), 2);
-        assert_eq!(nethuns_lpow2(5), 8);
-        assert_eq!(nethuns_lpow2(12), 16);
-        assert_eq!(nethuns_lpow2(16), 16);
-        assert_eq!(nethuns_lpow2(30), 32);
     }
 }
