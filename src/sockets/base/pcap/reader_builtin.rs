@@ -22,8 +22,8 @@ use crate::sockets::PkthdrTrait;
 use crate::types::NethunsSocketOptions;
 
 use super::{
-    nethuns_pcap_patched_pkthdr, nethuns_pcap_pkthdr, NethunsSocketPcap,
-    NethunsSocketPcapTrait, nethuns_pcap_timeval,
+    nethuns_pcap_patched_pkthdr, nethuns_pcap_pkthdr, nethuns_pcap_timeval,
+    NethunsSocketPcap, NethunsSocketPcapTrait,
 };
 
 
@@ -135,9 +135,9 @@ impl NethunsSocketPcapTrait for NethunsSocketPcap {
         // Read a new packet (header + payload) from the file
         let mut header = nethuns_pcap_patched_pkthdr::default();
         let header_slice = if self.magic == KUZNETZOV_TCPDUMP_MAGIC {
-            unsafe { any_as_u8_slice_mut(&mut header.hdr) }
-        } else {
             unsafe { any_as_u8_slice_mut(&mut header) }
+        } else {
+            unsafe { any_as_u8_slice_mut(&mut header.hdr) }
         };
         
         self.reader.read_exact(header_slice)?;
@@ -145,7 +145,7 @@ impl NethunsSocketPcapTrait for NethunsSocketPcap {
         let mut slot = rc_slot.borrow_mut();
         let bytes = cmp::min(caplen, header.hdr.caplen);
         
-        self.reader.read_exact(&mut slot.packet)?;
+        self.reader.read_exact(&mut slot.packet[..bytes as _])?;
         
         // Store the information related to the new packet
         // in a free ring slot of the base nethuns socket
@@ -174,7 +174,10 @@ impl NethunsSocketPcapTrait for NethunsSocketPcap {
         let packet_data = RecvPacketDataBuilder {
             slot: rc_slot,
             packet_builder: |s: &Rc<RefCell<NethunsRingSlot>>| unsafe {
-                bind_packet_lifetime_to_slot(&s.borrow().packet[..bytes as _], s)
+                bind_packet_lifetime_to_slot(
+                    &s.borrow().packet[..bytes as _],
+                    s,
+                )
             },
         }
         .build();
@@ -281,11 +284,11 @@ unsafe fn any_as_u8_slice_mut<'a, T: Sized>(p: &'a mut T) -> &mut [u8] {
 
 
 /// Header of a libpcap dump file.
-/// 
-/// The first record in the file contains saved values for some of the flags used 
-/// in the printout phases of tcpdump. 
-/// Many fields here are 32 bit ints so compilers won't 
-/// insert unwanted padding; these files need to be interchangeable 
+///
+/// The first record in the file contains saved values for some of the flags used
+/// in the printout phases of tcpdump.
+/// Many fields here are 32 bit ints so compilers won't
+/// insert unwanted padding; these files need to be interchangeable
 /// across architectures.
 #[allow(non_camel_case_types)]
 #[repr(C)]

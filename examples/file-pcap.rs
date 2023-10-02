@@ -88,11 +88,11 @@ fn run_read_count_mode(conf: Configuration) {
                 
                 if conf.mode == PcapMode::Count {
                     if total % 1_000_000 == 0 {
-                        eprintln!("packet: {}", total);
+                        println!("packet: {}", total);
                     }
                 } else {
                     let pkthdr = pkt.pkthdr();
-                    eprintln!(
+                    println!(
                         "{}:{} caplen:{} len:{}: PACKET!",
                         pkthdr.tstamp_sec(),
                         pkthdr.tstamp_nsec(),
@@ -114,9 +114,9 @@ fn run_read_count_mode(conf: Configuration) {
         }
     }
     
-    eprintln!("total packet: {total}");
-    eprintln!("total errors: {errors}");
-    eprintln!("total       : {}", total + errors);
+    println!("total packet: {total}");
+    println!("total errors: {errors}");
+    println!("total       : {}", total + errors);
 }
 
 
