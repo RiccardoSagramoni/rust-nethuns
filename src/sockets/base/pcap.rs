@@ -1,5 +1,7 @@
 mod constants;
 
+use core::fmt::Debug;
+
 use cfg_if::cfg_if;
 use derivative::Derivative;
 use getset::{CopyGetters, Getters};
@@ -35,7 +37,7 @@ pub struct NethunsSocketPcap {
 /// Depending on the `NETHUNS_USE_BUILTIN_PCAP_READER` feature,
 /// the implementation of this trait will use the standard pcap reader
 /// (STANDARD_PCAP_READER) or a custom built-in pcap reader (BUILTIN_PCAP_READER).
-pub trait NethunsSocketPcapTrait {
+pub trait NethunsSocketPcapTrait: Debug + Send {
     /// Open the socket for reading captured packets from a file.
     ///
     /// # Arguments

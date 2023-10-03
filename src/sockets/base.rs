@@ -16,7 +16,7 @@ use super::PkthdrTrait;
 
 /// Closure type for the filtering of received packets.
 /// Returns true if the packet should be received, false if it should be discarded.
-type NethunsFilter = dyn Fn(&dyn PkthdrTrait, &[u8]) -> bool;
+type NethunsFilter = dyn Fn(&dyn PkthdrTrait, &[u8]) -> bool + Send;
 
 
 /// Base structure for a `NethunsSocket`.

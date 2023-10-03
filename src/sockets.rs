@@ -105,7 +105,7 @@ pub trait BindableNethunsSocket: Debug {
 
 /// Trait which defines the interface for a Nethuns socket after binding.
 /// This socket is usable for RX and/or TX, depending from its configuration.
-pub trait NethunsSocket: Debug {
+pub trait NethunsSocket: Debug + Send {
     /// Get the next unprocessed received packet.
     ///
     /// # Returns
