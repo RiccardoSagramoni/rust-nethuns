@@ -24,7 +24,7 @@ fn main() {
     
     let opt = NethunsSocketOptions {
         numblocks: 4,
-        numpackets: 65536,
+        numpackets: 2048,
         packetsize: 2048,
         timeout_ms: 20,
         dir: NethunsCaptureDir::InOut,
