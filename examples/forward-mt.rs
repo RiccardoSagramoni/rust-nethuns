@@ -1,13 +1,13 @@
 use std::ops::DerefMut;
 use std::sync::mpsc::TryRecvError;
-use std::sync::{mpsc, Arc, Mutex};
+use std::sync::{Arc, Mutex};
 use std::time::{Duration, SystemTime};
-use std::{env, mem, thread};
+use std::{mem, thread};
 
 use bus::{Bus, BusReader};
-use nethuns::sockets::base::pcap::{NethunsSocketPcap, NethunsSocketPcapTrait};
+
 use nethuns::sockets::base::RecvPacket;
-use nethuns::sockets::errors::NethunsPcapReadError;
+
 use nethuns::sockets::nethuns_socket_open;
 use nethuns::types::{
     NethunsCaptureDir, NethunsCaptureMode, NethunsQueue, NethunsSocketMode,
@@ -63,7 +63,6 @@ fn main() {
         let opt = opt.clone();
         let dev = conf.dev_out.clone();
         let rx = bus.add_rx();
-        let total_fwd = total_fwd.clone();
         thread::spawn(move || {
             consumer_body(opt, &dev, consumer, rx, total_fwd);
         })
@@ -87,7 +86,7 @@ fn main() {
         }
         
         if let Ok(pkt) = socket.recv() {
-            *(total_rcv.lock().expect("lock failed")) += 1;
+            *total_rcv.lock().expect("lock failed") += 1;
             // Push packet in queue
             while !producer.is_abandoned() {
                 if !producer.is_full() {
@@ -188,7 +187,7 @@ fn consumer_body(
                     }
                 }
             }
-            *total_fwd.lock().unwrap().deref_mut() += 1;
+            *total_fwd.lock().unwrap() += 1;
         }
     }
 }

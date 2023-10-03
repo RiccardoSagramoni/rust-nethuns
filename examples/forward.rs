@@ -20,7 +20,7 @@ struct Configuration {
 
 
 fn main() {
-    let conf = parse_args();
+    let conf = get_configuration();
     
     let opt = NethunsSocketOptions {
         numblocks: 4,
@@ -89,7 +89,7 @@ fn main() {
 }
 
 
-fn parse_args() -> Configuration {
+fn get_configuration() -> Configuration {
     let mut args: Vec<String> = std::env::args().collect();
     if args.len() < 3 {
         panic!("Usage: {} <device_in> <device_out>", args[0]);
