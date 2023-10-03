@@ -1,0 +1,355 @@
+use std::net::{Ipv4Addr, Ipv6Addr};
+use std::ops::Deref;
+use std::sync::mpsc::TryRecvError;
+use std::sync::{Arc, Mutex};
+use std::thread;
+
+use bus::{Bus, BusReader};
+use etherparse::{IpHeader, PacketHeaders};
+use nethuns::sockets::{nethuns_socket_open, NethunsSocket};
+use nethuns::types::{
+    NethunsCaptureDir, NethunsCaptureMode, NethunsQueue, NethunsSocketMode,
+    NethunsSocketOptions,
+};
+
+const HELP_BRIEF: &str = "\
+Usage:  meter [ options ]
+Use --help (or -h) to see full option list and a complete description
+
+Required options:
+            [ -i <ifname> ]     set network interface
+Other options:
+            [ -n <nsock> ]      set number of sockets
+            [ -m ]              enable multithreading
+            [ -s <sockid> ]     enable per socket stats
+            [ -d ]              enable extra debug printing
+";
+
+const HELP_LONG: &str = "\
+Usage:  send [ options ]
+
+-h, --help                      Show program usage and exit
+
+Required options:
+
+-i, --interface     <ifname>    Name of the network interface that send operates on.
+
+Other options:
+
+-n, --sockets       <nsock>     Number of sockets to use. By default, only one socket is used.
+
+-m, --multithreading            Enable multithreading. By default, only one thread is used.
+                                If multithreading is enabled, and there is more than one socket in use,
+                                each socket is handled by a separated thread.
+
+-s, --sockstats     <sockid>    Enable printing of complete statistics for the <sockid> socket in range [0, nsock).
+
+-d, --debug                     Enable printing of extra info out to stdout for debug purposes
+                                (e.g., IP address fields of received packets).
+";
+
+
+#[derive(Debug, Default)]
+struct Configuration {
+    interface: String,
+    num_sockets: u32,
+    multithreading: bool,
+    sockstats: Option<u32>,
+    debug: bool,
+}
+
+
+fn main() {
+    let conf = match get_configuration() {
+        Ok(c) => c,
+        Err(e) => {
+            eprintln!("Error in parsing command line options: {e}.");
+            eprint!("{}", HELP_BRIEF);
+            return;
+        }
+    };
+    
+    let nethuns_opt = NethunsSocketOptions {
+        numblocks: 1,
+        numpackets: 4096,
+        packetsize: 2048,
+        timeout_ms: 0,
+        dir: NethunsCaptureDir::InOut,
+        capture: NethunsCaptureMode::ZeroCopy,
+        mode: NethunsSocketMode::RxTx,
+        promisc: true,
+        rxhash: false,
+        tx_qdisc_bypass: true,
+        ..Default::default()
+    };
+    
+    // Open sockets
+    let mut sockets: Vec<Mutex<Box<dyn NethunsSocket>>> =
+        Vec::with_capacity(conf.num_sockets as _);
+    for i in 0..sockets.capacity() {
+        sockets.push(Mutex::new(setup_rx_ring(
+            &conf,
+            nethuns_opt.clone(),
+            i as _,
+        )));
+    }
+    let sockets = Arc::new(sockets);
+    
+    
+    // Stats counter
+    let mut totals: Vec<Mutex<u64>> = Vec::with_capacity(conf.num_sockets as _);
+    for _ in 0..totals.capacity() {
+        totals.push(Mutex::new(0));
+    }
+    let totals = Arc::new(totals);
+    
+    // Define bus for SPMC communication between threads
+    let mut sigint_bus: Bus<()> = Bus::new(5);
+    
+    // Create a thread for computing statistics
+    let meter_thread = {
+        let totals = totals.clone();
+        let rx = sigint_bus.add_rx();
+        match conf.sockstats {
+            Some(sockid) => thread::spawn(move || {
+                todo!();
+            }),
+            None => thread::spawn(move || {
+                todo!();
+            }),
+        }
+    };
+    
+    
+    if !conf.multithreading {
+        // case single thread (main) with generic number of sockets
+        let sigint_rx = sigint_bus.add_rx();
+        set_sigint_handler(sigint_bus);
+        st_execution(&conf, sockets, totals, sigint_rx)
+            .expect("Single-threaded execution failed");
+    } else {
+        // case multithreading enabled (num_threads == num_sockets)
+        let mut threads: Vec<thread::JoinHandle<()>> = Vec::new();
+        let conf = Arc::new(conf);
+        
+        for th_idx in 0..conf.num_sockets {
+            let args = conf.clone();
+            let opt = nethuns_opt.clone();
+            let rx = sigint_bus.add_rx();
+            let totals = totals.clone();
+            threads.push(thread::spawn(move || {
+                todo!();
+                // mt_execution(args, opt, th_idx, rx, totals)
+            }));
+        }
+        
+        set_sigint_handler(sigint_bus);
+        
+        for t in threads {
+            if let Err(e) = t.join() {
+                eprintln!("Error joining thread: {:?}", e);
+            }
+        }
+    }
+    
+    if let Err(e) = meter_thread.join() {
+        eprintln!("Error joining stats thread: {:?}", e);
+    }
+}
+
+
+// Parses the command-line arguments and build an instance of the `Args`
+/// struct.
+///
+/// It uses the `pico_args` crate to handle argument parsing.
+///
+/// # Returns
+///
+/// - `Ok(Args)`: If the command-line arguments are successfully parsed, a
+///   Result with an Args instance containing the parsed options is returned.
+/// - `Err(anyhow::Error)`: If an error occurs during argument parsing or
+///   any related operations, a Result with a boxed error is returned.
+fn get_configuration() -> Result<Configuration, anyhow::Error> {
+    let mut args = pico_args::Arguments::from_env();
+    
+    // Help has a higher priority and should be handled separately.
+    if args.contains(["-h", "--help"]) {
+        print!("{}", HELP_LONG);
+        std::process::exit(0);
+    }
+    
+    let conf = Configuration {
+        interface: args.value_from_str(["-i", "--interface"])?,
+        num_sockets: args.value_from_str(["-n", "--sockets"]).unwrap_or(1),
+        multithreading: args.contains(["-m", "--multithreading"]),
+        sockstats: args.value_from_str(["-s", "--sockstats"]).ok(),
+        debug: args.contains(["-d", "--debug"]),
+    };
+    
+    // It's up to the caller what to do with the remaining arguments.
+    let remaining = args.finish();
+    if !remaining.is_empty() {
+        eprintln!("Warning: unused arguments left: {:?}.", remaining);
+    }
+    
+    println!(
+        "\
+Test {} started with parameters
+* interface: {}
+* sockets: {}
+* multithreading: {}
+* sockstats: {}
+* debug: {}
+",
+        std::env::args().next().unwrap(),
+        conf.interface,
+        conf.num_sockets,
+        if conf.multithreading { "ON" } else { "OFF" },
+        if let Some(sockid) = conf.sockstats {
+            format!("ON for socket {sockid}")
+        } else {
+            "OFF, aggregated stats only".to_owned()
+        },
+        if conf.debug { "ON" } else { "OFF" },
+    );
+    
+    Ok(conf)
+}
+
+
+fn setup_rx_ring(
+    conf: &Configuration,
+    opt: NethunsSocketOptions,
+    sockid: u32,
+) -> Box<dyn NethunsSocket> {
+    let socket = nethuns_socket_open(opt)
+        .expect("Failed to open nethuns socket")
+        .bind(
+            &conf.interface,
+            if conf.num_sockets > 1 {
+                NethunsQueue::Some(sockid)
+            } else {
+                NethunsQueue::Any
+            },
+        )
+        .expect("Failed to bind nethuns socket");
+    
+    if conf.debug {
+        println!(
+            "Thread: {}, bind on {}:{}",
+            sockid,
+            conf.interface,
+            if conf.num_sockets > 1 {
+                sockid as i64
+            } else {
+                -1
+            }
+        );
+    }
+    
+    socket
+}
+
+
+/// Set an handler for the SIGINT signal (Ctrl-C),
+/// which will notify the other threads
+/// to gracefully stop their execution.
+///
+/// # Arguments
+/// - `bus`: Bus for SPMC (single-producer/multiple-consumers) communication
+///   between threads.
+fn set_sigint_handler(mut bus: Bus<()>) {
+    ctrlc::set_handler(move || {
+        println!("Ctrl-C detected. Shutting down...");
+        bus.broadcast(());
+    })
+    .expect("Error setting Ctrl-C handler");
+}
+
+
+fn st_execution(
+    conf: &Configuration,
+    sockets: Arc<Vec<Mutex<Box<dyn NethunsSocket>>>>,
+    totals: Arc<Vec<Mutex<u64>>>,
+    mut sigint_rx: BusReader<()>,
+) -> anyhow::Result<()> {
+    let mut count_to_dump: u64 = 0;
+    
+    loop {
+        // Check if Ctrl-C was pressed
+        match sigint_rx.try_recv() {
+            Ok(_) | Err(TryRecvError::Disconnected) => break,
+            _ => {}
+        }
+        
+        for (id, (sock, tot)) in sockets.iter().zip(totals.iter()).enumerate() {
+            let mut sock = sock
+                .lock()
+                .map_err(|e| anyhow::anyhow!("Error locking mutex: {e}"))?;
+            let mut tot = tot
+                .lock()
+                .map_err(|e| anyhow::anyhow!("Error locking mutex: {e}"))?;
+            
+            recv_pkt(conf, id, sock.as_mut(), &mut tot, &mut count_to_dump)?;
+        }
+        
+        if conf.debug {
+            println!("Thread: MAIN, cound to dump: {}", count_to_dump);
+        }
+    }
+    
+    Ok(())
+}
+
+
+fn recv_pkt(
+    conf: &Configuration,
+    sockid: usize,
+    socket: &mut dyn NethunsSocket,
+    total: &mut u64,
+    count_to_dump: &mut u64,
+) -> anyhow::Result<()> {
+    let pkt = socket.recv()?;
+    
+    if conf.debug {
+        println!("Thread: {}, total: {}, pkt: {}", sockid, total, pkt.id());
+        println!(
+            "Packet IP addr: {}",
+            print_addrs(pkt.packet().borrow_packet())?
+        );
+    }
+    
+    *total += 1;
+    *count_to_dump += 1;
+    if *count_to_dump == 10_000_000 {
+        // do something periodically
+        *count_to_dump = 0;
+        socket.dump_rings();
+    }
+    
+    Ok(())
+}
+
+
+fn print_addrs(frame: &[u8]) -> anyhow::Result<String> {
+    // Parse the ethernet header
+    let packet_header = PacketHeaders::from_ethernet_slice(frame)?;
+    
+    // Get reference to IP header
+    let ip_header = &packet_header
+        .ip
+        .ok_or(anyhow::anyhow!("Error: IP header not found"))?;
+    
+    match ip_header {
+        IpHeader::Version4(hdr, _) => Ok(format!(
+            "IP: {} > {}",
+            Ipv4Addr::from(hdr.source),
+            Ipv4Addr::from(hdr.destination)
+        )),
+        IpHeader::Version6(hdr, _) => Ok(format!(
+            "IP: {} > {}",
+            Ipv6Addr::from(hdr.source),
+            Ipv6Addr::from(hdr.destination)
+        )),
+    }
+}
