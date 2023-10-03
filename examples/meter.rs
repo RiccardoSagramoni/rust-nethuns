@@ -3,6 +3,7 @@ use std::ops::Deref;
 use std::sync::mpsc::TryRecvError;
 use std::sync::{Arc, Mutex};
 use std::thread;
+use std::time::{Duration, SystemTime};
 
 use bus::{Bus, BusReader};
 use etherparse::{IpHeader, PacketHeaders};
@@ -109,14 +110,15 @@ fn main() {
     // Create a thread for computing statistics
     let meter_thread = {
         let totals = totals.clone();
-        let rx = sigint_bus.add_rx();
+        let sigint_rx = sigint_bus.add_rx();
         match conf.sockstats {
-            Some(sockid) => thread::spawn(move || {
-                todo!();
-            }),
-            None => thread::spawn(move || {
-                todo!();
-            }),
+            Some(sockid) => {
+                let sockets = sockets.clone();
+                thread::spawn(move || {
+                sock_meter(sockid, sockets, totals, sigint_rx);
+            })
+        },
+            None => thread::spawn(move || global_meter(totals, sigint_rx)),
         }
     };
     
@@ -264,6 +266,84 @@ fn set_sigint_handler(mut bus: Bus<()>) {
         bus.broadcast(());
     })
     .expect("Error setting Ctrl-C handler");
+}
+
+
+fn global_meter(totals: Arc<Vec<Mutex<u64>>>, mut sigint_rx: BusReader<()>) {
+    let mut now = SystemTime::now();
+    let mut old_total: u64 = 0;
+    
+    loop {
+        match sigint_rx.try_recv() {
+            Ok(_) | Err(TryRecvError::Disconnected) => break,
+            _ => (),
+        }
+        
+        // Sleep for 1 second
+        let next_sys_time = now
+            .checked_add(Duration::from_secs(1))
+            .expect("SystemTime::checked_add() failed");
+        if let Ok(delay) = next_sys_time.duration_since(now) {
+            thread::sleep(delay);
+        }
+        now = next_sys_time;
+        
+        // Print number of sent packets
+        let new_total = totals
+            .iter()
+            .map(|t| *t.lock().expect("Mutex::lock failed"))
+            .sum();
+        println!("pkt/sec: {}", new_total - old_total);
+        old_total = new_total;
+    }
+}
+
+
+fn sock_meter(
+    sockid: u32,
+    sockets: Arc<Vec<Mutex<Box<dyn NethunsSocket>>>>,
+    totals: Arc<Vec<Mutex<u64>>>,
+    mut rx: BusReader<()>,
+) {
+    let mut now = SystemTime::now();
+    let mut old_total: u64 = 0;
+    
+    loop {
+        match rx.try_recv() {
+            Ok(_) | Err(TryRecvError::Disconnected) => break,
+            _ => (),
+        }
+        
+        // Sleep for 1 second
+        let next_sys_time = now
+            .checked_add(Duration::from_secs(1))
+            .expect("SystemTime::checked_add() failed");
+        if let Ok(delay) = next_sys_time.duration_since(now) {
+            thread::sleep(delay);
+        }
+        now = next_sys_time;
+        
+        // Print number of sent packets + stats about the requestes socket
+        let new_total = totals
+            .iter()
+            .map(|t| *t.lock().expect("Mutex::lock failed"))
+            .sum();
+        print!("pkt/sec: {} ", new_total - old_total);
+        old_total = new_total;
+        
+        let stats = sockets.as_ref()[sockid as usize]
+            .lock()
+            .expect("lock failed")
+            .stats()
+            .expect("NethunsSocket::stats failed");
+        println!(
+            "{{ rx: {}, tx: {}, drop: {}, ifdrop: {}, rx_inv: {}, tx_inv: {}, freeze: {} }}",
+            stats.rx_packets(), stats.tx_packets(),
+            stats.rx_dropped(), stats.rx_if_dropped(),
+            stats.rx_invalid(), stats.tx_invalid(),
+            stats.freeze()
+        );
+    }
 }
 
 
