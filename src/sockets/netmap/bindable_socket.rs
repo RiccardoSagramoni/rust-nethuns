@@ -99,7 +99,7 @@ impl BindableNethunsSocket for BindableNethunsSocketNetmap {
         // Build the device name
         let nm_dev = match CString::new(match queue {
             NethunsQueue::Some(idx) => {
-                format!("{prefix}{dev}-{idx}{flags}")
+                format!("{prefix}{dev}:{idx}{flags}")
             }
             NethunsQueue::Any => {
                 format!("{prefix}{dev}{flags}")

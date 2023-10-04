@@ -66,3 +66,8 @@ impl Drop for NmPortDescriptor {
         unsafe { nmport_close(self.nmport_d.as_ptr()) };
     }
 }
+
+/// # Safety
+/// No one besides us has the raw pointer, so we can 
+/// safely transfer the ownership to another thread
+unsafe impl Send for NmPortDescriptor {}

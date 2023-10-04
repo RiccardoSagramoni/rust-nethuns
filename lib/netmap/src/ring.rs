@@ -54,42 +54,25 @@ impl NetmapRing {
     /// Given the current value of one index of the ring slots
     /// (`head`, `cur`, `tail`), move it ahead of one position
     /// in a circular manner.
-    /// 
+    ///
     /// # Arguments
     /// * `index` - the current value of one of the indexes (`head`, `cur`, `tail`)
-    /// 
+    ///
     /// # Safety
     /// When calling this method, you have to ensure that all of the following is true:
     /// * `index` is the current value of `head`, `cur` or `tail`
     pub unsafe fn nm_ring_next(&self, index: u32) -> u32 {
         nm_ring_next(self.netmap_ring.as_ptr(), index)
     }
-}
-
-impl Deref for NetmapRing {
-    type Target = netmap_ring;
     
-    fn deref(&self) -> &Self::Target {
-        // [SAFETY] Safety requirements met thanks to 
-        // the usage of `NonNull` to wrap the raw pointer.
-        unsafe { self.netmap_ring.as_ref() }
-    }
-}
-
-impl DerefMut for NetmapRing {
-    fn deref_mut(&mut self) -> &mut Self::Target {
-        // [SAFETY] Safety requirements met thanks to 
-        // the usage of `NonNull` to wrap the raw pointer.
-        unsafe { self.netmap_ring.as_mut() }
-    }
-}
-
-impl NetmapRing {
     /// Get a slot by its index.
     pub fn get_slot(&self, index: usize) -> Result<NetmapSlot, String> {
         // [SAFETY] Check for out-of-bounds
         if index >= self.num_slots as _ {
-            return Err(format!("[get_slot] index {index} out of bounds ({})", self.num_slots));
+            return Err(format!(
+                "[get_slot] index {index} out of bounds ({})",
+                self.num_slots
+            ));
         }
         
         let slot_array = std::ptr::addr_of!(self.slot) as *mut netmap_slot;
@@ -99,3 +82,26 @@ impl NetmapRing {
         ))
     }
 }
+
+impl Deref for NetmapRing {
+    type Target = netmap_ring;
+    
+    fn deref(&self) -> &Self::Target {
+        // [SAFETY] Safety requirements met thanks to
+        // the usage of `NonNull` to wrap the raw pointer.
+        unsafe { self.netmap_ring.as_ref() }
+    }
+}
+
+impl DerefMut for NetmapRing {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        // [SAFETY] Safety requirements met thanks to
+        // the usage of `NonNull` to wrap the raw pointer.
+        unsafe { self.netmap_ring.as_mut() }
+    }
+}
+
+/// # Safety
+/// No one besides us has the raw pointer, so we can
+/// safely transfer the ownership to another thread
+unsafe impl Send for NetmapRing {}
