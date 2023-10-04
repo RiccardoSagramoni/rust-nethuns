@@ -95,12 +95,18 @@ impl NethunsSocket for NethunsSocketNetmap {
             return Err(NethunsRecvError::InUse);
         }
         
+        // If no slots are available, try again after
+        // taking some available "extra buffers" as "free slots"
         if self.free_ring.is_empty() {
             nethuns_ring_free_slots!(self, rx_ring, nethuns_blocks_free);
             
             if self.free_ring.is_empty() {
                 return Err(NethunsRecvError::NoPacketsAvailable);
             }
+            
+            // Check some invariant during debugging
+            debug_assert_ne!(self.free_ring.get(self.free_ring.head()), 0);
+            debug_assert_ne!(self.free_ring.get(self.free_ring.tail() - 1), 0);
         }
         
         // Find the first non-empty netmap ring.
@@ -132,6 +138,7 @@ impl NethunsSocket for NethunsSocketNetmap {
                 slot.pkthdr.ts = netmap_ring.ts;
                 slot.pkthdr.caplen = cur_netmap_slot.len as _;
                 slot.pkthdr.len = cur_netmap_slot.len as _;
+                slot.pkthdr.buf_idx = idx;
             }
             Err(e) => {
                 panic!("`RwLock::write` failed: {:?}", e);

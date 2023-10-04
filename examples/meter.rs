@@ -79,7 +79,7 @@ fn main() {
         dir: NethunsCaptureDir::InOut,
         capture: NethunsCaptureMode::ZeroCopy,
         mode: NethunsSocketMode::RxTx,
-        promisc: false,
+        promisc: true,
         rxhash: false,
         tx_qdisc_bypass: true,
         ..Default::default()
