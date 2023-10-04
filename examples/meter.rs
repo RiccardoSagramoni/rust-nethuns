@@ -1,5 +1,4 @@
 use std::net::{Ipv4Addr, Ipv6Addr};
-use std::ops::Deref;
 use std::sync::mpsc::TryRecvError;
 use std::sync::{Arc, Mutex};
 use std::thread;
@@ -12,6 +11,7 @@ use nethuns::types::{
     NethunsCaptureDir, NethunsCaptureMode, NethunsQueue, NethunsSocketMode,
     NethunsSocketOptions,
 };
+
 
 const HELP_BRIEF: &str = "\
 Usage:  meter [ options ]
@@ -115,9 +115,9 @@ fn main() {
             Some(sockid) => {
                 let sockets = sockets.clone();
                 thread::spawn(move || {
-                sock_meter(sockid, sockets, totals, sigint_rx);
-            })
-        },
+                    sock_meter(sockid, sockets, totals, sigint_rx)
+                })
+            }
             None => thread::spawn(move || global_meter(totals, sigint_rx)),
         }
     };
@@ -127,21 +127,25 @@ fn main() {
         // case single thread (main) with generic number of sockets
         let sigint_rx = sigint_bus.add_rx();
         set_sigint_handler(sigint_bus);
-        st_execution(&conf, sockets, totals, sigint_rx)
-            .expect("Single-threaded execution failed");
+        if let Err(e) = st_execution(&conf, sockets, totals, sigint_rx) {
+            eprintln!("MAIN thread execution failed: {e}");
+        }
     } else {
         // case multithreading enabled (num_threads == num_sockets)
         let mut threads: Vec<thread::JoinHandle<()>> = Vec::new();
         let conf = Arc::new(conf);
         
         for th_idx in 0..conf.num_sockets {
-            let args = conf.clone();
-            let opt = nethuns_opt.clone();
+            let conf = conf.clone();
             let rx = sigint_bus.add_rx();
+            let sockets = sockets.clone();
             let totals = totals.clone();
             threads.push(thread::spawn(move || {
-                todo!();
-                // mt_execution(args, opt, th_idx, rx, totals)
+                let sock = &sockets[th_idx as usize];
+                let tot = &totals[th_idx as usize];
+                if let Err(e) = mt_execution(&conf, th_idx, sock, tot, rx) {
+                    eprintln!("Thread {th_idx} execution failed: {e}");
+                }
             }));
         }
         
@@ -372,10 +376,46 @@ fn st_execution(
             
             recv_pkt(conf, id, sock.as_mut(), &mut tot, &mut count_to_dump)?;
         }
-        
-        if conf.debug {
-            println!("Thread: MAIN, cound to dump: {}", count_to_dump);
+    }
+    
+    if conf.debug {
+        println!("Thread: MAIN, count to dump: {}", count_to_dump);
+    }
+    
+    Ok(())
+}
+
+
+fn mt_execution(
+    conf: &Configuration,
+    sockid: u32,
+    socket: &Mutex<Box<dyn NethunsSocket>>,
+    total: &Mutex<u64>,
+    mut sigint_rx: BusReader<()>,
+) -> anyhow::Result<()> {
+    let mut count_to_dump: u64 = 0;
+    
+    loop {
+        // Check if Ctrl-C was pressed
+        match sigint_rx.try_recv() {
+            Ok(_) | Err(TryRecvError::Disconnected) => break,
+            _ => {}
         }
+        
+        recv_pkt(
+            conf,
+            sockid as _,
+            socket
+                .lock()
+                .expect("Mutex::lock failed for `socket`")
+                .as_mut(),
+            &mut total.lock().expect("Mutex::lock failed for `total`"),
+            &mut count_to_dump,
+        )?;
+    }
+    
+    if conf.debug {
+        println!("Thread: {sockid}, count to dump: {count_to_dump}");
     }
     
     Ok(())
