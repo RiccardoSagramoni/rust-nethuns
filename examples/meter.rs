@@ -6,6 +6,7 @@ use std::time::{Duration, SystemTime};
 
 use bus::{Bus, BusReader};
 use etherparse::{IpHeader, PacketHeaders};
+use nethuns::sockets::errors::NethunsRecvError;
 use nethuns::sockets::{nethuns_socket_open, NethunsSocket};
 use nethuns::types::{
     NethunsCaptureDir, NethunsCaptureMode, NethunsQueue, NethunsSocketMode,
@@ -78,7 +79,7 @@ fn main() {
         dir: NethunsCaptureDir::InOut,
         capture: NethunsCaptureMode::ZeroCopy,
         mode: NethunsSocketMode::RxTx,
-        promisc: true,
+        promisc: false,
         rxhash: false,
         tx_qdisc_bypass: true,
         ..Default::default()
@@ -115,7 +116,12 @@ fn main() {
             Some(sockid) => {
                 let sockets = sockets.clone();
                 thread::spawn(move || {
-                    sock_meter(sockid, sockets, totals, sigint_rx)
+                    sock_meter(
+                        sockid,
+                        &sockets[sockid as usize],
+                        totals,
+                        sigint_rx,
+                    )
                 })
             }
             None => thread::spawn(move || global_meter(totals, sigint_rx)),
@@ -127,9 +133,8 @@ fn main() {
         // case single thread (main) with generic number of sockets
         let sigint_rx = sigint_bus.add_rx();
         set_sigint_handler(sigint_bus);
-        if let Err(e) = st_execution(&conf, sockets, totals, sigint_rx) {
-            eprintln!("MAIN thread execution failed: {e}");
-        }
+        st_execution(&conf, sockets, totals, sigint_rx)
+            .expect("MAIN thread execution failed: {e}");
     } else {
         // case multithreading enabled (num_threads == num_sockets)
         let mut threads: Vec<thread::JoinHandle<()>> = Vec::new();
@@ -141,11 +146,14 @@ fn main() {
             let sockets = sockets.clone();
             let totals = totals.clone();
             threads.push(thread::spawn(move || {
-                let sock = &sockets[th_idx as usize];
-                let tot = &totals[th_idx as usize];
-                if let Err(e) = mt_execution(&conf, th_idx, sock, tot, rx) {
-                    eprintln!("Thread {th_idx} execution failed: {e}");
-                }
+                mt_execution(
+                    &conf,
+                    th_idx,
+                    &sockets[th_idx as usize],
+                    &totals[th_idx as usize],
+                    rx,
+                )
+                .expect("Thread {th_idx} execution failed: {e}");
             }));
         }
         
@@ -303,14 +311,16 @@ fn global_meter(totals: Arc<Vec<Mutex<u64>>>, mut sigint_rx: BusReader<()>) {
 }
 
 
+/// Print aggregated stats and per-socket detailed stats
 fn sock_meter(
     sockid: u32,
-    sockets: Arc<Vec<Mutex<Box<dyn NethunsSocket>>>>,
+    socket: &Mutex<Box<dyn NethunsSocket>>,
     totals: Arc<Vec<Mutex<u64>>>,
     mut rx: BusReader<()>,
 ) {
     let mut now = SystemTime::now();
     let mut old_total: u64 = 0;
+    let mut old_total_sock: u64 = 0;
     
     loop {
         match rx.try_recv() {
@@ -330,23 +340,30 @@ fn sock_meter(
         // Print number of sent packets + stats about the requestes socket
         let new_total = totals
             .iter()
-            .map(|t| *t.lock().expect("Mutex::lock failed"))
+            .map(|t| *t.lock().expect("Mutex::lock failed for `totals`"))
             .sum();
         print!("pkt/sec: {} ", new_total - old_total);
         old_total = new_total;
         
-        let stats = sockets.as_ref()[sockid as usize]
+        let new_total_sock = *totals[sockid as usize]
             .lock()
-            .expect("lock failed")
+            .expect("Mutex::lock failed for `totals`");
+        
+        let stats = socket
+            .lock()
+            .expect("Mutex::lock failed for `socket`")
             .stats()
             .expect("NethunsSocket::stats failed");
         println!(
-            "{{ rx: {}, tx: {}, drop: {}, ifdrop: {}, rx_inv: {}, tx_inv: {}, freeze: {} }}",
+            "{{ pkt/sec: {}, rx: {}, tx: {}, drop: {}, ifdrop: {}, rx_inv: {}, tx_inv: {}, freeze: {} }}",
+            new_total_sock - old_total_sock,
             stats.rx_packets(), stats.tx_packets(),
             stats.rx_dropped(), stats.rx_if_dropped(),
             stats.rx_invalid(), stats.tx_invalid(),
             stats.freeze()
         );
+        
+        old_total_sock = new_total_sock;
     }
 }
 
@@ -374,7 +391,21 @@ fn st_execution(
                 .lock()
                 .map_err(|e| anyhow::anyhow!("Error locking mutex: {e}"))?;
             
-            recv_pkt(conf, id, sock.as_mut(), &mut tot, &mut count_to_dump)?;
+            match recv_pkt(
+                conf,
+                id,
+                sock.as_mut(),
+                &mut tot,
+                &mut count_to_dump,
+            ) {
+                Ok(_) => (),
+                Err(e) => match e.downcast_ref::<NethunsRecvError>() {
+                    Some(NethunsRecvError::InUse)
+                    | Some(NethunsRecvError::NoPacketsAvailable)
+                    | Some(NethunsRecvError::PacketFiltered) => (),
+                    _ => return Err(e),
+                },
+            }
         }
     }
     
@@ -402,7 +433,7 @@ fn mt_execution(
             _ => {}
         }
         
-        recv_pkt(
+        match recv_pkt(
             conf,
             sockid as _,
             socket
@@ -411,7 +442,15 @@ fn mt_execution(
                 .as_mut(),
             &mut total.lock().expect("Mutex::lock failed for `total`"),
             &mut count_to_dump,
-        )?;
+        ) {
+            Ok(_) => (),
+            Err(e) => match e.downcast_ref::<NethunsRecvError>() {
+                Some(NethunsRecvError::InUse)
+                | Some(NethunsRecvError::NoPacketsAvailable)
+                | Some(NethunsRecvError::PacketFiltered) => (),
+                _ => return Err(e),
+            },
+        }
     }
     
     if conf.debug {
