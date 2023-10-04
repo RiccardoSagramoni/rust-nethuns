@@ -96,10 +96,16 @@ impl BindableNethunsSocket for BindableNethunsSocketNetmap {
             "netmap:".to_owned()
         };
         
+        let connector = if dev.starts_with("vale") {
+            ":".to_owned()
+        } else {
+            "-".to_owned() // ?? are you sure?
+        };
+        
         // Build the device name
         let nm_dev = match CString::new(match queue {
             NethunsQueue::Some(idx) => {
-                format!("{prefix}{dev}:{idx}{flags}")
+                format!("{prefix}{dev}{connector}{idx}{flags}")
             }
             NethunsQueue::Any => {
                 format!("{prefix}{dev}{flags}")
@@ -217,7 +223,12 @@ impl BindableNethunsSocket for BindableNethunsSocketNetmap {
         // Case 1: TX
         if let Some(tx_ring) = &mut self.base.tx_ring {
             for i in 0..tx_ring.size() {
-                tx_ring.get_slot(i).write().unwrap().pkthdr.buf_idx = scan;
+                tx_ring
+                    .get_slot(i)
+                    .write()
+                    .expect("failed `write()` on `tx_ring` because of RwLock poisoning")
+                    .pkthdr
+                    .buf_idx = scan;
                 scan = unsafe {
                     let ptr = netmap_buf(&some_ring, scan as _) as *const u32;
                     debug_assert!(!ptr.is_null());
