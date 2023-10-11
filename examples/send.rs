@@ -82,7 +82,8 @@ fn main() {
         // case single thread (main) with generic number of sockets
         let rx = bus.add_rx();
         set_sigint_handler(bus);
-        st_execution(args, opt, &payload, rx, totals);
+        st_send(&args, opt, &payload, rx, totals)
+            .expect("MAIN thread execution failed: {e}");
     } else {
         // case multithreading enabled (num_threads == num_sockets)
         let mut threads: Vec<thread::JoinHandle<()>> = Vec::new();
@@ -94,7 +95,9 @@ fn main() {
             let rx = bus.add_rx();
             let totals = totals.clone();
             threads.push(thread::spawn(move || {
-                mt_execution(args, opt, th_idx, &payload, rx, totals)
+                mt_send(&args, opt, th_idx, &payload, rx, totals).expect(
+                    format!("Thread {th_idx} execution failed").as_str(),
+                );
             }));
         }
         
@@ -254,33 +257,6 @@ fn meter(totals: Arc<Mutex<Vec<u64>>>, mut rx: BusReader<()>) {
 }
 
 
-/// Main function of the example for single-threaded execution.
-///
-/// # Arguments
-/// - `args`: Parsed command-line arguments.
-/// - `opt`: Nethuns socket options.
-/// - `payload`: Payload for packets.
-/// - `rx`: BusReader for SPMC (single-producer/multiple-consumers)
-///   communication between threads.
-/// - `totals`: Vector for storing the number of packets sent from each socket.
-///
-/// Starts the packet transmission, handles errors and closes sockets after
-/// transmission.
-fn st_execution(
-    args: Args,
-    opt: NethunsSocketOptions,
-    payload: &[u8],
-    rx: BusReader<()>,
-    totals: Arc<Mutex<Vec<u64>>>,
-) {
-    // Starts transmission
-    if let Err(e) = st_send(&args, opt, payload, rx, totals) {
-        eprintln!("Error in transmission: {:?}", e);
-        std::process::exit(1);
-    }
-}
-
-
 /// Execute packets transmission for single-threaded example.
 ///
 /// # Arguments
@@ -339,30 +315,6 @@ fn st_send(
     Ok(())
 }
 
-/// Main function of the example for multi-threaded execution.
-///
-/// # Arguments
-/// - `args`: Parsed command-line arguments.
-/// - `opt`: Nethuns socket options.
-/// - `th_idx`: Thread index.
-/// - `payload`: Payload for packets.
-/// - `rx`: BusReader for SPMC (single-producer/multiple-consumers)
-///   communication between threads.
-/// - `totals`: Vector for storing the number of packets sent from each socket.
-fn mt_execution(
-    args: Arc<Args>,
-    opt: NethunsSocketOptions,
-    th_idx: u32,
-    payload: &[u8],
-    rx: BusReader<()>,
-    totals: Arc<Mutex<Vec<u64>>>,
-) {
-    // Start transmission
-    if let Err(e) = mt_send(&args, opt, th_idx, payload, rx, totals) {
-        eprintln!("Error in transmission: {:?}", e);
-        std::process::exit(1);
-    }
-}
 
 /// Execute packets transmission for multi-threaded example.
 ///

@@ -7,7 +7,10 @@ use nethuns::types::{
     NethunsCaptureDir, NethunsCaptureMode, NethunsQueue, NethunsSocketMode,
     NethunsSocketOptions,
 };
-use nethuns::vlan::{nethuns_vlan_tci_, nethuns_vlan_tpid_, nethuns_vlan_tci, nethuns_vlan_tpid, nethuns_vlan_vid};
+use nethuns::vlan::{
+    nethuns_vlan_tci, nethuns_vlan_tci_, nethuns_vlan_tpid, nethuns_vlan_tpid_,
+    nethuns_vlan_vid,
+};
 
 
 fn main() {
@@ -25,16 +28,20 @@ fn main() {
         ..Default::default()
     };
     let socket = nethuns_socket_open(opt).unwrap();
-    let mut socket = socket.bind(
-        &env::args().nth(1).expect("Usage: ./recv_test <device_name>"), 
-        NethunsQueue::Any
-    ).unwrap();
+    let mut socket = socket
+        .bind(
+            &env::args()
+                .nth(1)
+                .expect("Usage: ./recv_test <device_name>"),
+            NethunsQueue::Any,
+        )
+        .unwrap();
     
     for _ in 0..5000 {
         match socket.recv() {
             Ok(p) => {
                 dump_packet(&p);
-            },
+            }
             Err(e) => {
                 eprintln!("[ERROR]: {}", e);
             }
@@ -44,26 +51,29 @@ fn main() {
 
 
 fn dump_packet(pkt: &RecvPacket) {
+    let pkthdr = pkt.pkthdr();
+    let packet = pkt.packet().borrow_packet();
+    
     print!(
         concat!(
             "{}:{} snap:{} len:{} offload{{tci:{:X} tpid:{:X}}} ",
             "packet{{tci:{:X} pid:{:X}}} => [tci:{:X} tpid:{:X} vid:{:X}] rxhash:0x{:X} | "
         ),
-        pkt.pkthdr.tstamp_sec(), 
-        pkt.pkthdr.tstamp_nsec(), 
-        pkt.pkthdr.snaplen(), 
-        pkt.pkthdr.len(), 
-        pkt.pkthdr.offvlan_tci(), 
-        pkt.pkthdr.offvlan_tpid(),
-        nethuns_vlan_tci(pkt.packet.borrow_packet()),
-        nethuns_vlan_tpid(pkt.packet.borrow_packet()),
-        nethuns_vlan_tci_(pkt.pkthdr.as_ref(), pkt.packet.borrow_packet()),
-        nethuns_vlan_tpid_(pkt.pkthdr.as_ref(), pkt.packet.borrow_packet()),
-        nethuns_vlan_vid(nethuns_vlan_tci_(pkt.pkthdr.as_ref(), pkt.packet.borrow_packet())),
-        pkt.pkthdr.rxhash()
+        pkthdr.tstamp_sec(),
+        pkthdr.tstamp_nsec(),
+        pkthdr.snaplen(),
+        pkthdr.len(),
+        pkthdr.offvlan_tci(),
+        pkthdr.offvlan_tpid(),
+        nethuns_vlan_tci(packet),
+        nethuns_vlan_tpid(packet),
+        nethuns_vlan_tci_(pkthdr.as_ref(), packet),
+        nethuns_vlan_tpid_(pkthdr.as_ref(), packet),
+        nethuns_vlan_vid(nethuns_vlan_tci_(pkthdr.as_ref(), packet)),
+        pkthdr.rxhash()
     );
     
-    if let Ok(eth) = Ethernet2Header::from_slice(pkt.packet.borrow_packet()) {
+    if let Ok(eth) = Ethernet2Header::from_slice(packet) {
         println!("{:?}", eth.0);
     }
 }

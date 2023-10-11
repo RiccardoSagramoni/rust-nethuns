@@ -4,7 +4,6 @@ fn main() {
     assert_io_framework_mutual_exclusivity();
 }
 
-
 /// Check the feature flags for the underlying I/O frameworks.
 ///
 /// # Panics

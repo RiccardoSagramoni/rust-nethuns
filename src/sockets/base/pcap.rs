@@ -1,6 +1,10 @@
 mod constants;
 
+use core::fmt::Debug;
+
 use cfg_if::cfg_if;
+use derivative::Derivative;
+use getset::{CopyGetters, Getters};
 
 use crate::sockets::errors::{
     NethunsPcapOpenError, NethunsPcapReadError, NethunsPcapRewindError,
@@ -13,23 +17,18 @@ use super::{NethunsSocketBase, RecvPacket};
 
 
 /// Nethuns socket for packet capture (PCAP).
+#[derive(Derivative, Getters)]
+#[derivative(Debug)]
+#[getset(get = "pub")]
 pub struct NethunsSocketPcap {
     base: NethunsSocketBase,
+    
+    #[derivative(Debug = "ignore")]
+    #[getset(skip)]
     reader: PcapReaderType,
+    
     snaplen: u32,
     magic: u32,
-}
-
-impl NethunsSocketPcap {
-    pub fn base(&self) -> &NethunsSocketBase {
-        &self.base
-    }
-    pub fn snaplen(&self) -> u32 {
-        self.snaplen
-    }
-    pub fn magic(&self) -> u32 {
-        self.magic
-    }
 }
 
 
@@ -38,7 +37,7 @@ impl NethunsSocketPcap {
 /// Depending on the `NETHUNS_USE_BUILTIN_PCAP_READER` feature,
 /// the implementation of this trait will use the standard pcap reader
 /// (STANDARD_PCAP_READER) or a custom built-in pcap reader (BUILTIN_PCAP_READER).
-pub trait NethunsSocketPcapTrait {
+pub trait NethunsSocketPcapTrait: Debug + Send {
     /// Open the socket for reading captured packets from a file.
     ///
     /// # Arguments
@@ -68,6 +67,7 @@ pub trait NethunsSocketPcapTrait {
     /// * `Err(NethunsPcapReadError::InUse)` - if the ring buffer of the nethuns base socket is full.
     /// * `Err(NethunsPcapOpenError::PcapError)` - if an error occurs while parsing the pcap file (STANDARD_PCAP_READER only).
     /// * `Err(NethunsPcapOpenError::FileError)` - if an error occurs while accessing the file (BUILTIN_PCAP_READER only).
+    /// * `Err(NethunsPcapOpenError::Eof)` - if the end of the file is reached.
     fn read(&mut self) -> Result<RecvPacket, NethunsPcapReadError>;
     
     
@@ -129,35 +129,38 @@ cfg_if!(
 
 
 /// Pcap packet header
-#[allow(non_camel_case_types)]
+#[allow(non_camel_case_types, clippy::len_without_is_empty)]
 #[repr(C)] // needed for safe transmutation to &[u8] and for compatibility with C programs
-#[derive(Clone, Copy, Debug, Default)]
+#[derive(Clone, Copy, Debug, Default, CopyGetters)]
+#[getset(get_copy = "pub")]
 pub struct nethuns_pcap_pkthdr {
     /// timestamp
-    pub ts: nethuns_pcap_timeval,
+    ts: nethuns_pcap_timeval,
     /// length of portion present
-    pub caplen: u32,
+    caplen: u32,
     /// length of this packet (off wire)
-    pub len: u32,
+    len: u32,
 }
 
 
 /// Patched pcap packet header for the Kuznetzov's implementation of TCPDUMP format
 #[allow(non_camel_case_types)]
 #[repr(C)] // needed for safe transmutation to &[u8] and for compatibility with C programs
-#[derive(Clone, Copy, Debug, Default)]
+#[derive(Clone, Copy, Debug, Default, CopyGetters)]
+#[getset(get_copy = "pub")]
 pub struct nethuns_pcap_patched_pkthdr {
-    pub hdr: nethuns_pcap_pkthdr,
-    pub index: i32,
-    pub protocol: libc::c_ushort,
-    pub pkt_type: libc::c_uchar,
+    hdr: nethuns_pcap_pkthdr,
+    index: i32,
+    protocol: libc::c_ushort,
+    pkt_type: libc::c_uchar,
 }
 
 
 #[allow(non_camel_case_types)]
 #[repr(C)] // needed for safe transmutation to &[u8] and for compatibility with C programs
-#[derive(Clone, Copy, Debug, Default)]
+#[derive(Clone, Copy, Debug, Default, CopyGetters)]
+#[getset(get_copy = "pub")]
 pub struct nethuns_pcap_timeval {
-    pub tv_sec: i64,
-    pub tv_usec: i64,
+    tv_sec: i64,
+    tv_usec: i64,
 }

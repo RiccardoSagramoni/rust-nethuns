@@ -1,8 +1,7 @@
 pub(crate) mod circular_buffer;
 
-use std::cell::RefCell;
 use std::mem;
-use std::rc::Rc;
+use std::sync::{Arc, RwLock};
 
 use crate::sockets::ring::NethunsRingSlot;
 use crate::sockets::NethunsSocket;
@@ -32,8 +31,8 @@ pub fn nethuns_dev_queue_name(
 #[inline(always)]
 pub fn nethuns_device_name(socket: &dyn NethunsSocket) -> String {
     nethuns_dev_queue_name(
-        socket.base().devname.to_str().ok(),
-        socket.base().queue,
+        socket.base().devname().to_str().ok(),
+        socket.base().get_queue(),
     )
 }
 
@@ -49,7 +48,7 @@ pub fn nethuns_device_name(socket: &dyn NethunsSocket) -> String {
 #[inline(always)]
 pub(crate) unsafe fn bind_packet_lifetime_to_slot<'a>(
     pkt: &[u8],
-    _slot: &'a Rc<RefCell<NethunsRingSlot>>,
+    _slot: &'a Arc<RwLock<NethunsRingSlot>>,
 ) -> &'a [u8] {
     mem::transmute(pkt)
 }

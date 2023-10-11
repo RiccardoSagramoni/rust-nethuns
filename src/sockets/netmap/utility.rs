@@ -82,7 +82,7 @@ pub(super) fn non_empty_rx_ring(
 /// * `block_id` - *unused*
 macro_rules! nethuns_blocks_free {
     ($socket: expr, $slot: expr, $block_id: expr) => {
-        $block_id; // trigger compile check for id field
+        $block_id; // trigger compile check for block_id field
         $socket.free_ring.push_unchecked($slot.pkthdr.buf_idx);
     };
 }
@@ -103,7 +103,7 @@ macro_rules! nethuns_get_buf_addr_netmap {
     ($some_ring: expr, $tx_ring: expr, $pktid: expr) => {
         netmap_buf(
             $some_ring,
-            $tx_ring.get_slot($pktid).borrow().pkthdr.buf_idx as _,
+            $tx_ring.get_slot($pktid).read().unwrap().pkthdr.buf_idx as _,
         ) as *mut u8
     };
 }

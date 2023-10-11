@@ -21,7 +21,7 @@ impl NmPortDescriptor {
         // [SAFETY] ok: portspec is a CString, thus it can be safely passed to C functions
         let nmport_d =
             NonNull::new(unsafe { nmport_prepare(portspec.as_ptr()) }).ok_or(
-                format!("nmport_prepare(portspec = {:?}) failed", portspec),
+                format!("nmport_prepare(portspec: {:?}) failed", portspec),
             )?;
         
         Ok(Self { nmport_d })
@@ -66,3 +66,8 @@ impl Drop for NmPortDescriptor {
         unsafe { nmport_close(self.nmport_d.as_ptr()) };
     }
 }
+
+/// # Safety
+/// No one besides us has the raw pointer, so we can 
+/// safely transfer the ownership to another thread
+unsafe impl Send for NmPortDescriptor {}

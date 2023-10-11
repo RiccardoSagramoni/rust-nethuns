@@ -12,18 +12,16 @@ use crate::nethuns::__nethuns_set_if_promisc;
 use crate::sockets::base::NethunsSocketBase;
 use crate::sockets::errors::{NethunsBindError, NethunsOpenError};
 use crate::sockets::ring::NethunsRing;
-use crate::sockets::BindableNethunsSocket;
+use crate::sockets::{BindableNethunsSocket, NethunsSocket};
 use crate::types::{NethunsQueue, NethunsSocketMode, NethunsSocketOptions};
 
 use super::nethuns_socket::NethunsSocketNetmap;
-use super::super::NethunsSocket;
 
 
 #[derive(Debug)]
 pub struct BindableNethunsSocketNetmap {
     base: NethunsSocketBase,
 }
-
 
 
 impl BindableNethunsSocketNetmap {
@@ -74,13 +72,15 @@ impl BindableNethunsSocketNetmap {
 }
 
 
-
 impl BindableNethunsSocket for BindableNethunsSocketNetmap {
     fn bind(
         mut self: Box<Self>,
         dev: &str,
         queue: NethunsQueue,
-    ) -> Result<Box<dyn NethunsSocket>, (NethunsBindError, Box<dyn BindableNethunsSocket>)> {
+    ) -> Result<
+        Box<dyn NethunsSocket>,
+        (NethunsBindError, Box<dyn BindableNethunsSocket>),
+    > {
         // Prepare flag and prefix for device name
         let flags = if !self.tx() {
             "/R".to_owned()
@@ -96,10 +96,16 @@ impl BindableNethunsSocket for BindableNethunsSocketNetmap {
             "netmap:".to_owned()
         };
         
+        let connector = if dev.starts_with("vale") {
+            ":".to_owned()
+        } else {
+            "-".to_owned() // ?? are you sure?
+        };
+        
         // Build the device name
         let nm_dev = match CString::new(match queue {
             NethunsQueue::Some(idx) => {
-                format!("{prefix}{dev}-{idx}{flags}")
+                format!("{prefix}{dev}{connector}{idx}{flags}")
             }
             NethunsQueue::Any => {
                 format!("{prefix}{dev}{flags}")
@@ -200,7 +206,7 @@ impl BindableNethunsSocket for BindableNethunsSocketNetmap {
                         NethunsBindError::FrameworkError(
                             "failed to initialize some_ring: netmap_rxring returned null"
                                 .to_owned()
-                        ), 
+                        ),
                         self
                     ))
                 }
@@ -217,9 +223,15 @@ impl BindableNethunsSocket for BindableNethunsSocketNetmap {
         // Case 1: TX
         if let Some(tx_ring) = &mut self.base.tx_ring {
             for i in 0..tx_ring.size() {
-                tx_ring.get_slot(i).borrow_mut().pkthdr.buf_idx = scan;
+                tx_ring
+                    .get_slot(i)
+                    .write()
+                    .expect("failed `write()` on `tx_ring` because of RwLock poisoning")
+                    .pkthdr
+                    .buf_idx = scan;
                 scan = unsafe {
                     let ptr = netmap_buf(&some_ring, scan as _) as *const u32;
+                    debug_assert!(!ptr.is_null());
                     ptr.read_unaligned()
                 }
             }
@@ -230,7 +242,7 @@ impl BindableNethunsSocket for BindableNethunsSocketNetmap {
                 free_ring.push_unchecked(scan);
                 scan = unsafe {
                     let ptr = netmap_buf(&some_ring, scan as _) as *const u32;
-                    assert!(!ptr.is_null());
+                    debug_assert!(!ptr.is_null());
                     ptr.read_unaligned()
                 };
             }
@@ -261,7 +273,9 @@ impl BindableNethunsSocket for BindableNethunsSocketNetmap {
             unsafe { libc::if_nametoindex(self.base.devname.as_ptr()) } as _;
         
         // Build the socket struct and return it
-        let socket = NethunsSocketNetmap::new(self.base, nm_port_d, some_ring, free_ring);
+        let socket = NethunsSocketNetmap::new(
+            self.base, nm_port_d, some_ring, free_ring,
+        );
         
         thread::sleep(time::Duration::from_secs(2));
         Ok(Box::new(socket))

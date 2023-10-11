@@ -35,7 +35,7 @@ pub unsafe fn netmap_txring(
         assert!(!ptr.is_null());
         
         let ptr = ptr.add(index);
-        *ptr
+        ptr.read_unaligned()
     };
     
     __netmap_offset!(netmap_ring, nifp, offset)
@@ -66,7 +66,7 @@ pub unsafe fn netmap_rxring(
             .add(index)
             .add((*nifp).ni_tx_rings as _)
             .add((*nifp).ni_host_tx_rings as _);
-        *ptr
+        ptr.read_unaligned()
     };
     unsafe { __netmap_offset!(netmap_ring, nifp, offset) }
 }

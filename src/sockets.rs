@@ -1,4 +1,4 @@
-//! This module exposes the data structures required 
+//! This module exposes the data structures required
 //! to interact with the specified I/O framework.
 //!
 //! Every framework-specific implementation must provide:
@@ -92,20 +92,20 @@ pub trait BindableNethunsSocket: Debug {
     /// Check if the socket is in RX mode
     #[inline(always)]
     fn rx(&self) -> bool {
-        self.base().rx_ring.is_some()
+        self.base().rx_ring().is_some()
     }
     
     /// Check if the socket is in TX mode
     #[inline(always)]
     fn tx(&self) -> bool {
-        self.base().tx_ring.is_some()
+        self.base().tx_ring().is_some()
     }
 }
 
 
 /// Trait which defines the interface for a Nethuns socket after binding.
 /// This socket is usable for RX and/or TX, depending from its configuration.
-pub trait NethunsSocket: Debug {
+pub trait NethunsSocket: Debug + Send {
     /// Get the next unprocessed received packet.
     ///
     /// # Returns
@@ -160,13 +160,13 @@ pub trait NethunsSocket: Debug {
     /// Check if the socket is in TX mode
     #[inline(always)]
     fn tx(&self) -> bool {
-        self.base().tx_ring.is_some()
+        self.base().tx_ring().is_some()
     }
     
     /// Check if the socket is in RX mode
     #[inline(always)]
     fn rx(&self) -> bool {
-        self.base().rx_ring.is_some()
+        self.base().rx_ring().is_some()
     }
     
     
@@ -209,7 +209,7 @@ pub trait NethunsSocket: Debug {
 /// Trait which defines the public API for Pkthdr,
 /// which contains the packet header metadata.
 #[allow(clippy::len_without_is_empty)]
-pub trait PkthdrTrait: Debug {
+pub trait PkthdrTrait: Debug + Send + Sync {
     fn tstamp_sec(&self) -> u32;
     fn tstamp_usec(&self) -> u32;
     fn tstamp_nsec(&self) -> u32;
