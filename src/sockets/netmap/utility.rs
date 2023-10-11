@@ -82,7 +82,7 @@ pub(super) fn non_empty_rx_ring(
 /// * `block_id` - *unused*
 macro_rules! nethuns_blocks_free {
     ($socket: expr, $slot: expr, $block_id: expr) => {
-        $block_id; // trigger compile check for id field
+        $block_id; // trigger compile check for block_id field
         $socket.free_ring.push_unchecked($slot.pkthdr.buf_idx);
     };
 }
