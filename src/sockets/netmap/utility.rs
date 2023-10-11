@@ -103,7 +103,7 @@ macro_rules! nethuns_get_buf_addr_netmap {
     ($some_ring: expr, $tx_ring: expr, $pktid: expr) => {
         netmap_buf(
             $some_ring,
-            $tx_ring.get_slot($pktid).read().unwrap().pkthdr.buf_idx as _,
+            $tx_ring.get_slot($pktid).inner().pkthdr.buf_idx as _,
         ) as *mut u8
     };
 }

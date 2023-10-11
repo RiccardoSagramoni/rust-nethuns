@@ -1,8 +1,10 @@
-use std::cmp;
-use std::sync::atomic::{AtomicU8, Ordering};
-use std::sync::{Arc, RwLock};
+pub mod ring_slot;
+pub use ring_slot::*;
 
-use super::{NethunsSocket, Pkthdr};
+use std::cmp;
+use std::sync::Arc;
+
+use super::NethunsSocket;
 
 use crate::misc::circular_buffer::CircularCloneBuffer;
 
@@ -12,7 +14,7 @@ use crate::misc::circular_buffer::CircularCloneBuffer;
 pub struct NethunsRing {
     pktsize: usize,
     
-    pub(crate) rings: CircularCloneBuffer<Arc<RwLock<NethunsRingSlot>>>,
+    pub(crate) rings: CircularCloneBuffer<Arc<RingSlotMutex>>,
 }
 
 
@@ -22,11 +24,7 @@ impl NethunsRing {
     /// Equivalent to `nethuns_make_ring` from the original C library.
     #[inline(always)]
     pub fn new(nslots: usize, pktsize: usize) -> NethunsRing {
-        let builder = || {
-            Arc::new(RwLock::new(NethunsRingSlot::default_with_packet_size(
-                pktsize,
-            )))
-        };
+        let builder = || Arc::new(RingSlotMutex::new(pktsize));
         
         NethunsRing {
             pktsize,
@@ -37,17 +35,14 @@ impl NethunsRing {
     
     /// Get a reference to a slot in the ring, given its index.
     #[inline(always)]
-    pub fn get_slot(&self, index: usize) -> Arc<RwLock<NethunsRingSlot>> {
+    pub fn get_slot(&self, index: usize) -> Arc<RingSlotMutex> {
         self.rings.get(index)
     }
     
     
     /// Get the index of a slot in the ring, given its reference.
     #[inline(always)]
-    pub fn get_idx_slot(
-        &self,
-        arc_slot: &Arc<RwLock<NethunsRingSlot>>,
-    ) -> Option<usize> {
+    pub fn get_idx_slot(&self, arc_slot: &Arc<RingSlotMutex>) -> Option<usize> {
         // FIXME: this is inefficient. Can we improve it?
         self.rings
             .iter()
@@ -107,7 +102,7 @@ impl NethunsRing {
             .skip(pos)
             .take(cmp::min(self.size() - 1, 32))
         {
-            if slot.read().unwrap().inuse.load(Ordering::Acquire) == 0 {
+            if slot.status() == InUseStatus::Free {
                 total += 1;
             } else {
                 break;
@@ -120,7 +115,7 @@ impl NethunsRing {
     
     /// Get a reference to the head slot in the ring
     /// and shift the head to the following slot.
-    pub fn next_slot(&mut self) -> Arc<RwLock<NethunsRingSlot>> {
+    pub fn next_slot(&mut self) -> Arc<RingSlotMutex> {
         self.rings.pop_unchecked()
     }
     
@@ -137,39 +132,15 @@ impl NethunsRing {
     /// * `false` - If the slot is already in use.
     #[inline(always)]
     pub fn nethuns_send_slot(&self, id: usize, len: usize) -> bool {
-        let arc_slot = self.get_slot(id as _);
-        let mut slot = arc_slot.write().unwrap();
-        if slot.inuse.load(Ordering::Acquire) != 0 {
+        let mut slot = self.get_slot(id as _);
+        if slot.status() != InUseStatus::Free {
             return false;
         }
-        slot.len = len;
-        slot.inuse.store(1, Ordering::Release);
-        true
-    }
-}
-
-
-/// Ring slot of a Nethuns socket.
-#[derive(Debug, Default)]
-pub struct NethunsRingSlot {
-    pub(super) pkthdr: Pkthdr,
-    pub(super) id: usize,
-    /// In-use flag => `0`: not in use; `1`: in use (a thread is reading a packet); `2`: in-flight (a thread is sending a packet)
-    pub(super) inuse: AtomicU8,
-    pub(super) len: usize,
-    
-    pub(super) packet: Vec<u8>,
-}
-
-
-impl NethunsRingSlot {
-    /// Get a new `NethunsRingSlot` with `packet` initialized
-    /// with a given packet size.
-    pub fn default_with_packet_size(pktsize: usize) -> Self {
-        NethunsRingSlot {
-            packet: vec![0; pktsize],
-            ..Default::default()
+        unsafe {
+            slot.inner_mut().len = len;
         }
+        slot.set_status(InUseStatus::Reading);
+        true
     }
 }
 
@@ -183,16 +154,15 @@ impl NethunsRingSlot {
 macro_rules! nethuns_ring_free_slots {
     ($socket: expr, $ring: expr, $free_macro: ident) => {
         loop {
-            let arc_slot = $ring.get_slot($ring.rings.tail());
-            let slot = arc_slot.read().unwrap();
+            let slot = $ring.get_slot($ring.rings.tail());
             
             if $ring.rings.is_empty()
-                || slot.inuse.load(atomic::Ordering::Acquire) != 0
+                || slot.status() != crate::sockets::ring::InUseStatus::Free
             {
                 break;
             }
             
-            $free_macro!($socket, slot, slot.id);
+            $free_macro!($socket, slot, unsafe { slot.inner().id });
             $ring.rings.advance_tail();
         }
     };
