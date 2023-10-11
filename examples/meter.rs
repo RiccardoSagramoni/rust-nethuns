@@ -134,7 +134,7 @@ fn main() {
         let sigint_rx = sigint_bus.add_rx();
         set_sigint_handler(sigint_bus);
         st_execution(&conf, sockets, totals, sigint_rx)
-            .expect("MAIN thread execution failed: {e}");
+            .expect("MAIN thread execution failed");
     } else {
         // case multithreading enabled (num_threads == num_sockets)
         let mut threads: Vec<thread::JoinHandle<()>> = Vec::new();
@@ -153,7 +153,7 @@ fn main() {
                     &totals[th_idx as usize],
                     rx,
                 )
-                .expect("Thread {th_idx} execution failed: {e}");
+                .expect(format!("Thread {th_idx} execution failed").as_str());
             }));
         }
         
