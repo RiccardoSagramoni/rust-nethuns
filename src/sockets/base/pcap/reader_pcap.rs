@@ -14,9 +14,7 @@ use crate::sockets::errors::{
     NethunsPcapOpenError, NethunsPcapReadError, NethunsPcapRewindError,
     NethunsPcapStoreError, NethunsPcapWriteError,
 };
-use crate::sockets::ring::{
-    InUseStatus, NethunsRing, RingSlotMutex,
-};
+use crate::sockets::ring::{InUseStatus, NethunsRing, NethunsRingSlot};
 use crate::sockets::PkthdrTrait;
 use crate::types::NethunsSocketOptions;
 
@@ -87,7 +85,7 @@ impl NethunsSocketPcapTrait for NethunsSocketPcap {
         }
         
         let bytes: u32;
-        let slot = unsafe { rc_slot.inner_mut() };
+        let mut slot = rc_slot.borrow_mut();
         loop {
             match self.reader.next() {
                 Ok((offset, block)) => match block {
@@ -125,11 +123,15 @@ impl NethunsSocketPcapTrait for NethunsSocketPcap {
         rx_ring.rings.advance_head();
         
         let pkthdr = Box::new(slot.pkthdr);
+        drop(slot);
         
         let packet_data = RecvPacketDataBuilder {
             slot: rc_slot,
-            packet_builder: |s: &SendRc<RingSlotMutex>| unsafe {
-                bind_packet_lifetime_to_slot(&s.inner().packet[..bytes as _], s)
+            packet_builder: |s: &SendRc<NethunsRingSlot>| unsafe {
+                bind_packet_lifetime_to_slot(
+                    &s.borrow().packet[..bytes as _],
+                    s,
+                )
             },
         }
         .build();
