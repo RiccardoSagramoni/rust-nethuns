@@ -4,7 +4,7 @@ use std::sync::atomic::Ordering;
 
 use atomic_enum::atomic_enum;
 
-use crate::sockets::netmap::pkthdr::Pkthdr;
+use crate::sockets::Pkthdr;
 
 
 #[derive(PartialEq, PartialOrd, Eq, Ord)]

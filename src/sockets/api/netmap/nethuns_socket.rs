@@ -20,14 +20,15 @@ use crate::sockets::base::{
 use crate::sockets::errors::{
     NethunsFlushError, NethunsRecvError, NethunsSendError,
 };
-use crate::sockets::netmap::utility::{nethuns_blocks_free, non_empty_rx_ring};
 use crate::sockets::ring::{
     nethuns_ring_free_slots, InUseStatus, RingSlotMutex,
 };
 use crate::sockets::NethunsSocket;
 use crate::types::NethunsStat;
 
-use super::utility::nethuns_get_buf_addr_netmap;
+use super::utility::{
+    nethuns_blocks_free, nethuns_get_buf_addr_netmap, non_empty_rx_ring,
+};
 
 
 #[derive(Debug)]
