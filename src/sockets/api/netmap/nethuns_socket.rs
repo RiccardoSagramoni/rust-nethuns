@@ -21,7 +21,7 @@ use crate::sockets::errors::{
     NethunsFlushError, NethunsRecvError, NethunsSendError,
 };
 use crate::sockets::ring::{
-    nethuns_ring_free_slots, InUseStatus, RingSlotMutex,
+    nethuns_ring_free_slots, InUseStatus, NethunsRingSlot,
 };
 use crate::sockets::NethunsSocket;
 use crate::types::NethunsStat;
@@ -92,15 +92,12 @@ impl NethunsSocket for NethunsSocketNetmap {
         if rc_slot.status() != InUseStatus::Free {
             return Err(NethunsRecvError::InUse);
         }
-        let slot = unsafe { rc_slot.inner_mut() };
         
         // If no slots are available, try again after
         // taking some available "extra buffers" as "free slots"
         if self.free_ring.is_empty() {
-            unsafe {
-                // Safe because we checked if the slot status if `Free`
-                nethuns_ring_free_slots!(self, rx_ring, nethuns_blocks_free);
-            }
+            // Safe because we checked if the slot status if `Free`
+            nethuns_ring_free_slots!(self, rx_ring, nethuns_blocks_free);
             
             if self.free_ring.is_empty() {
                 return Err(NethunsRecvError::NoPacketsAvailable);
@@ -135,10 +132,13 @@ impl NethunsSocket for NethunsSocketNetmap {
         let pkt = unsafe { netmap_buf_pkt!(netmap_ring, idx) };
         
         // Update the packet header metadata of the nethuns ring abstraction against the actual netmap packet.
-        slot.pkthdr.ts = netmap_ring.ts;
-        slot.pkthdr.caplen = cur_netmap_slot.len as _;
-        slot.pkthdr.len = cur_netmap_slot.len as _;
-        slot.pkthdr.buf_idx = idx;
+        {
+            let mut slot = rc_slot.borrow_mut();
+            slot.pkthdr.ts = netmap_ring.ts;
+            slot.pkthdr.caplen = cur_netmap_slot.len as _;
+            slot.pkthdr.len = cur_netmap_slot.len as _;
+            slot.pkthdr.buf_idx = idx;
+        }
         
         // Assign a new buffer to the netmap `cur` slot and set the relative flag
         cur_netmap_slot.buf_idx = self.free_ring.pop_unchecked();
@@ -151,26 +151,24 @@ impl NethunsSocket for NethunsSocketNetmap {
         // Filter the packet
         if match &self.base.filter {
             None => false,
-            Some(filter) => !filter(&slot.pkthdr, pkt),
+            Some(filter) => !filter(&rc_slot.borrow().pkthdr, pkt),
         } {
-            unsafe {
-                nethuns_ring_free_slots!(self, rx_ring, nethuns_blocks_free);
-            }
+            nethuns_ring_free_slots!(self, rx_ring, nethuns_blocks_free);
             return Err(NethunsRecvError::PacketFiltered);
         }
         
-        slot.pkthdr.caplen =
-            cmp::min(self.base.opt.packetsize, slot.pkthdr.caplen);
+        rc_slot.borrow_mut().pkthdr.caplen =
+            cmp::min(self.base.opt.packetsize, rc_slot.borrow().pkthdr.caplen);
         
         rc_slot.set_status(InUseStatus::Reading);
         
         rx_ring.rings.advance_head();
         
-        let pkthdr = Box::new(slot.pkthdr);
+        let pkthdr = Box::new(rc_slot.borrow().pkthdr);
         
         let packet_data = RecvPacketDataBuilder {
             slot: rc_slot,
-            packet_builder: |slot: &SendRc<RingSlotMutex>| unsafe {
+            packet_builder: |slot: &SendRc<NethunsRingSlot>| unsafe {
                 bind_packet_lifetime_to_slot(pkt, slot)
             },
         }
@@ -249,16 +247,23 @@ impl NethunsSocket for NethunsSocketNetmap {
                 // swap buf indexes between the nethuns and netmap slots, mark
                 // the nethuns slot as in-flight (inuse <- 2)
                 rc_slot.set_status(InUseStatus::Sending);
-                let slot = unsafe { rc_slot.inner_mut() };
                 
                 let mut netmap_slot = ring
                     .get_slot(ring.head as _)
                     .map_err(NethunsFlushError::FrameworkError)?;
-                mem::swap(&mut netmap_slot.buf_idx, &mut slot.pkthdr.buf_idx);
-                netmap_slot.len = slot.len as _;
+                
+                {
+                    let mut slot = rc_slot.borrow_mut();
+                    mem::swap(
+                        &mut netmap_slot.buf_idx,
+                        &mut slot.pkthdr.buf_idx,
+                    );
+                    netmap_slot.len = slot.len as _;
+                }
                 netmap_slot.flags = NS_BUF_CHANGED as _;
                 // remember the nethuns slot in the netmap slot ptr field
-                netmap_slot.ptr = rc_slot.deref() as *const RingSlotMutex as _;
+                netmap_slot.ptr =
+                    rc_slot.deref() as *const NethunsRingSlot as _;
                 
                 ring.cur = unsafe { ring.nm_ring_next(ring.head) };
                 ring.head = ring.cur;
@@ -301,14 +306,11 @@ impl NethunsSocket for NethunsSocketNetmap {
                     .get_slot(scan as _)
                     .map_err(NethunsFlushError::FrameworkError)?;
                 let slot =
-                    unsafe { &mut *(netmap_slot.ptr as *mut RingSlotMutex) };
-                unsafe {
-                    // TODO safety comment
-                    mem::swap(
-                        &mut netmap_slot.buf_idx,
-                        &mut slot.inner_mut().pkthdr.buf_idx,
-                    )
-                };
+                    unsafe { &mut *(netmap_slot.ptr as *mut NethunsRingSlot) };
+                mem::swap(
+                    &mut netmap_slot.buf_idx,
+                    &mut slot.borrow_mut().pkthdr.buf_idx,
+                );
                 slot.set_status(InUseStatus::Free);
                 
                 scan = unsafe { ring.nm_ring_next(scan) };
@@ -388,7 +390,7 @@ impl Drop for NethunsSocketNetmap {
         
         if let Some(ring) = &self.base.tx_ring {
             for i in 0..ring.size() {
-                let idx = unsafe { ring.get_slot(i).inner().pkthdr.buf_idx };
+                let idx = ring.get_slot(i).borrow().pkthdr.buf_idx;
                 let next = unsafe {
                     netmap_buf(&self.some_ring, idx as _) as *mut u32
                 };

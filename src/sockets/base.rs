@@ -11,7 +11,7 @@ use crate::misc::send_rc::SendRc;
 use crate::types::{NethunsQueue, NethunsSocketOptions};
 
 use super::ring::{
-    InUseStatus, NethunsRing, RingSlotMutex,
+    InUseStatus, NethunsRing, NethunsRingSlot,
 };
 use super::PkthdrTrait;
 
@@ -91,7 +91,7 @@ impl Display for RecvPacket {
 #[self_referencing(pub_extras)]
 #[derive(Debug)]
 pub struct RecvPacketData {
-    slot: SendRc<RingSlotMutex>,
+    slot: SendRc<NethunsRingSlot>,
     #[borrows(slot)]
     pub packet: &'this [u8],
 }

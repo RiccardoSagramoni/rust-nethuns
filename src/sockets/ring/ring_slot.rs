@@ -1,5 +1,4 @@
-use std::cell::UnsafeCell;
-use std::ops::{Deref, DerefMut};
+use std::cell::{Ref, RefCell, RefMut};
 use std::sync::atomic::Ordering;
 
 use atomic_enum::atomic_enum;
@@ -7,6 +6,11 @@ use atomic_enum::atomic_enum;
 use crate::sockets::Pkthdr;
 
 
+/// Status of a ring slot
+///
+/// - `Free`: not in use
+/// - `Reading`: a thread is reading a packet ("in-use")
+/// - `Sending`: a thread is sending a packet ("in-flight")
 #[derive(PartialEq, PartialOrd, Eq, Ord)]
 #[atomic_enum]
 pub enum InUseStatus {
@@ -17,28 +21,27 @@ pub enum InUseStatus {
 
 
 #[derive(Debug)]
-pub struct RingSlotMutex {
-    /// In-use flag => `0`: not in use; `1`: in use (a thread is reading a packet); `2`: in-flight (a thread is sending a packet)
+pub struct NethunsRingSlot {
     status: AtomicInUseStatus,
     
-    inner: UnsafeCell<NethunsRingSlot>,
+    inner: RefCell<NethunsRingSlotInner>,
 }
 
 
-#[derive(Debug)]
+#[derive(Debug, thiserror::Error)]
 pub enum SlotError {
-    // TODO thiserror
+    #[error("the slot is inuse")]
     NotFree,
 }
 
-unsafe impl Send for RingSlotMutex {}
+unsafe impl Send for NethunsRingSlot {}
 
-impl RingSlotMutex {
+impl NethunsRingSlot {
     pub fn new(pktsize: usize) -> Self {
         Self {
-            inner: UnsafeCell::new(NethunsRingSlot::default_with_packet_size(
-                pktsize,
-            )),
+            inner: RefCell::new(
+                NethunsRingSlotInner::default_with_packet_size(pktsize),
+            ),
             status: AtomicInUseStatus::new(InUseStatus::Free),
         }
     }
@@ -51,51 +54,19 @@ impl RingSlotMutex {
         self.status.store(status, Ordering::Release)
     }
     
-    pub unsafe fn inner(&self) -> &NethunsRingSlot {
-        &*self.inner.get()
+    pub fn borrow(&self) -> Ref<'_, NethunsRingSlotInner> {
+        self.inner.borrow()
     }
     
-    #[allow(clippy::mut_from_ref)]
-    pub unsafe fn inner_mut(&self) -> &mut NethunsRingSlot {
-        &mut *self.inner.get()
+    pub fn borrow_mut(&self) -> RefMut<'_, NethunsRingSlotInner> {
+        self.inner.borrow_mut()
     }
 }
 
-
-#[derive(Debug)]
-pub struct RingSlotGuard<'a> {
-    slot: &'a RingSlotMutex,
-}
-
-impl Deref for RingSlotGuard<'_> {
-    type Target = NethunsRingSlot;
-    
-    fn deref(&self) -> &NethunsRingSlot {
-        unsafe { &*self.slot.inner.get() }
-    }
-}
-
-impl DerefMut for RingSlotGuard<'_> {
-    fn deref_mut(&mut self) -> &mut NethunsRingSlot {
-        unsafe { &mut *self.slot.inner.get() }
-    }
-}
-
-impl Drop for RingSlotGuard<'_> {
-    fn drop(&mut self) {
-        self.slot.status.store(InUseStatus::Free, Ordering::Release);
-    }
-}
-
-
-///
-///
-///
-///
 
 /// Ring slot of a Nethuns socket.
 #[derive(Debug, Default)]
-pub struct NethunsRingSlot {
+pub struct NethunsRingSlotInner {
     pub(crate) pkthdr: Pkthdr,
     pub(crate) id: usize,
     pub(crate) len: usize,
@@ -104,11 +75,11 @@ pub struct NethunsRingSlot {
 }
 
 
-impl NethunsRingSlot {
+impl NethunsRingSlotInner {
     /// Get a new `NethunsRingSlot` with `packet` initialized
     /// with a given packet size.
     pub fn default_with_packet_size(pktsize: usize) -> Self {
-        NethunsRingSlot {
+        NethunsRingSlotInner {
             packet: vec![0; pktsize],
             ..Default::default()
         }

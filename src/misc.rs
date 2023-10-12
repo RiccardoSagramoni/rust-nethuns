@@ -4,7 +4,7 @@ pub(crate) mod send_rc;
 
 use std::mem;
 
-use crate::sockets::ring::RingSlotMutex;
+use crate::sockets::ring::NethunsRingSlot;
 use crate::sockets::NethunsSocket;
 use crate::types::NethunsQueue;
 
@@ -51,7 +51,7 @@ pub fn nethuns_device_name(socket: &dyn NethunsSocket) -> String {
 #[inline(always)]
 pub(crate) unsafe fn bind_packet_lifetime_to_slot<'a>(
     pkt: &[u8],
-    _slot: &'a SendRc<RingSlotMutex>,
+    _slot: &'a SendRc<NethunsRingSlot>,
 ) -> &'a [u8] {
     mem::transmute(pkt)
 }

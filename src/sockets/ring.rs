@@ -14,7 +14,7 @@ use crate::misc::send_rc::SendRc;
 pub struct NethunsRing {
     pktsize: usize,
     
-    pub(crate) rings: CircularCloneBuffer<SendRc<RingSlotMutex>>,
+    pub(crate) rings: CircularCloneBuffer<SendRc<NethunsRingSlot>>,
 }
 
 
@@ -24,7 +24,7 @@ impl NethunsRing {
     /// Equivalent to `nethuns_make_ring` from the original C library.
     #[inline(always)]
     pub fn new(nslots: usize, pktsize: usize) -> NethunsRing {
-        let builder = || SendRc::new(RingSlotMutex::new(pktsize));
+        let builder = || SendRc::new(NethunsRingSlot::new(pktsize));
         
         NethunsRing {
             pktsize,
@@ -35,7 +35,7 @@ impl NethunsRing {
     
     /// Get a reference to a slot in the ring, given its index.
     #[inline(always)]
-    pub fn get_slot(&self, index: usize) -> SendRc<RingSlotMutex> {
+    pub fn get_slot(&self, index: usize) -> SendRc<NethunsRingSlot> {
         self.rings.get(index)
     }
     
@@ -44,7 +44,7 @@ impl NethunsRing {
     #[inline(always)]
     pub fn get_idx_slot(
         &self,
-        rc_slot: &SendRc<RingSlotMutex>,
+        rc_slot: &SendRc<NethunsRingSlot>,
     ) -> Option<usize> {
         // FIXME: this is inefficient. Can we improve it?
         self.rings
@@ -118,7 +118,7 @@ impl NethunsRing {
     
     /// Get a reference to the head slot in the ring
     /// and shift the head to the following slot.
-    pub fn next_slot(&mut self) -> SendRc<RingSlotMutex> {
+    pub fn next_slot(&mut self) -> SendRc<NethunsRingSlot> {
         self.rings.pop_unchecked()
     }
     
@@ -139,9 +139,7 @@ impl NethunsRing {
         if slot.status() != InUseStatus::Free {
             return false;
         }
-        unsafe {
-            slot.inner_mut().len = len;
-        }
+        slot.borrow_mut().len = len;
         slot.set_status(InUseStatus::Reading);
         true
     }
@@ -165,7 +163,9 @@ macro_rules! nethuns_ring_free_slots {
                 break;
             }
             
-            $free_macro!($socket, slot, slot.inner().id);
+            let block_id = slot.borrow().id;
+            
+            $free_macro!($socket, slot, block_id);
             $ring.rings.advance_tail();
         }
     };
