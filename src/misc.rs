@@ -1,11 +1,14 @@
 pub(crate) mod circular_buffer;
+pub(crate) mod send_rc;
+
 
 use std::mem;
-use std::sync::{Arc, RwLock};
 
-use crate::sockets::ring::NethunsRingSlot;
+use crate::sockets::ring::RingSlotMutex;
 use crate::sockets::NethunsSocket;
 use crate::types::NethunsQueue;
+
+use self::send_rc::SendRc;
 
 
 /// Get full device name, taking into account
@@ -48,7 +51,7 @@ pub fn nethuns_device_name(socket: &dyn NethunsSocket) -> String {
 #[inline(always)]
 pub(crate) unsafe fn bind_packet_lifetime_to_slot<'a>(
     pkt: &[u8],
-    _slot: &'a Arc<RwLock<NethunsRingSlot>>,
+    _slot: &'a SendRc<RingSlotMutex>,
 ) -> &'a [u8] {
     mem::transmute(pkt)
 }

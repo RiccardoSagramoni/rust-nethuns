@@ -2,15 +2,17 @@ pub mod pcap;
 
 use std::ffi::CString;
 use std::fmt::{self, Debug, Display};
-use std::sync::{atomic, Arc, RwLock};
 
 use derivative::Derivative;
 use getset::{CopyGetters, Getters, Setters};
 use ouroboros::self_referencing;
 
+use crate::misc::send_rc::SendRc;
 use crate::types::{NethunsQueue, NethunsSocketOptions};
 
-use super::ring::{NethunsRing, NethunsRingSlot};
+use super::ring::{
+    InUseStatus, NethunsRing, RingSlotMutex,
+};
 use super::PkthdrTrait;
 
 
@@ -89,16 +91,14 @@ impl Display for RecvPacket {
 #[self_referencing(pub_extras)]
 #[derive(Debug)]
 pub struct RecvPacketData {
-    slot: Arc<RwLock<NethunsRingSlot>>,
+    slot: SendRc<RingSlotMutex>,
     #[borrows(slot)]
     pub packet: &'this [u8],
 }
 
 impl Display for RecvPacketData {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        self.with(|safe_self| {
-            write!(f, "{:?}", &safe_self.packet)
-        })
+        self.with(|safe_self| write!(f, "{:?}", &safe_self.packet))
     }
 }
 
@@ -106,12 +106,7 @@ impl Drop for RecvPacket {
     /// Release the buffer obtained by calling `recv()`.
     fn drop(&mut self) {
         // Unset the `inuse` flag of the related ring slot
-        self.packet
-            .borrow_slot()
-            .write()
-            .unwrap()
-            .inuse
-            .store(0, atomic::Ordering::Release);
+        self.packet.borrow_slot().set_status(InUseStatus::Free)
     }
 }
 

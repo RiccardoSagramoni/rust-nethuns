@@ -223,12 +223,13 @@ impl BindableNethunsSocket for BindableNethunsSocketNetmap {
         // Case 1: TX
         if let Some(tx_ring) = &mut self.base.tx_ring {
             for i in 0..tx_ring.size() {
-                tx_ring
-                    .get_slot(i)
-                    .write()
-                    .expect("failed `write()` on `tx_ring` because of RwLock poisoning")
-                    .pkthdr
-                    .buf_idx = scan;
+                unsafe {
+                    tx_ring
+                        .get_slot(i)
+                        .inner_mut()
+                        .pkthdr
+                        .buf_idx = scan;
+                }
                 scan = unsafe {
                     let ptr = netmap_buf(&some_ring, scan as _) as *const u32;
                     debug_assert!(!ptr.is_null());

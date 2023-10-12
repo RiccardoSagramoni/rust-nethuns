@@ -16,7 +16,7 @@ use derivative::Derivative;
 ///
 /// Whenever an item is read from the buffer, the item is **cloned**, not moved.
 /// Thus, this buffer more appropriate for reference-counting pointer
-/// ([`std::rc::Rc`], [`std::sync::Arc`]) and primitive types (which implement
+/// ([`std::rc::Rc`], [`std::sync::Arc`], [`SendRc`](crate::misc::send_rc::SendRc)) and primitive types (which implement
 /// the [`Copy`] trait).
 #[derive(Default, Derivative)]
 #[derivative(Debug)]

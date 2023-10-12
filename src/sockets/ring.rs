@@ -2,11 +2,11 @@ pub mod ring_slot;
 pub use ring_slot::*;
 
 use std::cmp;
-use std::sync::Arc;
 
 use super::NethunsSocket;
 
 use crate::misc::circular_buffer::CircularCloneBuffer;
+use crate::misc::send_rc::SendRc;
 
 
 /// Ring abstraction for Nethuns sockets.
@@ -14,7 +14,7 @@ use crate::misc::circular_buffer::CircularCloneBuffer;
 pub struct NethunsRing {
     pktsize: usize,
     
-    pub(crate) rings: CircularCloneBuffer<Arc<RingSlotMutex>>,
+    pub(crate) rings: CircularCloneBuffer<SendRc<RingSlotMutex>>,
 }
 
 
@@ -24,7 +24,7 @@ impl NethunsRing {
     /// Equivalent to `nethuns_make_ring` from the original C library.
     #[inline(always)]
     pub fn new(nslots: usize, pktsize: usize) -> NethunsRing {
-        let builder = || Arc::new(RingSlotMutex::new(pktsize));
+        let builder = || SendRc::new(RingSlotMutex::new(pktsize));
         
         NethunsRing {
             pktsize,
@@ -35,19 +35,22 @@ impl NethunsRing {
     
     /// Get a reference to a slot in the ring, given its index.
     #[inline(always)]
-    pub fn get_slot(&self, index: usize) -> Arc<RingSlotMutex> {
+    pub fn get_slot(&self, index: usize) -> SendRc<RingSlotMutex> {
         self.rings.get(index)
     }
     
     
     /// Get the index of a slot in the ring, given its reference.
     #[inline(always)]
-    pub fn get_idx_slot(&self, arc_slot: &Arc<RingSlotMutex>) -> Option<usize> {
+    pub fn get_idx_slot(
+        &self,
+        rc_slot: &SendRc<RingSlotMutex>,
+    ) -> Option<usize> {
         // FIXME: this is inefficient. Can we improve it?
         self.rings
             .iter()
             .take(self.rings.size())
-            .position(|slot: _| Arc::ptr_eq(slot, arc_slot))
+            .position(|slot: _| SendRc::ptr_eq(slot, rc_slot))
     }
     
     
@@ -115,7 +118,7 @@ impl NethunsRing {
     
     /// Get a reference to the head slot in the ring
     /// and shift the head to the following slot.
-    pub fn next_slot(&mut self) -> Arc<RingSlotMutex> {
+    pub fn next_slot(&mut self) -> SendRc<RingSlotMutex> {
         self.rings.pop_unchecked()
     }
     
@@ -132,7 +135,7 @@ impl NethunsRing {
     /// * `false` - If the slot is already in use.
     #[inline(always)]
     pub fn nethuns_send_slot(&self, id: usize, len: usize) -> bool {
-        let mut slot = self.get_slot(id as _);
+        let slot = self.get_slot(id as _);
         if slot.status() != InUseStatus::Free {
             return false;
         }
@@ -162,7 +165,7 @@ macro_rules! nethuns_ring_free_slots {
                 break;
             }
             
-            $free_macro!($socket, slot, unsafe { slot.inner().id });
+            $free_macro!($socket, slot, slot.inner().id);
             $ring.rings.advance_tail();
         }
     };

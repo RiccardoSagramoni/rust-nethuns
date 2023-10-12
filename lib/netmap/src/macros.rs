@@ -81,7 +81,7 @@ pub unsafe fn netmap_buf(
     ring: &NetmapRing,
     index: usize,
 ) -> *const libc::c_char {
-    (ring.deref() as *const _ as *const libc::c_char)
+    (ring.deref() as *const netmap_ring as *const libc::c_char)
         .add(ring.buf_ofs as _)
         .add(index * ring.nr_buf_size as usize)
 }
