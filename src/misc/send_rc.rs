@@ -187,7 +187,7 @@ impl<T: ?Sized> SendRc<T> {
     #[inline]
     #[must_use]
     pub fn ptr_eq(this: &Self, other: &Self) -> bool {
-        this.ptr.as_ptr() as *const () == other.ptr.as_ptr() as *const ()
+        ptr::eq(this.ptr.as_ptr(), other.ptr.as_ptr())
     }
 }
 

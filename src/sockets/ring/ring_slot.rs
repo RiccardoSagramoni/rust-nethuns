@@ -55,6 +55,7 @@ impl RingSlotMutex {
         &*self.inner.get()
     }
     
+    #[allow(clippy::mut_from_ref)]
     pub unsafe fn inner_mut(&self) -> &mut NethunsRingSlot {
         &mut *self.inner.get()
     }
