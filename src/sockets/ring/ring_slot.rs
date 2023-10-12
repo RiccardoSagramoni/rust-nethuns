@@ -24,7 +24,7 @@ pub enum InUseStatus {
 pub struct NethunsRingSlot {
     status: AtomicInUseStatus,
     
-    inner: RefCell<NethunsRingSlotInner>,
+    inner: RefCell<NethunsRingSlotInner>, // RefCell guarantees more safetu against UB
 }
 
 

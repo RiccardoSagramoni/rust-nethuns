@@ -157,8 +157,10 @@ impl NethunsSocket for NethunsSocketNetmap {
             return Err(NethunsRecvError::PacketFiltered);
         }
         
-        rc_slot.borrow_mut().pkthdr.caplen =
-            cmp::min(self.base.opt.packetsize, rc_slot.borrow().pkthdr.caplen);
+        {
+            let mut slot = rc_slot.borrow_mut();
+            slot.pkthdr.caplen = cmp::min(self.base.opt.packetsize, slot.pkthdr.caplen);
+        }
         
         rc_slot.set_status(InUseStatus::Reading);
         
