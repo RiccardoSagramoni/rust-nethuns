@@ -20,6 +20,10 @@ pub enum InUseStatus {
 }
 
 
+/// Slot of a socket ring.
+///
+/// It holds a status flag which indicates if the slot is currently "in use" by a thread
+/// and provide mutable access to its inner data with dynamically checked borrow rules.
 #[derive(Debug)]
 pub struct NethunsRingSlot {
     status: AtomicInUseStatus,
@@ -27,16 +31,11 @@ pub struct NethunsRingSlot {
     inner: RefCell<NethunsRingSlotInner>, // RefCell guarantees more safetu against UB
 }
 
-
-#[derive(Debug, thiserror::Error)]
-pub enum SlotError {
-    #[error("the slot is inuse")]
-    NotFree,
-}
-
 unsafe impl Send for NethunsRingSlot {}
 
 impl NethunsRingSlot {
+    /// Create a new `NethunsRingSlot` object with an allocated
+    /// buffer of size `pktsize`.
     pub fn new(pktsize: usize) -> Self {
         Self {
             inner: RefCell::new(
@@ -46,18 +45,22 @@ impl NethunsRingSlot {
         }
     }
     
+    /// Get the current status flag in a thread-safe manner.
     pub fn status(&self) -> InUseStatus {
         self.status.load(Ordering::Acquire)
     }
     
+    /// Set the current status flag in a thread-safe manner.
     pub fn set_status(&self, status: InUseStatus) {
         self.status.store(status, Ordering::Release)
     }
     
+    /// Immutably borrows the inner structure.
     pub fn borrow(&self) -> Ref<'_, NethunsRingSlotInner> {
         self.inner.borrow()
     }
     
+    /// Mutably borrows the inner structure.
     pub fn borrow_mut(&self) -> RefMut<'_, NethunsRingSlotInner> {
         self.inner.borrow_mut()
     }
