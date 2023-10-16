@@ -10,7 +10,7 @@ use ouroboros::self_referencing;
 
 use crate::types::{NethunsQueue, NethunsSocketOptions};
 
-use super::ring::{NethunsRing, NethunsRingSlot};
+use super::ring::{NethunsRing, NethunsRingSlot, RingSlotStatus};
 use super::PkthdrTrait;
 
 
@@ -89,7 +89,7 @@ impl Display for RecvPacket {
 #[self_referencing(pub_extras)]
 #[derive(Debug)]
 pub struct RecvPacketData {
-    slot: Arc<RwLock<NethunsRingSlot>>,
+    slot: Arc<NethunsRingSlot>,
     #[borrows(slot)]
     pub packet: &'this [u8],
 }
@@ -108,10 +108,8 @@ impl Drop for RecvPacket {
         // Unset the `inuse` flag of the related ring slot
         self.packet
             .borrow_slot()
-            .write()
-            .unwrap()
             .inuse
-            .store(0, atomic::Ordering::Release);
+            .store(RingSlotStatus::Free, atomic::Ordering::Release);
     }
 }
 

@@ -1,10 +1,10 @@
 pub(crate) mod circular_buffer;
 
 use std::mem;
-use std::sync::{Arc, RwLock};
+use std::sync::Arc;
 
-use crate::sockets::ring::NethunsRingSlot;
 use crate::sockets::NethunsSocket;
+use crate::sockets::ring::NethunsRingSlot;
 use crate::types::NethunsQueue;
 
 
@@ -48,7 +48,7 @@ pub fn nethuns_device_name(socket: &dyn NethunsSocket) -> String {
 #[inline(always)]
 pub(crate) unsafe fn bind_packet_lifetime_to_slot<'a>(
     pkt: &[u8],
-    _slot: &'a Arc<RwLock<NethunsRingSlot>>,
+    _slot: &'a Arc<NethunsRingSlot>,
 ) -> &'a [u8] {
     mem::transmute(pkt)
 }

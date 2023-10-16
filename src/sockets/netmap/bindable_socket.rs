@@ -225,8 +225,6 @@ impl BindableNethunsSocket for BindableNethunsSocketNetmap {
             for i in 0..tx_ring.size() {
                 tx_ring
                     .get_slot(i)
-                    .write()
-                    .expect("failed `write()` on `tx_ring` because of RwLock poisoning")
                     .pkthdr
                     .buf_idx = scan;
                 scan = unsafe {
