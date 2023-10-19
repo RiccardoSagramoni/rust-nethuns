@@ -148,7 +148,7 @@ pub trait NethunsSocket: Debug + Send {
     /// # Returns
     /// * `Ok(())` - On success.
     /// * `Err(NethunsSendError::InUse)` - If the slot is not released yet and it's currently in use by the application.
-    fn send_slot(&self, id: usize, len: usize) -> Result<(), NethunsSendError>;
+    fn send_slot(&mut self, id: usize, len: usize) -> Result<(), NethunsSendError>;
     
     
     /// Get an immutable reference to the base socket descriptor.

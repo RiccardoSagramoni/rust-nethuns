@@ -1,12 +1,12 @@
-use std::cmp;
 use std::sync::atomic::{AtomicU8, Ordering};
 use std::sync::Arc;
+use std::{cmp, ptr};
 
 use getset::{Getters, MutGetters};
 
 use super::{NethunsSocket, Pkthdr};
 
-use crate::misc::circular_buffer::CircularCloneBuffer;
+use crate::misc::circular_buffer::CircularBuffer;
 
 
 /// Ring abstraction for Nethuns sockets.
@@ -14,7 +14,7 @@ use crate::misc::circular_buffer::CircularCloneBuffer;
 pub struct NethunsRing {
     pktsize: usize,
     
-    pub(crate) rings: CircularCloneBuffer<Arc<NethunsRingSlot>>,
+    pub(crate) rings: CircularBuffer<NethunsRingSlot>,
 }
 
 
@@ -24,34 +24,36 @@ impl NethunsRing {
     /// Equivalent to `nethuns_make_ring` from the original C library.
     #[inline(always)]
     pub fn new(nslots: usize, pktsize: usize) -> NethunsRing {
-        let builder =
-            || Arc::new(NethunsRingSlot::default_with_packet_size(pktsize));
+        let builder = || NethunsRingSlot::default_with_packet_size(pktsize);
         
         NethunsRing {
             pktsize,
-            rings: CircularCloneBuffer::new(nslots, &builder),
+            rings: CircularBuffer::new(nslots, &builder),
         }
     }
     
     
     /// Get a reference to a slot in the ring, given its index.
     #[inline(always)]
-    pub fn get_slot(&self, index: usize) -> Arc<NethunsRingSlot> {
+    pub fn get_slot(&self, index: usize) -> &NethunsRingSlot {
         self.rings.get(index)
+    }
+    
+    /// Get a reference to a slot in the ring, given its index.
+    #[inline(always)]
+    pub fn get_slot_mut(&mut self, index: usize) -> &mut NethunsRingSlot {
+        self.rings.get_mut(index)
     }
     
     
     /// Get the index of a slot in the ring, given its reference.
     #[inline(always)]
-    pub fn get_idx_slot(
-        &self,
-        arc_slot: &Arc<NethunsRingSlot>,
-    ) -> Option<usize> {
+    pub fn get_idx_slot(&self, slot: &NethunsRingSlot) -> Option<usize> {
         // FIXME: this is inefficient. Can we improve it?
         self.rings
             .iter()
             .take(self.rings.size())
-            .position(|slot: _| Arc::ptr_eq(slot, arc_slot))
+            .position(|s: _| ptr::eq(s, slot))
     }
     
     
@@ -119,7 +121,7 @@ impl NethunsRing {
     
     /// Get a reference to the head slot in the ring
     /// and shift the head to the following slot.
-    pub fn next_slot(&mut self) -> Arc<NethunsRingSlot> {
+    pub fn next_slot(&mut self) -> &NethunsRingSlot {
         self.rings.pop_unchecked()
     }
     
@@ -135,8 +137,8 @@ impl NethunsRing {
     /// * `true` - On success.
     /// * `false` - If the slot is already in use.
     #[inline(always)]
-    pub fn nethuns_send_slot(&self, id: usize, len: usize) -> bool {
-        let mut slot = self.get_slot(id as _);
+    pub fn nethuns_send_slot(&mut self, id: usize, len: usize) -> bool {
+        let slot = self.get_slot_mut(id as _);
         if slot.inuse.load(Ordering::Acquire) != RingSlotStatus::Free {
             return false;
         }
@@ -149,14 +151,21 @@ impl NethunsRing {
 
 /// Ring slot of a Nethuns socket.
 #[derive(Debug, Default, Getters, MutGetters)]
-pub(crate) struct NethunsRingSlot {
-    pub inuse: AtomicRingSlotStatus,
+pub struct NethunsRingSlot {
+    pub(crate) inuse: Arc<AtomicRingSlotStatus>,
     
-    pub pkthdr: Pkthdr,
-    pub id: usize,
-    pub len: usize,
+    pub(crate) pkthdr: Pkthdr,
+    pub(crate) id: usize,
+    pub(crate) len: usize,
     
-    pub packet: Vec<u8>,
+    pub(crate) packet: Vec<u8>,
+}
+
+impl Clone for NethunsRingSlot {
+    fn clone(&self) -> Self {
+        // TODO remove and refactor circular buffer
+        todo!()
+    }
 }
 
 
@@ -292,12 +301,12 @@ pub(super) use nethuns_ring_free_slots;
 /// Get size of the RX ring.
 #[inline(always)]
 pub fn rxring_get_size(socket: &dyn NethunsSocket) -> Option<usize> {
-    socket.base().rx_ring().map(|r| r.size())
+    socket.base().rx_ring().as_ref().map(|r| r.size())
 }
 
 
 /// Get size of the TX ring.
 #[inline(always)]
 pub fn txring_get_size(socket: &dyn NethunsSocket) -> Option<usize> {
-    socket.base().tx_ring().map(|r| r.size())
+    socket.base().tx_ring().as_ref().map(|r| r.size())
 }

@@ -1,4 +1,4 @@
-use std::cmp;
+use std::{cmp, mem};
 use std::fs::File;
 use std::sync::{atomic, Arc, RwLock};
 
@@ -79,7 +79,8 @@ impl NethunsSocketPcapTrait for NethunsSocketPcap {
             .expect("[read] rx_ring should have been set during `open`");
         
         let caplen = self.base.opt.packetsize;
-        let slot = rx_ring.get_slot(rx_ring.rings.head());
+        let head_idx = rx_ring.rings.head();
+        let slot = rx_ring.get_slot_mut(head_idx);
         if slot.inuse.load(atomic::Ordering::Acquire) != RingSlotStatus::Free {
             return Err(NethunsPcapReadError::InUse);
         }
@@ -119,15 +120,18 @@ impl NethunsSocketPcapTrait for NethunsSocketPcap {
         
         slot.inuse
             .store(RingSlotStatus::InUse, atomic::Ordering::Release);
+        #[allow(dropping_references)]
+        mem::drop(slot);
         
         rx_ring.rings.advance_head();
         
-        let pkthdr = Box::new(slot.pkthdr);
+        let pkthdr = Box::new(rx_ring.get_slot(head_idx).pkthdr);
         
         let packet_data = RecvPacketDataBuilder {
-            slot,
-            packet_builder: |s: &Arc<NethunsRingSlot>| unsafe {
-                bind_packet_lifetime_to_slot(&s.packet[..bytes as _], s)
+            slot: todo!(),
+            packet_builder: |s: &NethunsRingSlot| unsafe {
+                todo!()
+                // bind_packet_lifetime_to_slot(&s.packet[..bytes as _], s)
             },
         }
         .build();

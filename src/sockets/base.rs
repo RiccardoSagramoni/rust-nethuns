@@ -89,7 +89,7 @@ impl Display for RecvPacket {
 #[self_referencing(pub_extras)]
 #[derive(Debug)]
 pub struct RecvPacketData {
-    slot: Arc<NethunsRingSlot>,
+    slot: NethunsRingSlot,
     #[borrows(slot)]
     pub packet: &'this [u8],
 }
