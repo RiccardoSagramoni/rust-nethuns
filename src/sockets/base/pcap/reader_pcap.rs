@@ -1,14 +1,13 @@
 use std::{cmp, mem};
 use std::fs::File;
-use std::sync::{atomic, Arc, RwLock};
+use std::sync::atomic;
 
 use pcap_parser::traits::PcapReaderIterator;
 use pcap_parser::{LegacyPcapReader, PcapBlockOwned, PcapError};
 
-use crate::misc::bind_packet_lifetime_to_slot;
 use crate::sockets::base::pcap::{NethunsSocketPcap, NethunsSocketPcapTrait};
 use crate::sockets::base::{
-    NethunsSocketBase, RecvPacket, RecvPacketDataBuilder,
+    NethunsSocketBase, RecvPacket,
 };
 use crate::sockets::errors::{
     NethunsPcapOpenError, NethunsPcapReadError, NethunsPcapRewindError,
@@ -125,21 +124,13 @@ impl NethunsSocketPcapTrait for NethunsSocketPcap {
         
         rx_ring.rings.advance_head();
         
-        let pkthdr = Box::new(rx_ring.get_slot(head_idx).pkthdr);
-        
-        let packet_data = RecvPacketDataBuilder {
-            slot: todo!(),
-            packet_builder: |s: &NethunsRingSlot| unsafe {
-                todo!()
-                // bind_packet_lifetime_to_slot(&s.packet[..bytes as _], s)
-            },
-        }
-        .build();
+        let slot = rx_ring.get_slot(head_idx);
         
         Ok(RecvPacket::new(
             rx_ring.rings.head() as _,
-            pkthdr,
-            packet_data,
+            Box::new(slot.pkthdr),
+            &slot.packet[..bytes as _],
+            slot.inuse.clone()
         ))
     }
     

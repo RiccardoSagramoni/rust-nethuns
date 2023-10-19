@@ -474,7 +474,7 @@ fn recv_pkt(
         println!("Thread: {}, total: {}, pkt: {}", sockid, total, pkt.id());
         println!(
             "Packet IP addr: {}",
-            print_addrs(pkt.packet().borrow_packet())?
+            print_addrs(pkt.packet())?
         );
     }
     

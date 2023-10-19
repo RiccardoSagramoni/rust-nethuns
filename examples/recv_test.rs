@@ -47,12 +47,16 @@ fn main() {
             }
         }
     }
+    
+    let p = socket.recv();
+    std::mem::drop(socket);
+    println!("{:?}", p);
 }
 
 
 fn dump_packet(pkt: &RecvPacket) {
     let pkthdr = pkt.pkthdr();
-    let packet = pkt.packet().borrow_packet();
+    let packet = pkt.packet();
     
     print!(
         concat!(

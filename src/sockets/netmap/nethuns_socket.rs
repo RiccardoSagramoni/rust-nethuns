@@ -12,9 +12,7 @@ use c_netmap_wrapper::ring::NetmapRing;
 
 use crate::misc::circular_buffer::CircularBuffer;
 use crate::nethuns::__nethuns_clear_if_promisc;
-use crate::sockets::base::{
-    NethunsSocketBase, RecvPacket, RecvPacketDataBuilder,
-};
+use crate::sockets::base::{NethunsSocketBase, RecvPacket};
 use crate::sockets::errors::{
     NethunsFlushError, NethunsRecvError, NethunsSendError,
 };
@@ -174,21 +172,13 @@ impl NethunsSocket for NethunsSocketNetmap {
         
         rx_ring.rings.advance_head();
         
-        let pkthdr = Box::new(rx_ring.get_slot(head_idx).pkthdr);
-        
-        let packet_data = RecvPacketDataBuilder {
-            slot: todo!(),
-            packet_builder: |slot: &NethunsRingSlot| unsafe {
-                // bind_packet_lifetime_to_slot(pkt, slot)
-                todo!()
-            },
-        }
-        .build();
+        let slot = rx_ring.get_slot(head_idx);
         
         Ok(RecvPacket::new(
             rx_ring.rings.head() as _,
-            pkthdr,
-            packet_data,
+            Box::new(slot.pkthdr),
+            pkt,
+            slot.inuse.clone(),
         ))
     }
     
@@ -323,7 +313,11 @@ impl NethunsSocket for NethunsSocketNetmap {
     
     
     #[inline(always)]
-    fn send_slot(&mut self, id: usize, len: usize) -> Result<(), NethunsSendError> {
+    fn send_slot(
+        &mut self,
+        id: usize,
+        len: usize,
+    ) -> Result<(), NethunsSendError> {
         let tx_ring = match &mut self.base.tx_ring {
             Some(r) => r,
             None => return Err(NethunsSendError::NotTx),

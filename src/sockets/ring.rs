@@ -183,7 +183,6 @@ impl NethunsRingSlot {
 
 /// Status of a ring slot
 #[derive(Debug, Default, PartialEq, PartialOrd, Eq, Ord)]
-// #[atomic_enum]
 pub enum RingSlotStatus {
     /// Not in use
     #[default]

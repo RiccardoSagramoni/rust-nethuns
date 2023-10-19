@@ -2,15 +2,14 @@ pub mod pcap;
 
 use std::ffi::CString;
 use std::fmt::{self, Debug, Display};
-use std::sync::{atomic, Arc, RwLock};
+use std::sync::{atomic, Arc};
 
 use derivative::Derivative;
 use getset::{CopyGetters, Getters, Setters};
-use ouroboros::self_referencing;
 
 use crate::types::{NethunsQueue, NethunsSocketOptions};
 
-use super::ring::{NethunsRing, NethunsRingSlot, RingSlotStatus};
+use super::ring::{AtomicRingSlotStatus, NethunsRing, RingSlotStatus};
 use super::PkthdrTrait;
 
 
@@ -67,54 +66,40 @@ pub struct NethunsSocketBase {
 /// - `id`: the id of the packet.
 /// - `pkthdr`: the packet header metadata. Its internal format depends on the selected I/O framework.
 /// - `packet`: the Ethernet packet payload.
-#[derive(Debug, Getters)]
-#[getset(get = "pub")]
-pub struct RecvPacket {
+#[derive(Debug, Getters, CopyGetters)]
+pub struct RecvPacket<'a> {
+    #[getset(get = "pub")]
     id: usize,
+    #[getset(get = "pub")]
     pkthdr: Box<dyn PkthdrTrait>,
-    packet: RecvPacketData,
+    #[getset(get_copy = "pub")]
+    packet: &'a [u8],
+    
+    #[getset(skip)]
+    slot_status_flag: Arc<AtomicRingSlotStatus>,
 }
 
-impl Display for RecvPacket {
+impl<'a> Display for RecvPacket<'_> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(
             f,
-            "{{\n    id: {},\n    pkthdr: {:?},\n    packet: {}\n}}",
+            "{{\n    id: {},\n    pkthdr: {:?},\n    packet: {:?}\n}}",
             self.id, self.pkthdr, self.packet
         )
     }
 }
 
-
-#[self_referencing(pub_extras)]
-#[derive(Debug)]
-pub struct RecvPacketData {
-    slot: NethunsRingSlot,
-    #[borrows(slot)]
-    pub packet: &'this [u8],
-}
-
-impl Display for RecvPacketData {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        self.with(|safe_self| {
-            write!(f, "{:?}", &safe_self.packet)
-        })
-    }
-}
-
-impl Drop for RecvPacket {
+impl Drop for RecvPacket<'_> {
     /// Release the buffer obtained by calling `recv()`.
     fn drop(&mut self) {
         // Unset the `inuse` flag of the related ring slot
-        self.packet
-            .borrow_slot()
-            .inuse
+        self.slot_status_flag
             .store(RingSlotStatus::Free, atomic::Ordering::Release);
     }
 }
 
 
-impl RecvPacket {
+impl RecvPacket<'_> {
     /// Create a new `RecvPacket` instance.
     ///
     /// # Arguments
@@ -126,8 +111,14 @@ impl RecvPacket {
     pub fn new(
         id: usize,
         pkthdr: Box<dyn PkthdrTrait>,
-        packet: RecvPacketData,
+        packet: &[u8],
+        slot_status_flag: Arc<AtomicRingSlotStatus>,
     ) -> RecvPacket {
-        RecvPacket { id, pkthdr, packet }
+        RecvPacket {
+            id,
+            pkthdr,
+            packet,
+            slot_status_flag,
+        }
     }
 }
