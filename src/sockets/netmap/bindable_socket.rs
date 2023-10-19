@@ -77,10 +77,8 @@ impl BindableNethunsSocket for BindableNethunsSocketNetmap {
         mut self: Box<Self>,
         dev: &str,
         queue: NethunsQueue,
-    ) -> Result<
-        Box<dyn NethunsSocket>,
-        (NethunsBindError, Box<dyn BindableNethunsSocket>),
-    > {
+    ) -> Result<NethunsSocket, (NethunsBindError, Box<dyn BindableNethunsSocket>)>
+    {
         // Prepare flag and prefix for device name
         let flags = if !self.tx() {
             "/R".to_owned()
@@ -223,10 +221,7 @@ impl BindableNethunsSocket for BindableNethunsSocketNetmap {
         // Case 1: TX
         if let Some(tx_ring) = &mut self.base.tx_ring {
             for i in 0..tx_ring.size() {
-                tx_ring
-                    .get_slot_mut(i)
-                    .pkthdr
-                    .buf_idx = scan;
+                tx_ring.get_slot_mut(i).pkthdr.buf_idx = scan;
                 scan = unsafe {
                     let ptr = netmap_buf(&some_ring, scan as _) as *const u32;
                     debug_assert!(!ptr.is_null());
@@ -276,7 +271,7 @@ impl BindableNethunsSocket for BindableNethunsSocketNetmap {
         );
         
         thread::sleep(time::Duration::from_secs(2));
-        Ok(Box::new(socket))
+        Ok(NethunsSocket::new(Box::new(socket)))
     }
     
     

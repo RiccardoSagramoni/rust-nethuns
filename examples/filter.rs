@@ -38,8 +38,10 @@ fn main() {
         ..Default::default()
     };
     
-    let socket = nethuns_socket_open(opt).unwrap();
-    let mut socket = socket.bind(&dev, NethunsQueue::Any).unwrap();
+    let socket = nethuns_socket_open(opt)
+        .expect("nethuns_socket_open failed")
+        .bind(&dev, NethunsQueue::Any)
+        .expect("bind failed");
     
     // Set filter
     socket.base_mut().set_filter(Some(Box::new(simple_filter)));

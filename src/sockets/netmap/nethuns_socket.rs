@@ -19,7 +19,7 @@ use crate::sockets::errors::{
 use crate::sockets::ring::{
     nethuns_ring_free_slots, NethunsRingSlot, RingSlotStatus,
 };
-use crate::sockets::NethunsSocket;
+use crate::sockets::NethunsSocketTrait;
 use crate::types::NethunsStat;
 
 use super::utility::{
@@ -75,7 +75,7 @@ impl NethunsSocketNetmap {
     }
 }
 
-impl NethunsSocket for NethunsSocketNetmap {
+impl NethunsSocketTrait for NethunsSocketNetmap {
     fn recv(&mut self) -> Result<RecvPacket, NethunsRecvError> {
         // Check if the ring has been binded to a queue and if it's in RX mode
         let rx_ring = match &mut self.base.rx_ring {
@@ -389,7 +389,7 @@ impl Drop for NethunsSocketNetmap {
                 let next = unsafe {
                     netmap_buf(&self.some_ring, idx as _) as *mut u32
                 };
-                assert!(!next.is_null());
+                debug_assert!(!next.is_null());
                 unsafe {
                     *next = (*self.p.nifp).ni_bufs_head;
                     (*self.p.nifp).ni_bufs_head = idx;

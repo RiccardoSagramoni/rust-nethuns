@@ -13,6 +13,7 @@ pub mod ring;
 
 
 use core::fmt::Debug;
+use std::cell::UnsafeCell;
 use std::ffi::CStr;
 
 use crate::types::{NethunsQueue, NethunsSocketOptions, NethunsStat};
@@ -53,7 +54,7 @@ pub fn nethuns_socket_open(
 ) -> Result<Box<dyn BindableNethunsSocket>, NethunsOpenError> {
     cfg_if::cfg_if! {
         if #[cfg(feature="netmap")] {
-            return BindableNethunsSocketNetmap::open(opt);
+            BindableNethunsSocketNetmap::open(opt)
         }
         else {
             std::compile_error!("The support for the specified I/O framework is not available yet. Check the documentation for more information.");
@@ -79,10 +80,7 @@ pub trait BindableNethunsSocket: Debug {
         self: Box<Self>,
         dev: &str,
         queue: NethunsQueue,
-    ) -> Result<
-        Box<dyn NethunsSocket>,
-        (NethunsBindError, Box<dyn BindableNethunsSocket>),
-    >;
+    ) -> Result<NethunsSocket, (NethunsBindError, Box<dyn BindableNethunsSocket>)>;
     
     /// Get an immutable reference to the base descriptor of the socket.
     fn base(&self) -> &NethunsSocketBase;
@@ -103,9 +101,84 @@ pub trait BindableNethunsSocket: Debug {
 }
 
 
+pub struct NethunsSocket {
+    inner: UnsafeCell<Box<dyn NethunsSocketTrait>>,
+}
+
+impl NethunsSocket {
+    fn new(inner: Box<dyn NethunsSocketTrait>) -> Self {
+        Self {
+            inner: UnsafeCell::new(inner),
+        }
+    }
+    
+    #[allow(clippy::mut_from_ref)]
+    fn inner(&self) -> &mut Box<dyn NethunsSocketTrait> {
+        unsafe { &mut *self.inner.get() }
+    }
+    
+    pub fn recv(&self) -> Result<RecvPacket, NethunsRecvError> {
+        self.inner().recv()
+    }
+    
+    pub fn send(&self, packet: &[u8]) -> Result<(), NethunsSendError> {
+        self.inner().send(packet)
+    }
+    
+    pub fn flush(&self) -> Result<(), NethunsFlushError> {
+        self.inner().flush()
+    }
+    
+    pub fn send_slot(
+        &self,
+        id: usize,
+        len: usize,
+    ) -> Result<(), NethunsSendError> {
+        self.inner().send_slot(id, len)
+    }
+    
+    pub fn base(&self) -> &NethunsSocketBase {
+        self.inner().base()
+    }
+    
+    pub fn base_mut(&self) -> &mut NethunsSocketBase {
+        self.inner().base_mut()
+    }
+    
+    #[inline(always)]
+    pub fn tx(&self) -> bool {
+        self.inner().tx()
+    }
+    
+    #[inline(always)]
+    pub fn rx(&self) -> bool {
+        self.inner().rx()
+    }
+    
+    pub fn fd(&self) -> libc::c_int {
+        self.inner().fd()
+    }
+    
+    pub fn get_packet_buffer_ref(&self, pktid: usize) -> Option<&mut [u8]> {
+        self.inner().get_packet_buffer_ref(pktid)
+    }
+    
+    pub fn fanout(&self, group: libc::c_int, fanout: &CStr) -> bool {
+        self.inner().fanout(group, fanout)
+    }
+    
+    pub fn dump_rings(&self) {
+        self.inner().dump_rings();
+    }
+    
+    pub fn stats(&self) -> Option<NethunsStat> {
+        self.inner().stats()
+    }
+}
+
 /// Trait which defines the interface for a Nethuns socket after binding.
 /// This socket is usable for RX and/or TX, depending from its configuration.
-pub trait NethunsSocket: Debug + Send {
+trait NethunsSocketTrait: Debug + Send {
     /// Get the next unprocessed received packet.
     ///
     /// # Returns
@@ -148,7 +221,11 @@ pub trait NethunsSocket: Debug + Send {
     /// # Returns
     /// * `Ok(())` - On success.
     /// * `Err(NethunsSendError::InUse)` - If the slot is not released yet and it's currently in use by the application.
-    fn send_slot(&mut self, id: usize, len: usize) -> Result<(), NethunsSendError>;
+    fn send_slot(
+        &mut self,
+        id: usize,
+        len: usize,
+    ) -> Result<(), NethunsSendError>;
     
     
     /// Get an immutable reference to the base socket descriptor.
@@ -241,7 +318,7 @@ mod test {
                 assert!(
                     is_trait!(
                         super::netmap::nethuns_socket::NethunsSocketNetmap,
-                        super::NethunsSocket
+                        super::NethunsSocketTrait
                     )
                 );
             }

@@ -1,19 +1,17 @@
-use std::{cmp, mem};
 use std::fs::File;
 use std::sync::atomic;
+use std::{cmp, mem};
 
 use pcap_parser::traits::PcapReaderIterator;
 use pcap_parser::{LegacyPcapReader, PcapBlockOwned, PcapError};
 
 use crate::sockets::base::pcap::{NethunsSocketPcap, NethunsSocketPcapTrait};
-use crate::sockets::base::{
-    NethunsSocketBase, RecvPacket,
-};
+use crate::sockets::base::{NethunsSocketBase, RecvPacket};
 use crate::sockets::errors::{
     NethunsPcapOpenError, NethunsPcapReadError, NethunsPcapRewindError,
     NethunsPcapStoreError, NethunsPcapWriteError,
 };
-use crate::sockets::ring::{NethunsRing, NethunsRingSlot, RingSlotStatus};
+use crate::sockets::ring::{NethunsRing, RingSlotStatus};
 use crate::sockets::PkthdrTrait;
 use crate::types::NethunsSocketOptions;
 
@@ -130,7 +128,7 @@ impl NethunsSocketPcapTrait for NethunsSocketPcap {
             rx_ring.rings.head() as _,
             Box::new(slot.pkthdr),
             &slot.packet[..bytes as _],
-            slot.inuse.clone()
+            slot.inuse.clone(),
         ))
     }
     

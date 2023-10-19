@@ -278,7 +278,7 @@ fn st_send(
     totals: Arc<Mutex<Vec<u64>>>,
 ) -> Result<(), anyhow::Error> {
     // Vector for storing socket ids
-    let mut out_sockets: Vec<Box<dyn NethunsSocket>> =
+    let mut out_sockets: Vec<NethunsSocket> =
         Vec::with_capacity(args.num_sockets as _);
     // One packet index per socket (pos of next slot/packet to send in tx ring)
     let mut pktid: Vec<usize> = vec![0; args.num_sockets as _];
@@ -386,7 +386,7 @@ fn fill_tx_ring(
     opt: NethunsSocketOptions,
     socket_idx: u32,
     payload: &[u8],
-) -> Result<Box<dyn NethunsSocket>, anyhow::Error> {
+) -> Result<NethunsSocket, anyhow::Error> {
     // Open socket
     let socket = nethuns_socket_open(opt)?;
     
@@ -400,7 +400,7 @@ fn fill_tx_ring(
     
     // fill the slots in the tx ring (optimized send only)
     if args.zerocopy {
-        let size = txring_get_size(&*socket).expect("socket not in tx mode");
+        let size = txring_get_size(&socket).expect("socket not in tx mode");
         
         for j in 0..size {
             // tell me where to copy the j-th packet to be transmitted
@@ -428,7 +428,7 @@ fn fill_tx_ring(
 /// - `socket_idx`: Socket index.
 fn transmit_zc(
     args: &Args,
-    socket: &mut Box<dyn NethunsSocket>,
+    socket: &NethunsSocket,
     pktid: &mut usize,
     pkt_size: usize,
     totals: &Arc<Mutex<Vec<u64>>>,
@@ -461,7 +461,7 @@ fn transmit_zc(
 /// - `socket_idx`: Socket index.
 fn transmit_c(
     args: &Args,
-    socket: &mut Box<dyn NethunsSocket>,
+    socket: &NethunsSocket,
     payload: &[u8],
     totals: &Arc<Mutex<Vec<u64>>>,
     socket_idx: usize,

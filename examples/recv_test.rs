@@ -27,15 +27,15 @@ fn main() {
         tx_qdisc_bypass: false,
         ..Default::default()
     };
-    let socket = nethuns_socket_open(opt).unwrap();
-    let mut socket = socket
+    let socket = nethuns_socket_open(opt)
+        .expect("Failed to open socket")
         .bind(
             &env::args()
                 .nth(1)
                 .expect("Usage: ./recv_test <device_name>"),
             NethunsQueue::Any,
         )
-        .unwrap();
+        .expect("Failed to bind socket");
     
     for _ in 0..5000 {
         match socket.recv() {
@@ -47,10 +47,6 @@ fn main() {
             }
         }
     }
-    
-    let p = socket.recv();
-    std::mem::drop(socket);
-    println!("{:?}", p);
 }
 
 

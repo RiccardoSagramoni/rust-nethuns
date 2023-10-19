@@ -299,13 +299,13 @@ pub(super) use nethuns_ring_free_slots;
 
 /// Get size of the RX ring.
 #[inline(always)]
-pub fn rxring_get_size(socket: &dyn NethunsSocket) -> Option<usize> {
+pub fn rxring_get_size(socket: &NethunsSocket) -> Option<usize> {
     socket.base().rx_ring().as_ref().map(|r| r.size())
 }
 
 
 /// Get size of the TX ring.
 #[inline(always)]
-pub fn txring_get_size(socket: &dyn NethunsSocket) -> Option<usize> {
+pub fn txring_get_size(socket: &NethunsSocket) -> Option<usize> {
     socket.base().tx_ring().as_ref().map(|r| r.size())
 }

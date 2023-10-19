@@ -79,7 +79,7 @@ pub struct RecvPacket<'a> {
     slot_status_flag: Arc<AtomicRingSlotStatus>,
 }
 
-impl<'a> Display for RecvPacket<'_> {
+impl Display for RecvPacket<'_> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(
             f,
