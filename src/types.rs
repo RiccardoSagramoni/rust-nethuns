@@ -1,25 +1,28 @@
-use derive_builder::Builder;
-use getset::Getters;
+use getset::CopyGetters;
 
 
-#[derive(Clone, Copy, Debug, Default, PartialEq, PartialOrd)]
+/// Enum for specifying which queue of the device should be used
+/// for capturing packets.
+#[derive(Clone, Copy, Debug, Default, PartialEq, PartialOrd, Eq, Ord)]
 pub enum NethunsQueue {
-    Some(u32),
     #[default]
     Any,
+    Some(u32),
 }
 
 
-#[derive(Clone, Copy, Debug, Default, PartialEq, PartialOrd)]
+/// Enum for specifying the direction for capturing packets.
+#[derive(Clone, Copy, Debug, Default, PartialEq, PartialOrd, Eq, Ord)]
 pub enum NethunsCaptureDir {
-    #[default]
     In,
     Out,
+    #[default]
     InOut,
 }
 
 
-#[derive(Clone, Copy, Debug, Default, PartialEq, PartialOrd)]
+/// Enum for specifying the mode for capturing packets.
+#[derive(Clone, Copy, Debug, Default, PartialEq, PartialOrd, Eq, Ord)]
 pub enum NethunsCaptureMode {
     #[default]
     Default,
@@ -29,7 +32,8 @@ pub enum NethunsCaptureMode {
 }
 
 
-#[derive(Clone, Copy, Debug, Default, PartialEq, PartialOrd)]
+/// Enum for specifying the mode (rx/tx) for the nethuns socket.
+#[derive(Clone, Copy, Debug, Default, PartialEq, PartialOrd, Eq, Ord)]
 pub enum NethunsSocketMode {
     #[default]
     RxTx,
@@ -39,8 +43,7 @@ pub enum NethunsSocketMode {
 
 
 /// Options for the nethuns socket.
-#[derive(Builder, Clone, Debug, Default, PartialEq, PartialOrd)]
-#[builder(pattern = "owned", default)]
+#[derive(Clone, Debug, Default, PartialEq, PartialOrd, Eq, Ord)]
 pub struct NethunsSocketOptions {
     pub numblocks: u32,
     pub numpackets: u32,
@@ -67,8 +70,10 @@ pub struct NethunsSocketOptions {
 
 
 /// Statistics for the nethuns socket.
-#[derive(Clone, Copy, Debug, Default, PartialEq, PartialOrd, Getters)]
-#[getset(get = "pub")]
+#[derive(
+    Clone, Copy, CopyGetters, Debug, Default, PartialEq, PartialOrd, Eq, Ord,
+)]
+#[getset(get_copy = "pub")]
 pub struct NethunsStat {
     rx_packets: u64,
     tx_packets: u64,
@@ -86,36 +91,24 @@ pub struct NethunsStat {
 mod tests {
     use is_trait::is_trait;
     
+    use super::*;
     
     #[test]
     fn assert_send_trait() {
-        assert!(is_trait!(super::NethunsCaptureDir, Send));
-        assert!(is_trait!(super::NethunsCaptureMode, Send));
-        assert!(is_trait!(super::NethunsSocketMode, Send));
-        assert!(is_trait!(super::NethunsSocketOptions, Send));
-        assert!(is_trait!(super::NethunsStat, Send));
+        assert!(is_trait!(NethunsCaptureDir, Send));
+        assert!(is_trait!(NethunsCaptureMode, Send));
+        assert!(is_trait!(NethunsSocketMode, Send));
+        assert!(is_trait!(NethunsSocketOptions, Send));
+        assert!(is_trait!(NethunsStat, Send));
     }
     
     
     #[test]
     fn assert_sync_trait() {
-        assert!(is_trait!(super::NethunsCaptureDir, Sync));
-        assert!(is_trait!(super::NethunsCaptureMode, Sync));
-        assert!(is_trait!(super::NethunsSocketMode, Sync));
-        assert!(is_trait!(super::NethunsSocketOptions, Sync));
-        assert!(is_trait!(super::NethunsStat, Sync));
-    }
-    
-    
-    #[test]
-    fn test_nethuns_socket_options_builder() {
-        let numblocks: u32 = 12;
-        let opt1 = super::NethunsSocketOptionsBuilder::default()
-            .numblocks(numblocks)
-            .build()
-            .unwrap();
-        let mut opt2 = super::NethunsSocketOptions::default();
-        opt2.numblocks = numblocks;
-        assert_eq!(opt1, opt2);
+        assert!(is_trait!(NethunsCaptureDir, Sync));
+        assert!(is_trait!(NethunsCaptureMode, Sync));
+        assert!(is_trait!(NethunsSocketMode, Sync));
+        assert!(is_trait!(NethunsSocketOptions, Sync));
+        assert!(is_trait!(NethunsStat, Sync));
     }
 }
