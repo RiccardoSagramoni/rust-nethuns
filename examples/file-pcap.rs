@@ -1,6 +1,6 @@
 use std::{env, mem};
 
-use nethuns::sockets::base::pcap::{NethunsSocketPcap, NethunsSocketPcapTrait};
+use nethuns::sockets::pcap::NethunsSocketPcap;
 use nethuns::sockets::errors::NethunsPcapReadError;
 use nethuns::sockets::{nethuns_socket_open, PkthdrTrait};
 use nethuns::types::{
@@ -75,7 +75,7 @@ fn run_read_count_mode(conf: Configuration) {
         ..Default::default()
     };
     
-    let mut socket: NethunsSocketPcap =
+    let socket: NethunsSocketPcap =
         NethunsSocketPcap::open(opt, &conf.target_name, false)
             .expect("unable to open `output` socket");
     
@@ -135,7 +135,7 @@ fn run_capture_mode(conf: Configuration) {
         ..Default::default()
     };
     
-    let mut out_socket = NethunsSocketPcap::open(
+    let out_socket = NethunsSocketPcap::open(
         opt.clone(),
         format!("{}.pcap", &conf.target_name).as_str(),
         true,
@@ -144,7 +144,7 @@ fn run_capture_mode(conf: Configuration) {
     
     let in_socket =
         nethuns_socket_open(opt).expect("unable to open `input` socket");
-    let mut in_socket = in_socket
+    let in_socket = in_socket
         .bind(&conf.target_name, NethunsQueue::Any)
         .unwrap_or_else(|_| {
             panic!(
@@ -156,15 +156,9 @@ fn run_capture_mode(conf: Configuration) {
     let mut i = 0;
     while i < 10 {
         if let Ok(pkt) = in_socket.recv() {
-            println!(
-                "{}",
-                dump_packet(
-                    pkt.pkthdr().as_ref(),
-                    pkt.packet().borrow_packet()
-                )
-            );
+            println!("{}", dump_packet(pkt.pkthdr(), pkt.packet()));
             out_socket
-                .store(pkt.pkthdr().as_ref(), pkt.packet().borrow_packet())
+                .store(pkt.pkthdr(), pkt.packet())
                 .expect("pcap store failed");
             i += 1;
         }

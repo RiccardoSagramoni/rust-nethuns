@@ -1,9 +1,9 @@
 use std::sync::mpsc;
 use std::{env, mem, thread};
 
-use nethuns::sockets::base::pcap::{NethunsSocketPcap, NethunsSocketPcapTrait};
 use nethuns::sockets::base::RecvPacket;
 use nethuns::sockets::errors::NethunsPcapReadError;
+use nethuns::sockets::pcap::NethunsSocketPcap;
 use nethuns::types::{
     NethunsCaptureDir, NethunsCaptureMode, NethunsSocketMode,
     NethunsSocketOptions,
@@ -27,48 +27,49 @@ fn main() {
     };
     
     // Open socket
-    let mut socket: NethunsSocketPcap =
+    let socket: NethunsSocketPcap =
         NethunsSocketPcap::open(opt, get_target_filename().as_str(), false)
             .expect("unable to open `output` socket");
     
     
-    // Create SPSC ring buffer
-    let (mut producer, consumer) = RingBuffer::<RecvPacket>::new(65536);
-    
-    // Create channel for thread communication
-    let (tx, rx) = mpsc::channel::<()>();
-    
-    // Spawn consumer thread
-    let consumer_th = thread::spawn(move || {
-        consumer_body(consumer, rx);
-    });
-    
-    
-    loop {
-        match socket.read() {
-            Ok(packet) => {
-                while !producer.is_abandoned() {
-                    if !producer.is_full() {
-                        producer.push(packet).unwrap();
-                        break;
+    thread::scope(|scope| {
+        // Create SPSC ring buffer
+        let (mut producer, consumer) =
+            RingBuffer::<RecvPacket<NethunsSocketPcap>>::new(65536);
+        
+        // Create channel for send stop signal
+        let (stop_tx, stop_rx) = mpsc::channel::<()>();
+        
+        // Spawn consumer thread
+        scope.spawn(move || {
+            consumer_body(consumer, stop_rx);
+        });
+        
+        loop {
+            match socket.read() {
+                Ok(packet) => {
+                    while !producer.is_abandoned() {
+                        if !producer.is_full() {
+                            producer.push(packet).unwrap();
+                            break;
+                        }
                     }
                 }
-            }
-            Err(NethunsPcapReadError::Eof) => {
-                break;
-            }
-            Err(e) => {
-                panic!("error: {:?}", e);
+                Err(NethunsPcapReadError::Eof) => {
+                    break;
+                }
+                Err(e) => {
+                    panic!("error: {:?}", e);
+                }
             }
         }
-    }
-    
-    println!(
-        "head: {}\n",
-        socket.base().rx_ring().as_ref().unwrap().head()
-    );
-    tx.send(()).expect("unable to send signal in mpsc channel");
-    consumer_th.join().expect("unable to join consumer thread");
+        
+        println!(
+            "head: {}\n",
+            socket.base().rx_ring().as_ref().unwrap().head()
+        );
+        stop_tx.send(()).expect("unable to send signal in mpsc channel");
+    });
 }
 
 
@@ -81,7 +82,10 @@ fn get_target_filename() -> String {
 }
 
 
-fn consumer_body(mut consumer: Consumer<RecvPacket>, rx: mpsc::Receiver<()>) {
+fn consumer_body(
+    mut consumer: Consumer<RecvPacket<NethunsSocketPcap>>,
+    rx: mpsc::Receiver<()>,
+) {
     loop {
         // Read packet
         if let Ok(packet) = consumer.pop() {
