@@ -77,7 +77,7 @@ pub(super) fn non_empty_rx_ring(
 /// *free_macro* parameter.
 ///
 /// # Arguments
-/// * `socket` - the nethuns socket
+/// * `socket` - the [`NethunsSocketNetmap`](super::nethuns_socket::NethunsSocketNetmap) object
 /// * `slot` - the newly available ring slot
 /// * `block_id` - *unused*
 macro_rules! nethuns_blocks_free {
@@ -93,8 +93,8 @@ pub(super) use nethuns_blocks_free;
 /// inside a specific ring slot.
 ///
 /// # Arguments
-/// * `$some_ring`: an immutable reference to the `some_ring` field of NethunsSocketNetmap
-/// * `$tx_ring`: the NethunsRing object which represents the transmissione ring
+/// * `$some_ring`: an immutable reference to the `some_ring` field of [`NethunsSocketNetmap`](super::nethuns_socket::NethunsSocketNetmap)
+/// * `$tx_ring`: the [`NethunsRing`](crate::sockets::ring::NethunsRing) object which represents the transmissione ring
 /// * `$pktid`: the ring slot id
 ///
 /// # Returns

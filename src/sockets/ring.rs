@@ -4,17 +4,20 @@ use std::{cmp, ptr};
 
 use getset::{Getters, MutGetters};
 
-use super::{NethunsSocket, Pkthdr};
+use super::api::Pkthdr;
+use super::NethunsSocket;
 
 use crate::misc::circular_buffer::CircularBuffer;
 
 
 /// Ring abstraction for Nethuns sockets.
-#[derive(Debug, Getters, MutGetters)] // TODO getters
+#[derive(Debug, Getters, MutGetters)]
 pub struct NethunsRing {
+    #[getset(get = "pub")]
     pktsize: usize,
     
-    pub(crate) rings: CircularBuffer<NethunsRingSlot>,
+    #[getset(get = "pub(crate)", get_mut = "pub(crate)")]
+    rings: CircularBuffer<NethunsRingSlot>,
 }
 
 
@@ -53,7 +56,7 @@ impl NethunsRing {
         self.rings
             .iter()
             .take(self.rings.size())
-            .position(|s: _| ptr::eq(s, slot))
+            .position(|s| ptr::eq(s, slot))
     }
     
     
@@ -61,12 +64,6 @@ impl NethunsRing {
     #[inline(always)]
     pub fn size(&self) -> usize {
         self.rings.size()
-    }
-    
-    /// Get the packet size
-    #[inline(always)]
-    pub fn pktsize(&self) -> usize {
-        self.pktsize
     }
     
     /// Check if the buffer is empty
@@ -150,7 +147,7 @@ impl NethunsRing {
 
 
 /// Ring slot of a Nethuns socket.
-#[derive(Debug, Default, Getters, MutGetters)]
+#[derive(Debug, Default)]
 pub struct NethunsRingSlot {
     pub(crate) inuse: Arc<AtomicRingSlotStatus>,
     
@@ -159,13 +156,6 @@ pub struct NethunsRingSlot {
     pub(crate) len: usize,
     
     pub(crate) packet: Vec<u8>,
-}
-
-impl Clone for NethunsRingSlot {
-    fn clone(&self) -> Self {
-        // TODO remove and refactor circular buffer
-        todo!()
-    }
 }
 
 
@@ -280,9 +270,9 @@ impl Default for AtomicRingSlotStatus {
 macro_rules! nethuns_ring_free_slots {
     ($socket: expr, $ring: expr, $free_macro: ident) => {
         loop {
-            let slot = $ring.get_slot($ring.rings.tail());
+            let slot = $ring.get_slot($ring.rings().tail());
             
-            if $ring.rings.is_empty()
+            if $ring.rings().is_empty()
                 || slot.inuse.load(Ordering::Acquire)
                     != crate::sockets::ring::RingSlotStatus::Free
             {
@@ -290,7 +280,7 @@ macro_rules! nethuns_ring_free_slots {
             }
             
             $free_macro!($socket, slot, slot.id);
-            $ring.rings.advance_tail();
+            $ring.rings_mut().advance_tail();
         }
     };
 }

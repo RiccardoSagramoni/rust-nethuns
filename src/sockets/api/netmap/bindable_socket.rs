@@ -270,6 +270,7 @@ impl BindableNethunsSocketTrait for BindableNethunsSocketNetmap {
             self.base, nm_port_d, some_ring, free_ring,
         );
         
+        // Wait 2 secs for phy reset
         thread::sleep(time::Duration::from_secs(2));
         Ok(NethunsSocket::new(Box::new(socket)))
     }
@@ -278,11 +279,5 @@ impl BindableNethunsSocketTrait for BindableNethunsSocketNetmap {
     #[inline(always)]
     fn base(&self) -> &NethunsSocketBase {
         &self.base
-    }
-    
-    
-    #[inline(always)]
-    fn base_mut(&mut self) -> &mut NethunsSocketBase {
-        &mut self.base
     }
 }

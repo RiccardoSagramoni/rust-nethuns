@@ -396,7 +396,7 @@ fn fill_tx_ring(
     } else {
         NethunsQueue::Any
     };
-    let socket = socket.bind(&args.interface, queue).map_err(|(e, _)| e)?;
+    let mut socket = socket.bind(&args.interface, queue).map_err(|(e, _)| e)?;
     
     // fill the slots in the tx ring (optimized send only)
     if args.zerocopy {

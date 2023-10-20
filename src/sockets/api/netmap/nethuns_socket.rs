@@ -84,7 +84,7 @@ impl NethunsSocketTrait for NethunsSocketNetmap {
         };
         
         // Get the first slot available to userspace (head of RX ring) and check if it's in use
-        let head_idx = rx_ring.rings.head();
+        let head_idx = rx_ring.rings().head();
         if rx_ring.get_slot(head_idx).inuse.load(Ordering::Acquire)
             != RingSlotStatus::Free
         {
@@ -170,12 +170,12 @@ impl NethunsSocketTrait for NethunsSocketNetmap {
             slot.inuse.store(RingSlotStatus::InUse, Ordering::Release);
         }
         
-        rx_ring.rings.advance_head();
+        rx_ring.rings_mut().advance_head();
         
         let slot = rx_ring.get_slot(head_idx);
         
         Ok(RecvPacketData::new(
-            rx_ring.rings.head() as _,
+            rx_ring.rings().head() as _,
             Box::new(slot.pkthdr),
             pkt,
             slot.inuse.clone(),
@@ -189,7 +189,7 @@ impl NethunsSocketTrait for NethunsSocketNetmap {
             None => return Err(NethunsSendError::NotTx),
         };
         
-        let slot = tx_ring.get_slot(tx_ring.rings.tail());
+        let slot = tx_ring.get_slot(tx_ring.rings().tail());
         if slot.inuse.load(Ordering::Relaxed) != RingSlotStatus::Free {
             return Err(NethunsSendError::InUse);
         }
@@ -198,14 +198,14 @@ impl NethunsSocketTrait for NethunsSocketNetmap {
             nethuns_get_buf_addr_netmap!(
                 &self.some_ring,
                 tx_ring,
-                tx_ring.rings.tail()
+                tx_ring.rings().tail()
             )
         };
         unsafe {
             nm_pkt_copy(packet.as_ptr() as _, dst as _, packet.len() as _)
         };
-        tx_ring.nethuns_send_slot(tx_ring.rings.tail(), packet.len());
-        tx_ring.rings.advance_tail();
+        tx_ring.nethuns_send_slot(tx_ring.rings().tail(), packet.len());
+        tx_ring.rings_mut().advance_tail();
         
         Ok(())
     }
@@ -220,7 +220,7 @@ impl NethunsSocketTrait for NethunsSocketNetmap {
         let mut prev_tails: Vec<u32> =
             vec![0; (self.p.last_tx_ring - self.p.last_rx_ring + 1) as _];
         
-        let mut head = tx_ring.rings.head();
+        let mut head = tx_ring.rings().head();
         
         // Try to push packets marked for transmission
         for i in self.p.first_tx_ring as _..=self.p.last_tx_ring as _ {
@@ -262,7 +262,7 @@ impl NethunsSocketTrait for NethunsSocketNetmap {
                 ring.cur = unsafe { ring.nm_ring_next(ring.head) };
                 ring.head = ring.cur;
                 head += 1;
-                tx_ring.rings.advance_head();
+                tx_ring.rings_mut().advance_head();
             }
         }
         
@@ -341,7 +341,8 @@ impl NethunsSocketTrait for NethunsSocketNetmap {
     }
     
     
-    fn fd(&self) -> libc::c_int {
+    #[inline(always)]
+    fn fd(&self) -> std::os::raw::c_int {
         self.p.fd
     }
     

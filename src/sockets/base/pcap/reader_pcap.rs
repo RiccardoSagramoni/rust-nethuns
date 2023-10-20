@@ -76,7 +76,7 @@ impl NethunsSocketPcapTrait for NethunsSocketPcapInner {
             .expect("[read] rx_ring should have been set during `open`");
         
         let caplen = self.base.opt.packetsize;
-        let head_idx = rx_ring.rings.head();
+        let head_idx = rx_ring.rings().head();
         let slot = rx_ring.get_slot_mut(head_idx);
         if slot.inuse.load(atomic::Ordering::Acquire) != RingSlotStatus::Free {
             return Err(NethunsPcapReadError::InUse);
@@ -120,12 +120,12 @@ impl NethunsSocketPcapTrait for NethunsSocketPcapInner {
         #[allow(dropping_references)]
         mem::drop(slot);
         
-        rx_ring.rings.advance_head();
+        rx_ring.rings_mut().advance_head();
         
         let slot = rx_ring.get_slot(head_idx);
         
         Ok(RecvPacketData::new(
-            rx_ring.rings.head() as _,
+            rx_ring.rings().head() as _,
             Box::new(slot.pkthdr),
             &slot.packet[..bytes as _],
             slot.inuse.clone(),

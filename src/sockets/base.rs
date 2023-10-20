@@ -8,7 +8,7 @@ use std::sync::{atomic, Arc};
 use derivative::Derivative;
 use getset::{CopyGetters, Getters, Setters};
 
-use crate::types::{NethunsQueue, NethunsSocketOptions, NethunsFilter};
+use crate::types::{NethunsFilter, NethunsQueue, NethunsSocketOptions};
 
 use super::ring::{AtomicRingSlotStatus, NethunsRing, RingSlotStatus};
 use super::PkthdrTrait;
@@ -52,16 +52,11 @@ pub struct NethunsSocketBase {
 // filter_ctx removed => use closures with move semantics
 
 
-/// Packet received when calling `recv()` on a `NethunsSocket` object.
+/// Packet received when calling [`NethunsSocket::recv()`](crate::sockets::NethunsSocket::recv)
+/// or [`NethunsSocketPcap::read()`](crate::sockets::base::pcap::NethunsSocketPcap::read).
 ///
-/// It's valid as long as the related `NethunsRingSlot` object is alive.
-///
-/// You can use the `RecvPacket::try_new()` method to create a new instance.
-///
-/// # Fields
-/// - `id`: the id of the packet.
-/// - `pkthdr`: the packet header metadata. Its internal format depends on the selected I/O framework.
-/// - `packet`: the Ethernet packet payload.
+/// The struct contains a [`PhantomData`] marker associated with the socket itself,
+/// so that the `RecvPacket` item is valid as long as the socket is alive.
 #[derive(Debug, Getters)]
 pub struct RecvPacket<'a, T> {
     data: RecvPacketData,
@@ -69,12 +64,14 @@ pub struct RecvPacket<'a, T> {
     phantom_data: PhantomData<&'a T>,
 }
 
+/// [SAFETY]
+/// The `packet` raw pointer is valid as long as the `RecvPacket`
+/// item is valid and the library guarantees that we are the only
+/// holders of such pointer for the lifetime of the `RecvPacket` item.
+/// Thus, it can be safely send between threads.
 unsafe impl<T: Send> Send for RecvPacket<'_, T> {}
 
 impl<T> RecvPacket<'_, T> {
-    /// Create a new `RecvPacket` instance.
-    ///
-    /// TODO
     pub fn new(
         data: RecvPacketData,
         phantom_data: PhantomData<&'_ T>,
@@ -111,6 +108,11 @@ impl<T> Display for RecvPacket<'_, T> {
 }
 
 
+/// Packet received when calling [`NethunsSocket::recv()`](crate::sockets::NethunsSocket::recv)
+/// or [`NethunsSocketPcap::read()`](crate::sockets::base::pcap::NethunsSocketPcap::read)
+/// with static lifetime.
+/// 
+/// It **must** be wrapped inside `RecvPacket` struct before being handed to the user.
 #[derive(Debug)]
 pub struct RecvPacketData {
     id: usize,

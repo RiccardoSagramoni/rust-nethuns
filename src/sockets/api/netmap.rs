@@ -5,4 +5,4 @@ mod utility;
 
 pub use bindable_socket::BindableNethunsSocketNetmap;
 pub use nethuns_socket::NethunsSocketNetmap;
-pub use pkthdr::Pkthdr;
+pub use pkthdr::PkthdrNetmap;
