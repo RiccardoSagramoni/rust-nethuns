@@ -1,4 +1,4 @@
-use nethuns::sockets::base::pcap::NethunsSocketPcap;
+use nethuns::sockets::pcap::NethunsSocketPcap;
 use nethuns::types::NethunsSocketOptions;
 
 fn main() {

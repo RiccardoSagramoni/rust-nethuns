@@ -2,7 +2,7 @@ use std::{env, mem};
 
 use nethuns::sockets::errors::NethunsPcapReadError;
 use nethuns::sockets::pcap::NethunsSocketPcap;
-use nethuns::sockets::{nethuns_socket_open, PkthdrTrait};
+use nethuns::sockets::{PkthdrTrait, BindableNethunsSocket};
 use nethuns::types::{
     NethunsCaptureDir, NethunsCaptureMode, NethunsQueue, NethunsSocketMode,
     NethunsSocketOptions,
@@ -142,7 +142,7 @@ fn run_capture_mode(conf: Configuration) {
     )
     .expect("unable to open `output` socket");
 
-    let mut in_socket = BindableNethunsSocket::open(opt)
+    let in_socket = BindableNethunsSocket::open(opt)
         .expect("unable to open `input` socket")
         .bind(&conf.target_name, NethunsQueue::Any)
         .unwrap_or_else(|_| {
