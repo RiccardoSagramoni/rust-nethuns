@@ -1,10 +1,10 @@
-use nethuns::sockets::nethuns_socket_open;
+use nethuns::sockets::BindableNethunsSocket;
 use nethuns::types::{NethunsQueue, NethunsSocketOptions};
 
 fn main() {
     let opt = NethunsSocketOptions::default();
     
-    let socket = nethuns_socket_open(opt)
+    let socket = BindableNethunsSocket::open(opt)
         .unwrap()
         .bind("dev", NethunsQueue::Any)
         .unwrap();

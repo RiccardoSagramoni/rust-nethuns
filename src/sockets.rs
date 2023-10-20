@@ -12,12 +12,19 @@ use std::cell::UnsafeCell;
 use std::ffi::CStr;
 use std::marker::PhantomData;
 
-use crate::types::{NethunsFilter, NethunsQueue, NethunsStat};
+use crate::types::{
+    NethunsFilter, NethunsQueue, NethunsSocketOptions, NethunsStat,
+};
 
 use self::base::{NethunsSocketBase, RecvPacket, RecvPacketData};
 use self::errors::{
-    NethunsBindError, NethunsFlushError, NethunsRecvError, NethunsSendError,
+    NethunsBindError, NethunsFlushError, NethunsOpenError, NethunsRecvError,
+    NethunsSendError,
 };
+
+
+mod api;
+use api::nethuns_socket_open;
 
 
 /// Type for a Nethuns socket not binded to a specific device and queue.
@@ -33,9 +40,18 @@ pub struct BindableNethunsSocket {
 }
 
 impl BindableNethunsSocket {
-    /// Create a new `BindableNethunsSocket`.
-    fn new(inner: Box<dyn BindableNethunsSocketTrait>) -> Self {
-        Self { inner }
+    /// Open a new Nethuns socket, by calling the `open` function
+    /// of the struct belonging to the I/O framework selected at compile time.
+    ///
+    /// # Arguments
+    /// * `opt`: The options for the socket.
+    ///
+    /// # Returns
+    /// * `Ok(BindableNethunsSocket)` - A new nethuns socket, in no error occurs.
+    /// * `Err(NethunsOpenError::InvalidOptions)` - If at least one of the options holds a invalid value.
+    /// * `Err(NethunsOpenError::Error)` - If an unexpected error occurs.
+    pub fn open(opt: NethunsSocketOptions) -> Result<Self, NethunsOpenError> {
+        nethuns_socket_open(opt).map(|inner| Self { inner })
     }
     
     /// Bind an opened socket to a specific queue / any queue of interface/device `dev`.
@@ -50,9 +66,9 @@ impl BindableNethunsSocket {
         dev: &str,
         queue: NethunsQueue,
     ) -> Result<NethunsSocket, (NethunsBindError, Self)> {
-        self.inner.bind(dev, queue).map_err(|(error, socket)| {
-            (error, BindableNethunsSocket::new(socket))
-        })
+        self.inner
+            .bind(dev, queue)
+            .map_err(|(error, socket)| (error, Self { inner: socket }))
     }
     
     delegate::delegate! {
@@ -127,7 +143,7 @@ impl NethunsSocket {
     ///
     /// # Returns
     /// * `Ok(RecvPacket<NethunsSocket>)` - The unprocessed received packet, if no error occurred.
-    /// * `Err(NethunsRecvError::NotRx)` -  If the socket is not configured in RX mode. Check the configuration parameters passed to [`nethuns_socket_open`].
+    /// * `Err(NethunsRecvError::NotRx)` -  If the socket is not configured in RX mode. Check the configuration parameters passed to [`BindableNethunsSocket::open`].
     /// * `Err(NethunsRecvError::InUse)` - If the slot at the head of the RX ring is currently in use, i.e. the corresponding received packet is not released yet.
     /// * `Err(NethunsRecvError::NoPacketsAvailable)` - If there are no new packets available in the RX ring.
     /// * `Err(NethunsRecvError::PacketFiltered)` - If the packet is filtered out by the `filter` function specified during socket configuration.
@@ -143,7 +159,7 @@ impl NethunsSocket {
     ///
     /// # Returns
     /// * `Ok(())` - On success.
-    /// * `Err(NethunsSendError::NotTx)` -  If the socket is not configured in TX mode. Check the configuration parameters passed to [`nethuns_socket_open`].
+    /// * `Err(NethunsSendError::NotTx)` -  If the socket is not configured in TX mode. Check the configuration parameters passed to [`BindableNethunsSocket::open`].
     /// * `Err(NethunsSendError::InUse)` - If the slot at the tail of the TX ring is not released yet and it's currently in use by the application.
     pub fn send(&self, packet: &[u8]) -> Result<(), NethunsSendError> {
         unsafe { (*UnsafeCell::raw_get(&self.inner)).send(packet) }
@@ -154,7 +170,7 @@ impl NethunsSocket {
     ///
     /// # Returns
     /// * `Ok(())` - On success.
-    /// * `Err(NethunsFlushError::NotTx)` -  If the socket is not configured in TX mode. Check the configuration parameters passed to [`nethuns_socket_open`].
+    /// * `Err(NethunsFlushError::NotTx)` -  If the socket is not configured in TX mode. Check the configuration parameters passed to [`BindableNethunsSocket::open`].
     /// * `Err(NethunsFlushError::FrameworkError)` - If an error from the unsafe interaction with underlying I/O framework occurs.
     /// * `Err(NethunsFlushError::Error)` - If an unexpected error occurs.
     pub fn flush(&self) -> Result<(), NethunsFlushError> {
@@ -262,7 +278,7 @@ trait NethunsSocketTrait: Debug + Send {
     ///
     /// # Returns
     /// * `Ok(RecvPacketData)` - The unprocessed received packet, if no error occurred.
-    /// * `Err(NethunsRecvError::NotRx)` -  If the socket is not configured in RX mode. Check the configuration parameters passed to [`nethuns_socket_open`].
+    /// * `Err(NethunsRecvError::NotRx)` -  If the socket is not configured in RX mode. Check the configuration parameters passed to [`BindableNethunsSocket::open`].
     /// * `Err(NethunsRecvError::InUse)` - If the slot at the head of the RX ring is currently in use, i.e. the corresponding received packet is not released yet.
     /// * `Err(NethunsRecvError::NoPacketsAvailable)` - If there are no new packets available in the RX ring.
     /// * `Err(NethunsRecvError::PacketFiltered)` - If the packet is filtered out by the `filter` function specified during socket configuration.
@@ -275,7 +291,7 @@ trait NethunsSocketTrait: Debug + Send {
     ///
     /// # Returns
     /// * `Ok(())` - On success.
-    /// * `Err(NethunsSendError::NotTx)` -  If the socket is not configured in TX mode. Check the configuration parameters passed to [`nethuns_socket_open`].
+    /// * `Err(NethunsSendError::NotTx)` -  If the socket is not configured in TX mode. Check the configuration parameters passed to [`BindableNethunsSocket::open`].
     /// * `Err(NethunsSendError::InUse)` - If the slot at the tail of the TX ring is not released yet and it's currently in use by the application.
     fn send(&mut self, packet: &[u8]) -> Result<(), NethunsSendError>;
     
@@ -284,7 +300,7 @@ trait NethunsSocketTrait: Debug + Send {
     ///
     /// # Returns
     /// * `Ok(())` - On success.
-    /// * `Err(NethunsFlushError::NotTx)` -  If the socket is not configured in TX mode. Check the configuration parameters passed to [`nethuns_socket_open`].
+    /// * `Err(NethunsFlushError::NotTx)` -  If the socket is not configured in TX mode. Check the configuration parameters passed to [`BindableNethunsSocket::open`].
     /// * `Err(NethunsFlushError::FrameworkError)` - If an error from the unsafe interaction with underlying I/O framework occurs.
     /// * `Err(NethunsFlushError::Error)` - If an unexpected error occurs.
     fn flush(&mut self) -> Result<(), NethunsFlushError>;

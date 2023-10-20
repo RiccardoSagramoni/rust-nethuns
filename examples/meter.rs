@@ -7,7 +7,7 @@ use std::time::{Duration, SystemTime};
 use bus::{Bus, BusReader};
 use etherparse::{IpHeader, PacketHeaders};
 use nethuns::sockets::errors::NethunsRecvError;
-use nethuns::sockets::{nethuns_socket_open, NethunsSocket};
+use nethuns::sockets::{BindableNethunsSocket, NethunsSocket};
 use nethuns::types::{
     NethunsCaptureDir, NethunsCaptureMode, NethunsQueue, NethunsSocketMode,
     NethunsSocketOptions,
@@ -236,7 +236,7 @@ fn setup_rx_ring(
     opt: NethunsSocketOptions,
     sockid: u32,
 ) -> NethunsSocket {
-    let socket = nethuns_socket_open(opt)
+    let socket = BindableNethunsSocket::open(opt)
         .expect("Failed to open nethuns socket")
         .bind(
             &conf.interface,
@@ -391,13 +391,7 @@ fn st_execution(
                 .lock()
                 .map_err(|e| anyhow::anyhow!("Error locking mutex: {e}"))?;
             
-            match recv_pkt(
-                conf,
-                id,
-                &sock,
-                &mut tot,
-                &mut count_to_dump,
-            ) {
+            match recv_pkt(conf, id, &sock, &mut tot, &mut count_to_dump) {
                 Ok(_) => (),
                 Err(e) => match e.downcast_ref::<NethunsRecvError>() {
                     Some(NethunsRecvError::InUse)
@@ -436,9 +430,7 @@ fn mt_execution(
         match recv_pkt(
             conf,
             sockid as _,
-            &socket
-                .lock()
-                .expect("Mutex::lock failed for `socket`"),
+            &socket.lock().expect("Mutex::lock failed for `socket`"),
             &mut total.lock().expect("Mutex::lock failed for `total`"),
             &mut count_to_dump,
         ) {
@@ -471,10 +463,7 @@ fn recv_pkt(
     
     if conf.debug {
         println!("Thread: {}, total: {}, pkt: {}", sockid, total, pkt.id());
-        println!(
-            "Packet IP addr: {}",
-            print_addrs(pkt.packet())?
-        );
+        println!("Packet IP addr: {}", print_addrs(pkt.packet())?);
     }
     
     *total += 1;

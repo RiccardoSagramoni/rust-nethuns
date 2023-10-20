@@ -1,7 +1,7 @@
 use std::{env, mem};
 
-use nethuns::sockets::pcap::NethunsSocketPcap;
 use nethuns::sockets::errors::NethunsPcapReadError;
+use nethuns::sockets::pcap::NethunsSocketPcap;
 use nethuns::sockets::{nethuns_socket_open, PkthdrTrait};
 use nethuns::types::{
     NethunsCaptureDir, NethunsCaptureMode, NethunsQueue, NethunsSocketMode,
@@ -26,7 +26,7 @@ struct Configuration {
 
 fn main() {
     let conf = parse_args();
-    
+
     match &conf.mode {
         PcapMode::Read | PcapMode::Count => run_read_count_mode(conf),
         PcapMode::Capture => run_capture_mode(conf),
@@ -42,7 +42,7 @@ fn parse_args() -> Configuration {
             args[0]
         );
     }
-    
+
     let mode = match args[1].as_str() {
         "read" => PcapMode::Read,
         "count" => PcapMode::Count,
@@ -52,7 +52,7 @@ fn parse_args() -> Configuration {
             args[0]
         ),
     };
-    
+
     Configuration {
         mode,
         target_name: mem::take(&mut args[2]),
@@ -74,18 +74,18 @@ fn run_read_count_mode(conf: Configuration) {
         tx_qdisc_bypass: false,
         ..Default::default()
     };
-    
+
     let socket: NethunsSocketPcap =
         NethunsSocketPcap::open(opt, &conf.target_name, false)
             .expect("unable to open `output` socket");
-    
+
     let mut total: u64 = 0;
     let mut errors: u64 = 0;
     loop {
         match socket.read() {
             Ok(pkt) => {
                 total += 1;
-                
+
                 if conf.mode == PcapMode::Count {
                     if total % 1_000_000 == 0 {
                         println!("packet: {}", total);
@@ -113,7 +113,7 @@ fn run_read_count_mode(conf: Configuration) {
             }
         }
     }
-    
+
     println!("total packet: {total}");
     println!("total errors: {errors}");
     println!("total       : {}", total + errors);
@@ -134,17 +134,16 @@ fn run_capture_mode(conf: Configuration) {
         tx_qdisc_bypass: false,
         ..Default::default()
     };
-    
+
     let out_socket = NethunsSocketPcap::open(
         opt.clone(),
         format!("{}.pcap", &conf.target_name).as_str(),
         true,
     )
     .expect("unable to open `output` socket");
-    
-    let in_socket =
-        nethuns_socket_open(opt).expect("unable to open `input` socket");
-    let in_socket = in_socket
+
+    let mut in_socket = BindableNethunsSocket::open(opt)
+        .expect("unable to open `input` socket")
         .bind(&conf.target_name, NethunsQueue::Any)
         .unwrap_or_else(|_| {
             panic!(

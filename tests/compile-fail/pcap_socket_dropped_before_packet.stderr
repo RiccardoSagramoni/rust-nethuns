@@ -1,19 +1,13 @@
-warning: unused import: `nethuns::sockets::base::pcap::NethunsSocketPcap`
- --> tests/compile-fail/pcap_socket_dropped_before_packet.rs:1:5
-  |
-1 | use nethuns::sockets::base::pcap::NethunsSocketPcap;
-  |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  |
-  = note: `#[warn(unused_imports)]` on by default
-
-warning: unused import: `nethuns::types::NethunsSocketOptions`
- --> tests/compile-fail/pcap_socket_dropped_before_packet.rs:2:5
-  |
-2 | use nethuns::types::NethunsSocketOptions;
-  |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-
-error[E0601]: `main` function not found in crate `$CRATE`
-  --> tests/compile-fail/pcap_socket_dropped_before_packet.rs:15:2
+error[E0505]: cannot move out of `socket` because it is borrowed
+  --> tests/compile-fail/pcap_socket_dropped_before_packet.rs:12:10
    |
-15 | }
-   |  ^ consider adding a `main` function to `$DIR/tests/compile-fail/pcap_socket_dropped_before_packet.rs`
+7  |     let socket = NethunsSocketPcap::open(opt, "filename", false).unwrap();
+   |         ------ binding `socket` declared here
+8  |
+9  |     let p1 = socket.read().unwrap();
+   |              ------ borrow of `socket` occurs here
+...
+12 |     drop(socket);
+   |          ^^^^^^ move out of `socket` occurs here
+13 |     drop(p1);
+   |          -- borrow later used here

@@ -14,7 +14,7 @@
 use crate::types::NethunsSocketOptions;
 
 use super::errors::NethunsOpenError;
-use super::BindableNethunsSocket;
+use super::BindableNethunsSocketTrait;
 
 cfg_if::cfg_if! {
     if #[cfg(feature="netmap")] {
@@ -35,16 +35,15 @@ cfg_if::cfg_if! {
 /// * `opt`: The options for the socket.
 ///
 /// # Returns
-/// * `Ok(BindableNethunsSocket)` - A new nethuns socket, in no error occurs.
+/// * `Ok(Box<dyn BindableNethunsSocketTrait>)` - A new nethuns socket, in no error occurs.
 /// * `Err(NethunsOpenError::InvalidOptions)` - If at least one of the options holds a invalid value.
 /// * `Err(NethunsOpenError::Error)` - If an unexpected error occurs.
-pub fn nethuns_socket_open(
+pub(super) fn nethuns_socket_open(
     opt: NethunsSocketOptions,
-) -> Result<BindableNethunsSocket, NethunsOpenError> {
+) -> Result<Box<dyn BindableNethunsSocketTrait>, NethunsOpenError> {
     cfg_if::cfg_if! {
         if #[cfg(feature="netmap")] {
             netmap::BindableNethunsSocketNetmap::open(opt)
-                .map(BindableNethunsSocket::new)
         }
         else {
             std::compile_error!("The support for the specified I/O framework is not available yet. Check the documentation for more information.");

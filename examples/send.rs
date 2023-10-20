@@ -6,7 +6,7 @@ use std::{env, thread};
 
 use bus::{Bus, BusReader};
 use nethuns::sockets::ring::txring_get_size;
-use nethuns::sockets::{nethuns_socket_open, NethunsSocket};
+use nethuns::sockets::{BindableNethunsSocket, NethunsSocket};
 use nethuns::types::{
     NethunsCaptureDir, NethunsCaptureMode, NethunsQueue, NethunsSocketMode,
     NethunsSocketOptions,
@@ -388,7 +388,7 @@ fn fill_tx_ring(
     payload: &[u8],
 ) -> Result<NethunsSocket, anyhow::Error> {
     // Open socket
-    let socket = nethuns_socket_open(opt)?;
+    let socket = BindableNethunsSocket::open(opt)?;
     
     // Bind socket
     let queue = if args.num_sockets > 1 {
