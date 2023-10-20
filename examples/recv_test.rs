@@ -67,9 +67,9 @@ fn dump_packet(pkt: &RecvPacket) {
         pkthdr.offvlan_tpid(),
         nethuns_vlan_tci(packet),
         nethuns_vlan_tpid(packet),
-        nethuns_vlan_tci_(pkthdr.as_ref(), packet),
-        nethuns_vlan_tpid_(pkthdr.as_ref(), packet),
-        nethuns_vlan_vid(nethuns_vlan_tci_(pkthdr.as_ref(), packet)),
+        nethuns_vlan_tci_(pkthdr, packet),
+        nethuns_vlan_tpid_(pkthdr, packet),
+        nethuns_vlan_vid(nethuns_vlan_tci_(pkthdr, packet)),
         pkthdr.rxhash()
     );
     

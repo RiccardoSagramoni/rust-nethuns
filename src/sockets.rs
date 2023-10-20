@@ -15,10 +15,11 @@ pub mod ring;
 use core::fmt::Debug;
 use std::cell::UnsafeCell;
 use std::ffi::CStr;
+use std::marker::PhantomData;
 
 use crate::types::{NethunsQueue, NethunsSocketOptions, NethunsStat};
 
-use self::base::{NethunsSocketBase, RecvPacket};
+use self::base::{NethunsSocketBase, RecvPacket, RecvPacketData};
 use self::errors::{
     NethunsBindError, NethunsFlushError, NethunsOpenError, NethunsRecvError,
     NethunsSendError,
@@ -101,6 +102,7 @@ pub trait BindableNethunsSocket: Debug {
 }
 
 
+#[derive(Debug)]
 pub struct NethunsSocket {
     inner: UnsafeCell<Box<dyn NethunsSocketTrait>>,
 }
@@ -112,21 +114,17 @@ impl NethunsSocket {
         }
     }
     
-    #[allow(clippy::mut_from_ref)]
-    fn inner(&self) -> &mut Box<dyn NethunsSocketTrait> {
-        unsafe { &mut *self.inner.get() }
-    }
-    
     pub fn recv(&self) -> Result<RecvPacket, NethunsRecvError> {
-        self.inner().recv()
+        unsafe { (*UnsafeCell::raw_get(&self.inner)).recv() }
+            .map(|data| RecvPacket::new(data, PhantomData))
     }
     
     pub fn send(&self, packet: &[u8]) -> Result<(), NethunsSendError> {
-        self.inner().send(packet)
+        unsafe { (*UnsafeCell::raw_get(&self.inner)).send(packet) }
     }
     
     pub fn flush(&self) -> Result<(), NethunsFlushError> {
-        self.inner().flush()
+        unsafe { (*UnsafeCell::raw_get(&self.inner)).flush() }
     }
     
     pub fn send_slot(
@@ -134,45 +132,49 @@ impl NethunsSocket {
         id: usize,
         len: usize,
     ) -> Result<(), NethunsSendError> {
-        self.inner().send_slot(id, len)
+        unsafe { (*UnsafeCell::raw_get(&self.inner)).send_slot(id, len) }
     }
     
+    #[inline(always)]
     pub fn base(&self) -> &NethunsSocketBase {
-        self.inner().base()
+        unsafe { (*UnsafeCell::raw_get(&self.inner)).base() }
     }
     
+    #[inline(always)]
     pub fn base_mut(&self) -> &mut NethunsSocketBase {
-        self.inner().base_mut()
+        unsafe { (*UnsafeCell::raw_get(&self.inner)).base_mut() }
     }
     
     #[inline(always)]
     pub fn tx(&self) -> bool {
-        self.inner().tx()
+        unsafe { (*UnsafeCell::raw_get(&self.inner)).tx() }
     }
     
     #[inline(always)]
     pub fn rx(&self) -> bool {
-        self.inner().rx()
+        unsafe { (*UnsafeCell::raw_get(&self.inner)).rx() }
     }
     
     pub fn fd(&self) -> libc::c_int {
-        self.inner().fd()
+        unsafe { (*UnsafeCell::raw_get(&self.inner)).fd() }
     }
     
     pub fn get_packet_buffer_ref(&self, pktid: usize) -> Option<&mut [u8]> {
-        self.inner().get_packet_buffer_ref(pktid)
+        unsafe {
+            (*UnsafeCell::raw_get(&self.inner)).get_packet_buffer_ref(pktid)
+        }
     }
     
     pub fn fanout(&self, group: libc::c_int, fanout: &CStr) -> bool {
-        self.inner().fanout(group, fanout)
+        unsafe { (*UnsafeCell::raw_get(&self.inner)).fanout(group, fanout) }
     }
     
     pub fn dump_rings(&self) {
-        self.inner().dump_rings();
+        unsafe { (*UnsafeCell::raw_get(&self.inner)).dump_rings() }
     }
     
     pub fn stats(&self) -> Option<NethunsStat> {
-        self.inner().stats()
+        unsafe { (*UnsafeCell::raw_get(&self.inner)).stats() }
     }
 }
 
@@ -189,7 +191,7 @@ trait NethunsSocketTrait: Debug + Send {
     /// * `Err(NethunsRecvError::PacketFiltered)` - If the packet is filtered out by the `filter` function specified during socket configuration.
     /// * `Err(NethunsRecvError::FrameworkError)` - If an error from the unsafe interaction with underlying I/O framework occurs.
     /// * `Err(NethunsRecvError::Error)` - If an unexpected error occurs.
-    fn recv(&mut self) -> Result<RecvPacket, NethunsRecvError>;
+    fn recv(&mut self) -> Result<RecvPacketData, NethunsRecvError>;
     
     
     /// Queue up a packet for transmission.

@@ -12,7 +12,7 @@ use c_netmap_wrapper::ring::NetmapRing;
 
 use crate::misc::circular_buffer::CircularBuffer;
 use crate::nethuns::__nethuns_clear_if_promisc;
-use crate::sockets::base::{NethunsSocketBase, RecvPacket};
+use crate::sockets::base::{NethunsSocketBase, RecvPacketData};
 use crate::sockets::errors::{
     NethunsFlushError, NethunsRecvError, NethunsSendError,
 };
@@ -76,7 +76,7 @@ impl NethunsSocketNetmap {
 }
 
 impl NethunsSocketTrait for NethunsSocketNetmap {
-    fn recv(&mut self) -> Result<RecvPacket, NethunsRecvError> {
+    fn recv(&mut self) -> Result<RecvPacketData, NethunsRecvError> {
         // Check if the ring has been binded to a queue and if it's in RX mode
         let rx_ring = match &mut self.base.rx_ring {
             Some(r) => r,
@@ -174,7 +174,7 @@ impl NethunsSocketTrait for NethunsSocketNetmap {
         
         let slot = rx_ring.get_slot(head_idx);
         
-        Ok(RecvPacket::new(
+        Ok(RecvPacketData::new(
             rx_ring.rings.head() as _,
             Box::new(slot.pkthdr),
             pkt,
