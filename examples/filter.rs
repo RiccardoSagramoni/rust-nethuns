@@ -44,7 +44,7 @@ fn main() {
         .expect("bind failed");
     
     // Set filter
-    socket.base_mut().set_filter(Some(Box::new(simple_filter)));
+    socket.set_filter(Some(Box::new(simple_filter)));
     
     
     // Stats counter

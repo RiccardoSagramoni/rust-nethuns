@@ -8,7 +8,7 @@ use std::ffi::CStr;
 use std::marker::PhantomData;
 use std::ops::{Deref, DerefMut};
 
-use crate::types::{NethunsQueue, NethunsStat};
+use crate::types::{NethunsQueue, NethunsStat, NethunsFilter};
 
 use self::base::{NethunsSocketBase, RecvPacket, RecvPacketData};
 use self::errors::{
@@ -135,8 +135,8 @@ impl NethunsSocket {
     }
     
     #[inline(always)]
-    pub fn base_mut(&self) -> &mut NethunsSocketBase {
-        unsafe { (*UnsafeCell::raw_get(&self.inner)).base_mut() }
+    pub fn set_filter(&self, filter: Option<Box<NethunsFilter>>) {
+        unsafe { (*UnsafeCell::raw_get(&self.inner)).base_mut() }.set_filter(filter);
     }
     
     #[inline(always)]

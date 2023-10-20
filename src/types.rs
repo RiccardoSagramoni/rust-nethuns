@@ -1,5 +1,12 @@
 use getset::CopyGetters;
 
+use crate::sockets::PkthdrTrait;
+
+
+/// Closure type for the filtering of received packets.
+/// Returns true if the packet should be received, false if it should be discarded.
+pub type NethunsFilter = dyn Fn(&dyn PkthdrTrait, &[u8]) -> bool + Send;
+
 
 /// Enum for specifying which queue of the device should be used
 /// for capturing packets.
