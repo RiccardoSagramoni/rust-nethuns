@@ -11,7 +11,6 @@ macro_rules! __netmap_offset {
         ($ptr as *const libc::c_char).add($off as _) as *const _ as *mut $type
     };
 }
-pub(crate) use __netmap_offset;
 
 
 /// Equivalent to `NETMAP_TXRING`

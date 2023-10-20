@@ -6,7 +6,6 @@ use core::fmt::Debug;
 use std::cell::UnsafeCell;
 use std::ffi::CStr;
 use std::marker::PhantomData;
-use std::ops::{Deref, DerefMut};
 
 use crate::types::{NethunsQueue, NethunsStat, NethunsFilter};
 
@@ -18,7 +17,7 @@ use self::errors::{
 
 mod api;
 pub use api::nethuns_socket_open;
-pub(self) use api::Pkthdr;
+ use api::Pkthdr;
 
 
 /// Type for a Nethuns socket not binded to a specific device and queue.
@@ -59,7 +58,7 @@ impl BindableNethunsSocket {
 ///
 /// In order to properly use the socket, you need to bind it first
 /// to a specific device and queue by calling [`BindableNethunsSocketTrait::bind()`].
-pub(self) trait BindableNethunsSocketTrait: Debug {
+ trait BindableNethunsSocketTrait: Debug {
     /// Bind an opened socket to a specific queue / any queue of interface/device `dev`.
     ///
     /// # Returns

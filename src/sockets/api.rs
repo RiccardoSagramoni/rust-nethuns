@@ -44,7 +44,7 @@ pub fn nethuns_socket_open(
     cfg_if::cfg_if! {
         if #[cfg(feature="netmap")] {
             netmap::BindableNethunsSocketNetmap::open(opt)
-                .map(|socket| BindableNethunsSocket::new(socket))
+                .map(BindableNethunsSocket::new)
         }
         else {
             std::compile_error!("The support for the specified I/O framework is not available yet. Check the documentation for more information.");
