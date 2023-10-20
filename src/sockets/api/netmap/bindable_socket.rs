@@ -34,7 +34,7 @@ impl BindableNethunsSocketNetmap {
     /// * `Ok(Box<dyn BindableNethunsSocketTrait>)` - A new nethuns socket, in no error occurs.
     /// * `Err(NethunsOpenError::InvalidOptions)` - If at least one of the options holds a invalid value.
     /// * `Err(NethunsOpenError::Error)` - If an unexpected error occurs.
-    pub fn open(
+    pub(in crate::sockets) fn open(
         opt: NethunsSocketOptions,
     ) -> Result<Box<dyn BindableNethunsSocketTrait>, NethunsOpenError> {
         let rx = opt.mode == NethunsSocketMode::RxTx

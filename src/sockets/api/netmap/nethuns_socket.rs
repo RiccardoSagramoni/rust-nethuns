@@ -48,7 +48,7 @@ pub struct NethunsSocketNetmap {
     /// Our library allocates these free buffers and places them in the [`free_ring`](Self::free_ring).
     /// On the receiving end, new packets are written by the network interface
     /// into the buffers associated with the netmap_slots;
-    /// [`recv()`](NethunsSocket::recv()) extracts one of these buffers to pass it to
+    /// [`recv()`](NethunsSocketNetmap::recv()) extracts one of these buffers to pass it to
     /// the user, and it puts a new buffer extracted from the free_ring
     /// in the `netmap_slot`, so that it can be given back to
     /// netmap to receive more packets.

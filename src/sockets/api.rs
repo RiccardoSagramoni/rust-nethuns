@@ -3,19 +3,24 @@
 //!
 //! Every framework-specific implementation must provide:
 //! - A struct which implements the [`BindableNethunsSocketTrait`] trait.
-//! - A struct which implements the [`NethunsSocketTrait`](super::NethunsSocketTrait) trait.
-//! - A struct named [`Pkthdr`] which must implement the [`PkthdrTrait`](super::PkthdrTrait) trait.
+//! - A struct which implements the [`NethunsSocketTrait`] trait.
+//! - A struct named [`Pkthdr`] which must implement the [`PkthdrTrait`] trait.
+//!
+//!
+//! [`BindableNethunsSocketTrait`]: super::BindableNethunsSocketTrait
+//! [`NethunsSocketTrait`]: super::NethunsSocketTrait
+//! [`PkthdrTrait`]: super::PkthdrTrait
 
 use crate::types::NethunsSocketOptions;
 
 use super::errors::NethunsOpenError;
-use super::BindableNethunsSocketTrait;
+use super::BindableNethunsSocket;
 
 cfg_if::cfg_if! {
     if #[cfg(feature="netmap")] {
         mod netmap;
         
-        pub use netmap::pkthdr::Pkthdr;
+        pub use netmap::Pkthdr;
     }
     else {
         std::compile_error!("The support for the specified I/O framework is not available yet. Check the documentation for more information.");
@@ -30,15 +35,16 @@ cfg_if::cfg_if! {
 /// * `opt`: The options for the socket.
 ///
 /// # Returns
-/// * `Ok(Box<dyn BindableNethunsSocketTrait>)` - A new nethuns socket, in no error occurs.
+/// * `Ok(BindableNethunsSocket)` - A new nethuns socket, in no error occurs.
 /// * `Err(NethunsOpenError::InvalidOptions)` - If at least one of the options holds a invalid value.
 /// * `Err(NethunsOpenError::Error)` - If an unexpected error occurs.
 pub fn nethuns_socket_open(
     opt: NethunsSocketOptions,
-) -> Result<Box<dyn BindableNethunsSocketTrait>, NethunsOpenError> {
+) -> Result<BindableNethunsSocket, NethunsOpenError> {
     cfg_if::cfg_if! {
         if #[cfg(feature="netmap")] {
-            netmap::bindable_socket::BindableNethunsSocketNetmap::open(opt)
+            netmap::BindableNethunsSocketNetmap::open(opt)
+                .map(|socket| BindableNethunsSocket::new(socket))
         }
         else {
             std::compile_error!("The support for the specified I/O framework is not available yet. Check the documentation for more information.");
@@ -51,7 +57,9 @@ pub fn nethuns_socket_open(
 mod test {
     use is_trait::is_trait;
     
-    use crate::sockets::{NethunsSocketTrait, PkthdrTrait};
+    use crate::sockets::{
+        BindableNethunsSocketTrait, NethunsSocketTrait, PkthdrTrait,
+    };
     
     use super::*;
     
@@ -62,13 +70,13 @@ mod test {
             if #[cfg(feature="netmap")] {
                 assert!(
                     is_trait!(
-                        netmap::bindable_socket::BindableNethunsSocketNetmap,
+                        netmap::BindableNethunsSocketNetmap,
                         BindableNethunsSocketTrait
                     )
                 );
                 assert!(
                     is_trait!(
-                        netmap::nethuns_socket::NethunsSocketNetmap,
+                        netmap::NethunsSocketNetmap,
                         NethunsSocketTrait
                     )
                 );

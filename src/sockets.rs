@@ -6,13 +6,13 @@ use core::fmt::Debug;
 use std::cell::UnsafeCell;
 use std::ffi::CStr;
 use std::marker::PhantomData;
+use std::ops::{Deref, DerefMut};
 
 use crate::types::{NethunsQueue, NethunsStat};
 
 use self::base::{NethunsSocketBase, RecvPacket, RecvPacketData};
 use self::errors::{
-    NethunsBindError, NethunsFlushError, NethunsRecvError,
-    NethunsSendError,
+    NethunsBindError, NethunsFlushError, NethunsRecvError, NethunsSendError,
 };
 
 
@@ -22,14 +22,44 @@ pub(self) use api::Pkthdr;
 
 
 /// Type for a Nethuns socket not binded to a specific device and queue.
-pub type BindableNethunsSocket = Box<dyn BindableNethunsSocketTrait>;
+#[derive(Debug)]
+#[repr(transparent)]
+pub struct BindableNethunsSocket {
+    inner: Box<dyn BindableNethunsSocketTrait>,
+}
+
+impl BindableNethunsSocket {
+    fn new(inner: Box<dyn BindableNethunsSocketTrait>) -> Self {
+        Self { inner }
+    }
+    
+    pub fn bind(
+        self,
+        dev: &str,
+        queue: NethunsQueue,
+    ) -> Result<NethunsSocket, (NethunsBindError, Self)> {
+        self.inner.bind(dev, queue).map_err(|(error, socket)| {
+            (error, BindableNethunsSocket::new(socket))
+        })
+    }
+    
+    delegate::delegate! {
+        to self.inner {
+            pub fn base(&self) -> &NethunsSocketBase;
+            pub fn base_mut(&mut self) -> &mut NethunsSocketBase;
+            pub fn rx(&self) -> bool;
+            pub fn tx(&self) -> bool;
+        }
+    }
+}
+
 
 /// Trait which defines the interface for a Nethuns socket
 /// not binded to a specific device and queue.
 ///
 /// In order to properly use the socket, you need to bind it first
 /// to a specific device and queue by calling [`BindableNethunsSocketTrait::bind()`].
-pub trait BindableNethunsSocketTrait: Debug {
+pub(self) trait BindableNethunsSocketTrait: Debug {
     /// Bind an opened socket to a specific queue / any queue of interface/device `dev`.
     ///
     /// # Returns
@@ -41,7 +71,10 @@ pub trait BindableNethunsSocketTrait: Debug {
         self: Box<Self>,
         dev: &str,
         queue: NethunsQueue,
-    ) -> Result<NethunsSocket, (NethunsBindError, Box<dyn BindableNethunsSocketTrait>)>;
+    ) -> Result<
+        NethunsSocket,
+        (NethunsBindError, Box<dyn BindableNethunsSocketTrait>),
+    >;
     
     /// Get an immutable reference to the base descriptor of the socket.
     fn base(&self) -> &NethunsSocketBase;
@@ -63,6 +96,7 @@ pub trait BindableNethunsSocketTrait: Debug {
 
 
 #[derive(Debug)]
+#[repr(transparent)]
 pub struct NethunsSocket {
     inner: UnsafeCell<Box<dyn NethunsSocketTrait>>,
 }
