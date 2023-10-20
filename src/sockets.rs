@@ -1,9 +1,8 @@
 mod api;
-
 pub mod base;
 pub mod errors;
 pub mod pcap;
-pub mod ring;
+mod ring;
 
 
 use core::fmt::Debug;
@@ -257,13 +256,25 @@ impl NethunsSocket {
     /// Check if the socket is in TX mode
     #[inline(always)]
     pub fn tx(&self) -> bool {
-        unsafe { (*UnsafeCell::raw_get(&self.inner)).tx() }
+        self.base().tx_ring().is_some()
     }
     
     /// Check if the socket is in RX mode
     #[inline(always)]
     pub fn rx(&self) -> bool {
-        unsafe { (*UnsafeCell::raw_get(&self.inner)).rx() }
+        self.base().rx_ring().is_some()
+    }
+    
+    /// Get size of the RX ring.
+    #[inline(always)]
+    pub fn rxring_get_size(&self) -> Option<usize> {
+        self.base().rx_ring().as_ref().map(|r| r.size())
+    }
+    
+    /// Get size of the TX ring.
+    #[inline(always)]
+    pub fn txring_get_size(&self) -> Option<usize> {
+        self.base().tx_ring().as_ref().map(|r| r.size())
     }
 }
 
@@ -357,18 +368,6 @@ trait NethunsSocketTrait: Debug + Send {
     fn base(&self) -> &NethunsSocketBase;
     /// Get a mutable reference to the base socket descriptor.
     fn base_mut(&mut self) -> &mut NethunsSocketBase;
-    
-    /// Check if the socket is in TX mode
-    #[inline(always)]
-    fn tx(&self) -> bool {
-        self.base().tx_ring().is_some()
-    }
-    
-    /// Check if the socket is in RX mode
-    #[inline(always)]
-    fn rx(&self) -> bool {
-        self.base().rx_ring().is_some()
-    }
 }
 
 

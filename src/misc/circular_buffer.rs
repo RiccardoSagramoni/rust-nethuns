@@ -7,7 +7,7 @@ use derivative::Derivative;
 // TODO update docs and comments
 
 
-/// An optimized circular buffer for items which implements [`Clone`] trait.
+/// An optimized circular buffer with head and tail indexes.
 ///
 /// In order to avoid a division for each push, we allocate a buffer of actual
 /// size equals to the closest power of 2 larger or equal than the requested `max_items` size.
@@ -15,11 +15,6 @@ use derivative::Derivative;
 /// and filter them with a bit mask when accessing any buffer item.
 ///
 /// The buffer is empty when `head == tail` and is full when `(tail - head) >= max_items`.
-///
-/// Whenever an item is read from the buffer, the item is **cloned**, not moved.
-/// Thus, this buffer more appropriate for reference-counting pointer
-/// ([`std::rc::Rc`], [`std::sync::Arc`]) and primitive types (which implement
-/// the [`Copy`] trait).
 #[derive(Default, Derivative)]
 #[derivative(Debug)]
 pub struct CircularBuffer<T> {
@@ -37,12 +32,12 @@ impl<T> CircularBuffer<T> {
     ///
     /// # Parameters
     /// * `size` - the number of items.
-    /// * `builder` - a function which generates a new item.
+    /// * `generator` - a function which generates a new item.
     ///
     /// # Panics
     /// If size is equals to 0.
     #[inline(always)]
-    pub fn new(size: usize, builder: &dyn Fn() -> T) -> Self {
+    pub fn new(size: usize, generator: &dyn Fn() -> T) -> Self {
         assert!(size > 0);
         
         let num_items = size;
@@ -50,7 +45,7 @@ impl<T> CircularBuffer<T> {
         
         let mut buffer = Vec::with_capacity(size);
         for _ in 0..size {
-            buffer.push(builder());
+            buffer.push(generator());
         }
         
         CircularBuffer {
@@ -111,8 +106,9 @@ impl<T> CircularBuffer<T> {
     }
 }
 
+
 impl<T> CircularBuffer<T> {
-    /// Return a clone instance of the item specified by the `head` index
+    /// Return an immutable reference to the item specified by the `head` index
     /// and advance the `head` index of one position.
     #[inline(always)]
     #[allow(dead_code)]
@@ -124,7 +120,7 @@ impl<T> CircularBuffer<T> {
         }
     }
     
-    /// Return a clone instance of the item specified by the `head` index
+    /// Return an immutable reference to the item specified by the `head` index
     /// and advance the `head` index of one position.
     ///
     /// **It doesn't check if the buffer is empty.**
@@ -161,13 +157,13 @@ impl<T> CircularBuffer<T> {
         self.advance_tail();
     }
     
-    /// Get an element of the buffer
+    /// Get an immutable reference to an element of the buffer
     #[inline(always)]
     pub fn get(&self, index: usize) -> &T {
         &self.buffer[index & self.mask]
     }
     
-    /// Get an element of the buffer
+    /// Get a mutable reference to an element of the buffer
     #[inline(always)]
     pub fn get_mut(&mut self, index: usize) -> &mut T {
         &mut self.buffer[index & self.mask]
@@ -176,7 +172,7 @@ impl<T> CircularBuffer<T> {
 
 
 impl<T: Clone> CircularBuffer<T> {
-    /// Return a clone instance of the item specified by the `head` index
+    /// Return a cloned instance of the item specified by the `head` index
     /// and advance the `head` index of one position.
     #[inline(always)]
     #[allow(dead_code)]
@@ -188,7 +184,7 @@ impl<T: Clone> CircularBuffer<T> {
         }
     }
     
-    /// Return a clone instance of the item specified by the `head` index
+    /// Return a cloned instance of the item specified by the `head` index
     /// and advance the `head` index of one position.
     ///
     /// **It doesn't check if the buffer is empty.**
@@ -199,7 +195,7 @@ impl<T: Clone> CircularBuffer<T> {
         ret
     }
     
-    /// Get an element of the buffer
+    /// Get a cloned copy of an element of the buffer
     #[inline(always)]
     pub fn clone_get(&self, index: usize) -> T {
         self.buffer[index & self.mask].clone()

@@ -5,7 +5,6 @@ use std::{cmp, ptr};
 use getset::{Getters, MutGetters};
 
 use super::api::Pkthdr;
-use super::NethunsSocket;
 
 use crate::misc::circular_buffer::CircularBuffer;
 
@@ -213,31 +212,33 @@ impl AtomicRingSlotStatus {
         AtomicRingSlotStatus(AtomicU8::new(Self::to_u8(v)))
     }
     
-    /// Consumes the atomic and returns the contained value.
-    ///
-    /// This is safe because passing self by value guarantees that
-    /// no other threads are concurrently accessing the atomic data.
-    pub fn into_inner(self) -> RingSlotStatus {
-        Self::from_u8(self.0.into_inner())
-    }
-    
     /// Loads a value from the atomic.
     ///
-    /// `load` takes an `Ordering` argument which describes the memory ordering of this operation. Possiblvalues are `SeqCst`, `Acquire` and `Relaxed`."]
+    /// `load` takes an [`atomic::Ordering`](std::sync::atomic::Ordering) argument
+    /// which describes the memory ordering of this operation.
+    /// Possible values are [`SeqCst`](std::sync::atomic::Ordering::SeqCst),
+    /// [`Acquire`](std::sync::atomic::Ordering::Acquire) and
+    /// [`Relaxed`](std::sync::atomic::Ordering::Relaxed).
     ///
     /// # Panics
     ///
-    /// Panics if order is `Release` or `AcqRel`.
+    /// Panics if order is [`Release`](std::sync::atomic::Ordering::Release)
+    /// or [`AcqRel`](std::sync::atomic::Ordering::AcqRel).
     pub fn load(&self, order: Ordering) -> RingSlotStatus {
         Self::from_u8(self.0.load(order))
     }
     
     /// Stores a value into the atomic.
     ///
-    /// `store` takes an `Ordering` argument which describes the memory ordering of this operation. Possible values are `SeqCst`, `Release` and `Relaxed`.
+    /// `load` takes an [`atomic::Ordering`](std::sync::atomic::Ordering) argument
+    /// which describes the memory ordering of this operation.
+    /// Possible values are [`SeqCst`](std::sync::atomic::Ordering::SeqCst),
+    /// [`Release`](std::sync::atomic::Ordering::Release) and
+    /// [`Relaxed`](std::sync::atomic::Ordering::Relaxed).
     ///
     /// # Panics
-    /// Panics if order is `Acquire` or `AcqRel`.
+    /// Panics if order is [`Acquire`](std::sync::atomic::Ordering::Acquire)
+    /// or [`AcqRel`](std::sync::atomic::Ordering::AcqRel).
     pub fn store(&self, val: RingSlotStatus, order: Ordering) {
         self.0.store(Self::to_u8(val), order)
     }
@@ -285,17 +286,3 @@ macro_rules! nethuns_ring_free_slots {
     };
 }
 pub(super) use nethuns_ring_free_slots;
-
-
-/// Get size of the RX ring.
-#[inline(always)]
-pub fn rxring_get_size(socket: &NethunsSocket) -> Option<usize> {
-    socket.base().rx_ring().as_ref().map(|r| r.size())
-}
-
-
-/// Get size of the TX ring.
-#[inline(always)]
-pub fn txring_get_size(socket: &NethunsSocket) -> Option<usize> {
-    socket.base().tx_ring().as_ref().map(|r| r.size())
-}

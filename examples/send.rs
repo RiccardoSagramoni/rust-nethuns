@@ -5,7 +5,6 @@ use std::time::{Duration, SystemTime};
 use std::{env, thread};
 
 use bus::{Bus, BusReader};
-use nethuns::sockets::ring::txring_get_size;
 use nethuns::sockets::{BindableNethunsSocket, NethunsSocket};
 use nethuns::types::{
     NethunsCaptureDir, NethunsCaptureMode, NethunsQueue, NethunsSocketMode,
@@ -400,7 +399,7 @@ fn fill_tx_ring(
     
     // fill the slots in the tx ring (optimized send only)
     if args.zerocopy {
-        let size = txring_get_size(&socket).expect("socket not in tx mode");
+        let size = socket.txring_get_size().expect("socket not in tx mode");
         
         for j in 0..size {
             // tell me where to copy the j-th packet to be transmitted
