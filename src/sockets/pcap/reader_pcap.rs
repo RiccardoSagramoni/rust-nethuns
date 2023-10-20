@@ -1,3 +1,7 @@
+//! This module contains the implementation of [`NethunsSocketPcapInner`]
+//! when the default pcap reader is required 
+//! (i.e. `NETHUNS_USE_BUILTIN_PCAP_READER` feature is **not** enabled).
+
 use std::fs::File;
 use std::sync::atomic;
 use std::{cmp, mem};
@@ -5,7 +9,6 @@ use std::{cmp, mem};
 use pcap_parser::traits::PcapReaderIterator;
 use pcap_parser::{LegacyPcapReader, PcapBlockOwned, PcapError};
 
-use crate::sockets::base::pcap::NethunsSocketPcapTrait;
 use crate::sockets::base::{NethunsSocketBase, RecvPacketData};
 use crate::sockets::errors::{
     NethunsPcapOpenError, NethunsPcapReadError, NethunsPcapRewindError,
@@ -16,10 +19,12 @@ use crate::sockets::PkthdrTrait;
 use crate::types::NethunsSocketOptions;
 
 use super::constants::NSEC_TCPDUMP_MAGIC;
-use super::{nethuns_pcap_pkthdr, NethunsSocketPcapInner};
+use super::{
+    nethuns_pcap_pkthdr, NethunsSocketPcapInner, NethunsSocketPcapTrait,
+};
 
 
-// Define the type of the default pcap reader
+// Define the type of the pcap reader
 pub type PcapReaderType = LegacyPcapReader<File>;
 
 

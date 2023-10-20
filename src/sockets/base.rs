@@ -1,5 +1,3 @@
-pub mod pcap;
-
 use std::ffi::CString;
 use std::fmt::{self, Debug, Display};
 use std::marker::PhantomData;
@@ -53,18 +51,19 @@ pub struct NethunsSocketBase {
 
 
 /// Packet received when calling [`NethunsSocket::recv()`](crate::sockets::NethunsSocket::recv)
-/// or [`NethunsSocketPcap::read()`](crate::sockets::base::pcap::NethunsSocketPcap::read).
+/// or [`NethunsSocketPcap::read()`](crate::sockets::pcap::NethunsSocketPcap::read).
 ///
 /// The struct contains a [`PhantomData`] marker associated with the socket itself,
 /// so that the `RecvPacket` item is valid as long as the socket is alive.
-#[derive(Debug, Getters)]
+#[derive(Debug)]
 pub struct RecvPacket<'a, T> {
     data: RecvPacketData,
     
     phantom_data: PhantomData<&'a T>,
 }
 
-/// [SAFETY]
+/// # Safety
+/// 
 /// The `packet` raw pointer is valid as long as the `RecvPacket`
 /// item is valid and the library guarantees that we are the only
 /// holders of such pointer for the lifetime of the `RecvPacket` item.
@@ -72,7 +71,7 @@ pub struct RecvPacket<'a, T> {
 unsafe impl<T: Send> Send for RecvPacket<'_, T> {}
 
 impl<T> RecvPacket<'_, T> {
-    pub fn new(
+    pub(crate) fn new(
         data: RecvPacketData,
         phantom_data: PhantomData<&'_ T>,
     ) -> RecvPacket<T> {
@@ -109,12 +108,12 @@ impl<T> Display for RecvPacket<'_, T> {
 
 
 /// Packet received when calling [`NethunsSocket::recv()`](crate::sockets::NethunsSocket::recv)
-/// or [`NethunsSocketPcap::read()`](crate::sockets::base::pcap::NethunsSocketPcap::read)
+/// or [`NethunsSocketPcap::read()`](crate::sockets::pcap::NethunsSocketPcap::read)
 /// with static lifetime.
 /// 
 /// It **must** be wrapped inside `RecvPacket` struct before being handed to the user.
 #[derive(Debug)]
-pub struct RecvPacketData {
+pub(crate) struct RecvPacketData {
     id: usize,
     pkthdr: Box<dyn PkthdrTrait>,
     packet: *const [u8],

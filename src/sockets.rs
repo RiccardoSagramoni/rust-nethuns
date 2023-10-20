@@ -1,6 +1,10 @@
+mod api;
+
 pub mod base;
 pub mod errors;
+pub mod pcap;
 pub mod ring;
+
 
 use core::fmt::Debug;
 use std::cell::UnsafeCell;
@@ -16,10 +20,6 @@ use self::errors::{
     NethunsBindError, NethunsFlushError, NethunsOpenError, NethunsRecvError,
     NethunsSendError,
 };
-
-
-mod api;
-use api::nethuns_socket_open;
 
 
 /// Type for a Nethuns socket not binded to a specific device and queue.
@@ -46,7 +46,7 @@ impl BindableNethunsSocket {
     /// * `Err(NethunsOpenError::InvalidOptions)` - If at least one of the options holds a invalid value.
     /// * `Err(NethunsOpenError::Error)` - If an unexpected error occurs.
     pub fn open(opt: NethunsSocketOptions) -> Result<Self, NethunsOpenError> {
-        nethuns_socket_open(opt).map(|inner| Self { inner })
+        api::nethuns_socket_open(opt).map(|inner| Self { inner })
     }
     
     /// Bind an opened socket to a specific queue / any queue of interface/device `dev`.
