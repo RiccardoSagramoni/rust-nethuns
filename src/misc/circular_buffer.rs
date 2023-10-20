@@ -4,6 +4,8 @@ use std::slice::Iter;
 
 use derivative::Derivative;
 
+// TODO update docs and comments
+
 
 /// An optimized circular buffer for items which implements [`Clone`] trait.
 ///
@@ -20,7 +22,7 @@ use derivative::Derivative;
 /// the [`Copy`] trait).
 #[derive(Default, Derivative)]
 #[derivative(Debug)]
-pub struct CircularCloneBuffer<T: Clone> {
+pub struct CircularBuffer<T> {
     #[derivative(Debug = "ignore")]
     buffer: Vec<T>,
     head: Wrapping<usize>,
@@ -30,7 +32,7 @@ pub struct CircularCloneBuffer<T: Clone> {
 }
 
 
-impl<T: Clone> CircularCloneBuffer<T> {
+impl<T> CircularBuffer<T> {
     /// Generate a new circular buffer.
     ///
     /// # Parameters
@@ -51,68 +53,13 @@ impl<T: Clone> CircularCloneBuffer<T> {
             buffer.push(builder());
         }
         
-        CircularCloneBuffer {
+        CircularBuffer {
             buffer,
             head: Wrapping(0),
             tail: Wrapping(0),
             mask: size - 1,
             num_items,
         }
-    }
-    
-    /// Return a clone instance of the item specified by the `head` index
-    /// and advance the `head` index of one position.
-    #[inline(always)]
-    #[allow(dead_code)]
-    pub fn pop(&mut self) -> Option<T> {
-        if self.is_empty() {
-            None
-        } else {
-            Some(self.pop_unchecked())
-        }
-    }
-    
-    /// Return a clone instance of the item specified by the `head` index
-    /// and advance the `head` index of one position.
-    ///
-    /// **It doesn't check if the buffer is empty.**
-    #[inline(always)]
-    pub fn pop_unchecked(&mut self) -> T {
-        let ret = self.buffer[self.head.0 & self.mask].clone();
-        self.head += 1;
-        ret
-    }
-    
-    /// Add a new item to the buffer at the position specified by the `tail` index
-    /// and advance the `tail` index of one position.
-    ///
-    /// # Returns
-    /// `true` if the buffer is not full, `false` otherwise.
-    #[inline(always)]
-    #[allow(dead_code)]
-    pub fn push(&mut self, value: T) -> bool {
-        if self.is_full() {
-            false
-        } else {
-            self.push_unchecked(value);
-            true
-        }
-    }
-    
-    /// Add a new item to the buffer at the position specified by the `tail` index
-    /// and advance the `tail` index of one position.
-    ///  
-    /// **It doesn't check if the buffer is full.**
-    #[inline(always)]
-    pub fn push_unchecked(&mut self, value: T) {
-        self.buffer[self.tail.0 & self.mask] = value;
-        self.tail += 1;
-    }
-    
-    /// Get an element of the buffer
-    #[inline(always)]
-    pub fn get(&self, index: usize) -> T {
-        self.buffer[index & self.mask].clone()
     }
     
     /// Get the allocated size of the buffer
@@ -164,6 +111,101 @@ impl<T: Clone> CircularCloneBuffer<T> {
     }
 }
 
+impl<T> CircularBuffer<T> {
+    /// Return a clone instance of the item specified by the `head` index
+    /// and advance the `head` index of one position.
+    #[inline(always)]
+    #[allow(dead_code)]
+    pub fn pop(&mut self) -> Option<&T> {
+        if self.is_empty() {
+            None
+        } else {
+            Some(self.pop_unchecked())
+        }
+    }
+    
+    /// Return a clone instance of the item specified by the `head` index
+    /// and advance the `head` index of one position.
+    ///
+    /// **It doesn't check if the buffer is empty.**
+    #[inline(always)]
+    pub fn pop_unchecked(&mut self) -> &T {
+        let head_idx = self.head.0;
+        self.advance_head();
+        &self.buffer[head_idx & self.mask]
+    }
+    
+    /// Add a new item to the buffer at the position specified by the `tail` index
+    /// and advance the `tail` index of one position.
+    ///
+    /// # Returns
+    /// `true` if the buffer is not full, `false` otherwise.
+    #[inline(always)]
+    #[allow(dead_code)]
+    pub fn push(&mut self, value: T) -> bool {
+        if self.is_full() {
+            false
+        } else {
+            self.push_unchecked(value);
+            true
+        }
+    }
+    
+    /// Add a new item to the buffer at the position specified by the `tail` index
+    /// and advance the `tail` index of one position.
+    ///  
+    /// **It doesn't check if the buffer is full.**
+    #[inline(always)]
+    pub fn push_unchecked(&mut self, value: T) {
+        self.buffer[self.tail.0 & self.mask] = value;
+        self.advance_tail();
+    }
+    
+    /// Get an element of the buffer
+    #[inline(always)]
+    pub fn get(&self, index: usize) -> &T {
+        &self.buffer[index & self.mask]
+    }
+    
+    /// Get an element of the buffer
+    #[inline(always)]
+    pub fn get_mut(&mut self, index: usize) -> &mut T {
+        &mut self.buffer[index & self.mask]
+    }
+}
+
+
+impl<T: Clone> CircularBuffer<T> {
+    /// Return a clone instance of the item specified by the `head` index
+    /// and advance the `head` index of one position.
+    #[inline(always)]
+    #[allow(dead_code)]
+    pub fn clone_pop(&mut self) -> Option<T> {
+        if self.is_empty() {
+            None
+        } else {
+            Some(self.clone_pop_unchecked())
+        }
+    }
+    
+    /// Return a clone instance of the item specified by the `head` index
+    /// and advance the `head` index of one position.
+    ///
+    /// **It doesn't check if the buffer is empty.**
+    #[inline(always)]
+    pub fn clone_pop_unchecked(&mut self) -> T {
+        let ret = self.clone_get(self.head());
+        self.advance_head();
+        ret
+    }
+    
+    /// Get an element of the buffer
+    #[inline(always)]
+    pub fn clone_get(&self, index: usize) -> T {
+        self.buffer[index & self.mask].clone()
+    }
+}
+
 
 #[cfg(test)]
 mod tests {
@@ -173,7 +215,7 @@ mod tests {
     fn test_small_buffer() {
         // Create new buffer
         let num_items = 1;
-        let mut b = CircularCloneBuffer::new(num_items, &|| 0_u8);
+        let mut b = CircularBuffer::new(num_items, &|| 0_u8);
         assert!(b.is_empty());
         assert!(!b.is_full());
         assert_eq!(b.head(), 0);
@@ -188,7 +230,7 @@ mod tests {
         assert_eq!(b.tail(), 1);
         
         // Pop item
-        assert_eq!(b.pop(), Some(value));
+        assert_eq!(b.clone_pop(), Some(value));
         assert!(b.is_empty());
         assert!(!b.is_full());
         assert_eq!(b.head(), 1);
@@ -199,7 +241,7 @@ mod tests {
     fn test_normal_buffer() {
         // Create new buffer
         let num_items = 10;
-        let mut b = CircularCloneBuffer::new(num_items, &|| 0);
+        let mut b = CircularBuffer::new(num_items, &|| 0);
         assert!(b.is_empty());
         assert!(!b.is_full());
         assert_eq!(b.head(), 0);
@@ -214,7 +256,7 @@ mod tests {
         assert_eq!(b.tail(), 1);
         
         // Pop item
-        assert_eq!(b.pop(), Some(value));
+        assert_eq!(b.clone_pop(), Some(value));
         assert!(b.is_empty());
         assert_eq!(b.head(), 1);
         

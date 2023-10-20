@@ -86,7 +86,7 @@ fn main() {
     };
     
     // Open sockets
-    let mut sockets: Vec<Mutex<Box<dyn NethunsSocket>>> =
+    let mut sockets: Vec<Mutex<NethunsSocket>> =
         Vec::with_capacity(conf.num_sockets as _);
     for i in 0..sockets.capacity() {
         sockets.push(Mutex::new(setup_rx_ring(
@@ -235,7 +235,7 @@ fn setup_rx_ring(
     conf: &Configuration,
     opt: NethunsSocketOptions,
     sockid: u32,
-) -> Box<dyn NethunsSocket> {
+) -> NethunsSocket {
     let socket = nethuns_socket_open(opt)
         .expect("Failed to open nethuns socket")
         .bind(
@@ -314,7 +314,7 @@ fn global_meter(totals: Arc<Vec<Mutex<u64>>>, mut sigint_rx: BusReader<()>) {
 /// Print aggregated stats and per-socket detailed stats
 fn sock_meter(
     sockid: u32,
-    socket: &Mutex<Box<dyn NethunsSocket>>,
+    socket: &Mutex<NethunsSocket>,
     totals: Arc<Vec<Mutex<u64>>>,
     mut rx: BusReader<()>,
 ) {
@@ -370,7 +370,7 @@ fn sock_meter(
 
 fn st_execution(
     conf: &Configuration,
-    sockets: Arc<Vec<Mutex<Box<dyn NethunsSocket>>>>,
+    sockets: Arc<Vec<Mutex<NethunsSocket>>>,
     totals: Arc<Vec<Mutex<u64>>>,
     mut sigint_rx: BusReader<()>,
 ) -> anyhow::Result<()> {
@@ -384,7 +384,7 @@ fn st_execution(
         }
         
         for (id, (sock, tot)) in sockets.iter().zip(totals.iter()).enumerate() {
-            let mut sock = sock
+            let sock = sock
                 .lock()
                 .map_err(|e| anyhow::anyhow!("Error locking mutex: {e}"))?;
             let mut tot = tot
@@ -394,7 +394,7 @@ fn st_execution(
             match recv_pkt(
                 conf,
                 id,
-                sock.as_mut(),
+                &sock,
                 &mut tot,
                 &mut count_to_dump,
             ) {
@@ -420,7 +420,7 @@ fn st_execution(
 fn mt_execution(
     conf: &Configuration,
     sockid: u32,
-    socket: &Mutex<Box<dyn NethunsSocket>>,
+    socket: &Mutex<NethunsSocket>,
     total: &Mutex<u64>,
     mut sigint_rx: BusReader<()>,
 ) -> anyhow::Result<()> {
@@ -436,10 +436,9 @@ fn mt_execution(
         match recv_pkt(
             conf,
             sockid as _,
-            socket
+            &socket
                 .lock()
-                .expect("Mutex::lock failed for `socket`")
-                .as_mut(),
+                .expect("Mutex::lock failed for `socket`"),
             &mut total.lock().expect("Mutex::lock failed for `total`"),
             &mut count_to_dump,
         ) {
@@ -464,7 +463,7 @@ fn mt_execution(
 fn recv_pkt(
     conf: &Configuration,
     sockid: usize,
-    socket: &mut dyn NethunsSocket,
+    socket: &NethunsSocket,
     total: &mut u64,
     count_to_dump: &mut u64,
 ) -> anyhow::Result<()> {
@@ -474,7 +473,7 @@ fn recv_pkt(
         println!("Thread: {}, total: {}, pkt: {}", sockid, total, pkt.id());
         println!(
             "Packet IP addr: {}",
-            print_addrs(pkt.packet().borrow_packet())?
+            print_addrs(pkt.packet())?
         );
     }
     

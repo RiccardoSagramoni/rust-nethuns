@@ -1,6 +1,6 @@
 use std::ffi::CStr;
 use std::ptr::NonNull;
-use std::sync::{atomic, Arc, RwLock};
+use std::sync::atomic::Ordering;
 use std::{cmp, mem, slice};
 
 use c_netmap_wrapper::bindings::{nm_pkt_copy, NS_BUF_CHANGED};
@@ -10,21 +10,21 @@ use c_netmap_wrapper::netmap_buf_pkt;
 use c_netmap_wrapper::nmport::NmPortDescriptor;
 use c_netmap_wrapper::ring::NetmapRing;
 
-use crate::misc::bind_packet_lifetime_to_slot;
-use crate::misc::circular_buffer::CircularCloneBuffer;
+use crate::misc::circular_buffer::CircularBuffer;
 use crate::nethuns::__nethuns_clear_if_promisc;
-use crate::sockets::base::{
-    NethunsSocketBase, RecvPacket, RecvPacketDataBuilder,
-};
+use crate::sockets::base::{NethunsSocketBase, RecvPacketData};
 use crate::sockets::errors::{
     NethunsFlushError, NethunsRecvError, NethunsSendError,
 };
-use crate::sockets::netmap::utility::{nethuns_blocks_free, non_empty_rx_ring};
-use crate::sockets::ring::{nethuns_ring_free_slots, NethunsRingSlot};
-use crate::sockets::NethunsSocket;
+use crate::sockets::ring::{
+    nethuns_ring_free_slots, NethunsRingSlot, RingSlotStatus,
+};
+use crate::sockets::NethunsSocketTrait;
 use crate::types::NethunsStat;
 
-use super::utility::nethuns_get_buf_addr_netmap;
+use super::utility::{
+    nethuns_blocks_free, nethuns_get_buf_addr_netmap, non_empty_rx_ring,
+};
 
 
 #[derive(Debug)]
@@ -48,11 +48,11 @@ pub struct NethunsSocketNetmap {
     /// Our library allocates these free buffers and places them in the [`free_ring`](Self::free_ring).
     /// On the receiving end, new packets are written by the network interface
     /// into the buffers associated with the netmap_slots;
-    /// [`recv()`](NethunsSocket::recv()) extracts one of these buffers to pass it to
+    /// [`recv()`](NethunsSocketNetmap::recv()) extracts one of these buffers to pass it to
     /// the user, and it puts a new buffer extracted from the free_ring
     /// in the `netmap_slot`, so that it can be given back to
     /// netmap to receive more packets.
-    free_ring: CircularCloneBuffer<u32>,
+    free_ring: CircularBuffer<u32>,
 }
 // fields rx and tx removed because redundant with
 // base.rx_ring.is_some() and base.tx_ring.is_some()
@@ -64,7 +64,7 @@ impl NethunsSocketNetmap {
         base: NethunsSocketBase,
         p: NmPortDescriptor,
         some_ring: NetmapRing,
-        free_ring: CircularCloneBuffer<u32>,
+        free_ring: CircularBuffer<u32>,
     ) -> Self {
         Self {
             base,
@@ -75,8 +75,8 @@ impl NethunsSocketNetmap {
     }
 }
 
-impl NethunsSocket for NethunsSocketNetmap {
-    fn recv(&mut self) -> Result<RecvPacket, NethunsRecvError> {
+impl NethunsSocketTrait for NethunsSocketNetmap {
+    fn recv(&mut self) -> Result<RecvPacketData, NethunsRecvError> {
         // Check if the ring has been binded to a queue and if it's in RX mode
         let rx_ring = match &mut self.base.rx_ring {
             Some(r) => r,
@@ -84,13 +84,9 @@ impl NethunsSocket for NethunsSocketNetmap {
         };
         
         // Get the first slot available to userspace (head of RX ring) and check if it's in use
-        let arc_slot = rx_ring.get_slot(rx_ring.rings.head());
-        if arc_slot
-            .read()
-            .unwrap()
-            .inuse
-            .load(atomic::Ordering::Acquire)
-            != 0
+        let head_idx = rx_ring.rings().head();
+        if rx_ring.get_slot(head_idx).inuse.load(Ordering::Acquire)
+            != RingSlotStatus::Free
         {
             return Err(NethunsRecvError::InUse);
         }
@@ -105,8 +101,14 @@ impl NethunsSocket for NethunsSocketNetmap {
             }
             
             // Check some invariant during debugging
-            debug_assert_ne!(self.free_ring.get(self.free_ring.head()), 0);
-            debug_assert_ne!(self.free_ring.get(self.free_ring.tail() - 1), 0);
+            debug_assert_ne!(
+                self.free_ring.clone_get(self.free_ring.head()),
+                0
+            );
+            debug_assert_ne!(
+                self.free_ring.clone_get(self.free_ring.tail() - 1),
+                0
+            );
         }
         
         // Find the first non-empty netmap ring.
@@ -133,20 +135,16 @@ impl NethunsSocket for NethunsSocketNetmap {
         let pkt = unsafe { netmap_buf_pkt!(netmap_ring, idx) };
         
         // Update the packet header metadata of the nethuns ring abstraction against the actual netmap packet.
-        match arc_slot.write() {
-            Ok(mut slot) => {
-                slot.pkthdr.ts = netmap_ring.ts;
-                slot.pkthdr.caplen = cur_netmap_slot.len as _;
-                slot.pkthdr.len = cur_netmap_slot.len as _;
-                slot.pkthdr.buf_idx = idx;
-            }
-            Err(e) => {
-                panic!("`RwLock::write` failed: {:?}", e);
-            }
+        {
+            let slot = rx_ring.get_slot_mut(head_idx);
+            slot.pkthdr.ts = netmap_ring.ts;
+            slot.pkthdr.caplen = cur_netmap_slot.len as _;
+            slot.pkthdr.len = cur_netmap_slot.len as _;
+            slot.pkthdr.buf_idx = idx;
         }
         
         // Assign a new buffer to the netmap `cur` slot and set the relative flag
-        cur_netmap_slot.buf_idx = self.free_ring.pop_unchecked();
+        cur_netmap_slot.buf_idx = self.free_ring.clone_pop_unchecked();
         cur_netmap_slot.flags |= NS_BUF_CHANGED as u16;
         
         // Move `cur` and `head` indexes ahead of one position
@@ -156,40 +154,31 @@ impl NethunsSocket for NethunsSocketNetmap {
         // Filter the packet
         if match &self.base.filter {
             None => false,
-            Some(filter) => !filter(&arc_slot.read().unwrap().pkthdr, pkt),
+            Some(filter) => {
+                // Call the filter closure
+                !filter(&rx_ring.get_slot(head_idx).pkthdr, pkt)
+            }
         } {
             nethuns_ring_free_slots!(self, rx_ring, nethuns_blocks_free);
             return Err(NethunsRecvError::PacketFiltered);
         }
         
-        match arc_slot.write() {
-            Ok(mut slot) => {
-                slot.pkthdr.caplen =
-                    cmp::min(self.base.opt.packetsize, slot.pkthdr.caplen);
-                
-                slot.inuse.store(1, atomic::Ordering::Release);
-            }
-            Err(e) => {
-                panic!("`RwLock::write` failed: {:?}", e);
-            }
+        {
+            let slot = rx_ring.get_slot_mut(head_idx);
+            slot.pkthdr.caplen =
+                cmp::min(self.base.opt.packetsize, slot.pkthdr.caplen);
+            slot.inuse.store(RingSlotStatus::InUse, Ordering::Release);
         }
         
-        rx_ring.rings.advance_head();
+        rx_ring.rings_mut().advance_head();
         
-        let pkthdr = Box::new(arc_slot.read().unwrap().pkthdr);
+        let slot = rx_ring.get_slot(head_idx);
         
-        let packet_data = RecvPacketDataBuilder {
-            slot: arc_slot,
-            packet_builder: |slot: &Arc<RwLock<NethunsRingSlot>>| unsafe {
-                bind_packet_lifetime_to_slot(pkt, slot)
-            },
-        }
-        .build();
-        
-        Ok(RecvPacket::new(
-            rx_ring.rings.head() as _,
-            pkthdr,
-            packet_data,
+        Ok(RecvPacketData::new(
+            rx_ring.rings().head() as _,
+            Box::new(slot.pkthdr),
+            pkt,
+            slot.inuse.clone(),
         ))
     }
     
@@ -200,14 +189,8 @@ impl NethunsSocket for NethunsSocketNetmap {
             None => return Err(NethunsSendError::NotTx),
         };
         
-        let arc_slot = tx_ring.get_slot(tx_ring.rings.tail());
-        if arc_slot
-            .read()
-            .unwrap()
-            .inuse
-            .load(atomic::Ordering::Relaxed)
-            != 0
-        {
+        let slot = tx_ring.get_slot(tx_ring.rings().tail());
+        if slot.inuse.load(Ordering::Relaxed) != RingSlotStatus::Free {
             return Err(NethunsSendError::InUse);
         }
         
@@ -215,14 +198,14 @@ impl NethunsSocket for NethunsSocketNetmap {
             nethuns_get_buf_addr_netmap!(
                 &self.some_ring,
                 tx_ring,
-                tx_ring.rings.tail()
+                tx_ring.rings().tail()
             )
         };
         unsafe {
             nm_pkt_copy(packet.as_ptr() as _, dst as _, packet.len() as _)
         };
-        tx_ring.nethuns_send_slot(tx_ring.rings.tail(), packet.len());
-        tx_ring.rings.advance_tail();
+        tx_ring.nethuns_send_slot(tx_ring.rings().tail(), packet.len());
+        tx_ring.rings_mut().advance_tail();
         
         Ok(())
     }
@@ -237,7 +220,7 @@ impl NethunsSocket for NethunsSocketNetmap {
         let mut prev_tails: Vec<u32> =
             vec![0; (self.p.last_tx_ring - self.p.last_rx_ring + 1) as _];
         
-        let mut head = tx_ring.rings.head();
+        let mut head = tx_ring.rings().head();
         
         // Try to push packets marked for transmission
         for i in self.p.first_tx_ring as _..=self.p.last_tx_ring as _ {
@@ -254,18 +237,19 @@ impl NethunsSocket for NethunsSocketNetmap {
             prev_tails[i - self.p.first_tx_ring as usize] = ring.tail;
             
             loop {
-                let arc_slot = tx_ring.get_slot(head);
-                let mut slot = arc_slot.write().unwrap();
+                let slot = tx_ring.get_slot_mut(head);
                 
                 if ring.nm_ring_empty()
-                    || slot.inuse.load(atomic::Ordering::Acquire) != 1
+                    || slot.inuse.load(Ordering::Acquire)
+                        != RingSlotStatus::InUse
                 {
                     break;
                 }
                 
                 // swap buf indexes between the nethuns and netmap slots, mark
-                // the nethuns slot as in-flight (inuse <- 2)
-                slot.inuse.store(2, atomic::Ordering::Relaxed);
+                // the nethuns slot as in-flight
+                slot.inuse
+                    .store(RingSlotStatus::InFlight, Ordering::Relaxed);
                 let mut netmap_slot = ring
                     .get_slot(ring.head as _)
                     .map_err(NethunsFlushError::FrameworkError)?;
@@ -278,7 +262,7 @@ impl NethunsSocket for NethunsSocketNetmap {
                 ring.cur = unsafe { ring.nm_ring_next(ring.head) };
                 ring.head = ring.cur;
                 head += 1;
-                tx_ring.rings.advance_head();
+                tx_ring.rings_mut().advance_head();
             }
         }
         
@@ -318,7 +302,7 @@ impl NethunsSocket for NethunsSocketNetmap {
                 let slot =
                     unsafe { &mut *(netmap_slot.ptr as *mut NethunsRingSlot) };
                 mem::swap(&mut netmap_slot.buf_idx, &mut slot.pkthdr.buf_idx);
-                slot.inuse.store(0, atomic::Ordering::Release);
+                slot.inuse.store(RingSlotStatus::InUse, Ordering::Release);
                 
                 scan = unsafe { ring.nm_ring_next(scan) };
             }
@@ -329,8 +313,12 @@ impl NethunsSocket for NethunsSocketNetmap {
     
     
     #[inline(always)]
-    fn send_slot(&self, id: usize, len: usize) -> Result<(), NethunsSendError> {
-        let tx_ring = match &self.base.tx_ring {
+    fn send_slot(
+        &mut self,
+        id: usize,
+        len: usize,
+    ) -> Result<(), NethunsSendError> {
+        let tx_ring = match &mut self.base.tx_ring {
             Some(r) => r,
             None => return Err(NethunsSendError::NotTx),
         };
@@ -353,7 +341,8 @@ impl NethunsSocket for NethunsSocketNetmap {
     }
     
     
-    fn fd(&self) -> libc::c_int {
+    #[inline(always)]
+    fn fd(&self) -> std::os::raw::c_int {
         self.p.fd
     }
     
@@ -397,11 +386,11 @@ impl Drop for NethunsSocketNetmap {
         
         if let Some(ring) = &self.base.tx_ring {
             for i in 0..ring.size() {
-                let idx = ring.get_slot(i).read().unwrap().pkthdr.buf_idx;
+                let idx = ring.get_slot(i).pkthdr.buf_idx;
                 let next = unsafe {
                     netmap_buf(&self.some_ring, idx as _) as *mut u32
                 };
-                assert!(!next.is_null());
+                debug_assert!(!next.is_null());
                 unsafe {
                     *next = (*self.p.nifp).ni_bufs_head;
                     (*self.p.nifp).ni_bufs_head = idx;
@@ -410,7 +399,7 @@ impl Drop for NethunsSocketNetmap {
         }
         
         while !self.free_ring.is_empty() {
-            let idx = self.free_ring.pop_unchecked();
+            let idx = self.free_ring.clone_pop_unchecked();
             let next =
                 unsafe { netmap_buf(&self.some_ring, idx as _) as *mut u32 };
             debug_assert!(!next.is_null());

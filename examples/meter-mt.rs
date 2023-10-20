@@ -8,7 +8,7 @@ use bus::{Bus, BusReader};
 
 use nethuns::sockets::base::RecvPacket;
 
-use nethuns::sockets::nethuns_socket_open;
+use nethuns::sockets::{nethuns_socket_open, NethunsSocket};
 use nethuns::types::{
     NethunsCaptureDir, NethunsCaptureMode, NethunsQueue, NethunsSocketMode,
     NethunsSocketOptions,
@@ -26,7 +26,7 @@ fn main() {
     let conf = get_configuration();
     
     let opt = NethunsSocketOptions {
-        numblocks: 64,
+        numblocks: 1,
         numpackets: 2048,
         packetsize: 2048,
         timeout_ms: 0,
@@ -39,60 +39,56 @@ fn main() {
         ..Default::default()
     };
     
-    // Create SPSC ring buffer
-    let (mut pkt_producer, pkt_consumer) = RingBuffer::<RecvPacket>::new(65536);
-    
-    // Create channel for thread communication
-    let mut bus: Bus<()> = Bus::new(5);
-    let total = Arc::new(Mutex::new(0_u64));
-    
-    // Spawn meter thread
-    let meter_th = {
-        let total = total.clone();
-        let rx = bus.add_rx();
-        thread::spawn(move || {
-            meter(total, rx);
-        })
-    };
-    
-    // Spawn consumer thread
-    let consumer_th = {
-        let rx = bus.add_rx();
-        thread::spawn(move || {
-            consumer_body(pkt_consumer, rx, total);
-        })
-    };
-    
-    // Set handler for Ctrl-C
-    let mut bus_rx = bus.add_rx();
-    set_sigint_handler(bus);
-    
-    
-    let mut socket = nethuns_socket_open(opt)
-        .unwrap()
+    // Open socket
+    let socket = nethuns_socket_open(opt)
+        .expect("Failed to open nethuns socket")
         .bind(&conf.dev, NethunsQueue::Any)
-        .unwrap();
+        .expect("Failed to bind nethuns socket");
     
-    loop {
-        // Check if Ctrl-C was pressed
-        match bus_rx.try_recv() {
-            Ok(_) | Err(TryRecvError::Disconnected) => break,
-            _ => {}
-        }
+    thread::scope(|s| {
+        // Create SPSC ring buffer
+        let (mut pkt_producer, pkt_consumer) =
+            RingBuffer::<RecvPacket<NethunsSocket>>::new(65536);
         
-        if let Ok(pkt) = socket.recv() {
-            // Push packet in queue
-            while !pkt_producer.is_abandoned() {
-                if !pkt_producer.is_full() {
-                    pkt_producer.push(pkt).unwrap();
-                    break;
+        // Create channel for thread communication
+        let mut bus: Bus<()> = Bus::new(5);
+        let total = Arc::new(Mutex::new(0_u64));
+        
+        // Spawn meter thread
+        let total1 = total.clone();
+        let rx1 = bus.add_rx();
+        s.spawn(move || {
+            meter(total1, rx1);
+        });
+        
+        // Spawn consumer thread
+        let rx2 = bus.add_rx();
+        s.spawn(move || {
+            consumer_body(pkt_consumer, rx2, total);
+        });
+        
+        // Set handler for Ctrl-C
+        let mut bus_rx = bus.add_rx();
+        set_sigint_handler(bus);
+        
+        loop {
+            // Check if Ctrl-C was pressed
+            match bus_rx.try_recv() {
+                Ok(_) | Err(TryRecvError::Disconnected) => break,
+                _ => {}
+            }
+            
+            if let Ok(pkt) = socket.recv() {
+                // Push packet in queue
+                while !pkt_producer.is_abandoned() {
+                    if !pkt_producer.is_full() {
+                        pkt_producer.push(pkt).unwrap();
+                        break;
+                    }
                 }
             }
         }
-    }
-    
-    consumer_th.join().expect("unable to join consumer thread");
-    meter_th.join().expect("unable to join meter thread");
+    });
 }
 
 
@@ -107,10 +103,7 @@ fn get_configuration() -> Configuration {
 }
 
 
-fn meter(
-    total: Arc<Mutex<u64>>,
-    mut rx: BusReader<()>,
-) {
+fn meter(total: Arc<Mutex<u64>>, mut rx: BusReader<()>) {
     let mut now = SystemTime::now();
     
     loop {
@@ -151,7 +144,7 @@ fn set_sigint_handler(mut bus: Bus<()>) {
 
 
 fn consumer_body(
-    mut consumer: Consumer<RecvPacket>,
+    mut consumer: Consumer<RecvPacket<NethunsSocket>>,
     mut rx: BusReader<()>,
     total: Arc<Mutex<u64>>,
 ) {

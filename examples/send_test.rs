@@ -29,21 +29,21 @@ fn main() {
         tx_qdisc_bypass: false,
         ..Default::default()
     };
-    let socket = nethuns_socket_open(opt).unwrap();
-    let mut socket = socket
+    let socket = nethuns_socket_open(opt)
+        .expect("Failed to open socket")
         .bind(
             &env::args()
                 .nth(1)
                 .expect("Usage: ./send_test <device_name>"),
             NethunsQueue::Any,
         )
-        .unwrap();
+        .expect("Failed to bind socket");
     
     for i in 0..10 {
         for _ in 0..40 {
-            socket.send(&PAYLOAD).unwrap();
+            socket.send(&PAYLOAD).expect("Failed to send packet");
         }
-        socket.flush().unwrap();
+        socket.flush().expect("Failed to flush socket");
         println!("flush {i}");
         thread::sleep(Duration::from_secs(1));
     }

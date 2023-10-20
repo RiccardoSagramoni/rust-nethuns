@@ -37,11 +37,11 @@ fn main() {
     };
     
     // Open sockets
-    let mut in_socket = nethuns_socket_open(opt.clone())
+    let in_socket = nethuns_socket_open(opt.clone())
         .unwrap()
         .bind(&conf.dev_in, NethunsQueue::Any)
         .unwrap();
-    let mut out_socket = nethuns_socket_open(opt)
+    let out_socket = nethuns_socket_open(opt)
         .unwrap()
         .bind(&conf.dev_out, NethunsQueue::Any)
         .unwrap();
@@ -74,7 +74,7 @@ fn main() {
         if let Ok(pkt) = in_socket.recv() {
             *(total_rcv.lock().expect("lock failed")) += 1;
             loop {
-                match out_socket.send(pkt.packet().borrow_packet()) {
+                match out_socket.send(pkt.packet()) {
                     Ok(_) => break,
                     Err(_) => {
                         out_socket.flush().unwrap();

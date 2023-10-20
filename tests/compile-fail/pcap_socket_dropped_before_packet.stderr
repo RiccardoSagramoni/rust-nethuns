@@ -1,0 +1,19 @@
+warning: unused import: `nethuns::sockets::base::pcap::NethunsSocketPcap`
+ --> tests/compile-fail/pcap_socket_dropped_before_packet.rs:1:5
+  |
+1 | use nethuns::sockets::base::pcap::NethunsSocketPcap;
+  |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  |
+  = note: `#[warn(unused_imports)]` on by default
+
+warning: unused import: `nethuns::types::NethunsSocketOptions`
+ --> tests/compile-fail/pcap_socket_dropped_before_packet.rs:2:5
+  |
+2 | use nethuns::types::NethunsSocketOptions;
+  |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+error[E0601]: `main` function not found in crate `$CRATE`
+  --> tests/compile-fail/pcap_socket_dropped_before_packet.rs:15:2
+   |
+15 | }
+   |  ^ consider adding a `main` function to `$DIR/tests/compile-fail/pcap_socket_dropped_before_packet.rs`

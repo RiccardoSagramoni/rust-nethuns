@@ -31,7 +31,7 @@ pub static NETHUNS_GLOBAL: Mutex<Lazy<HashMap<CString, NethunsNetInfo>>> =
 /// (see [setrlimit(2) - Linux man page](https://linux.die.net/man/2/setrlimit)
 /// for more details).
 /// Since this usually means that we must run the tests with root privileges,
-/// this function is disabled when testing.
+/// this function is disabled while testing.
 #[cfg(target_os = "linux")]
 #[cfg(not(test))]
 #[small_ctor::ctor]
