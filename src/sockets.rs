@@ -1,75 +1,35 @@
-//! This module exposes the data structures required
-//! to interact with the specified I/O framework.
-//!
-//! Every framework-specific implementation must provide:
-//! - A struct which implements the `BindableNethunsSocket` trait.
-//! - A struct which implements the `NethunsSocket` trait.
-//! - A struct named `Pkthdr` which must implement the `PkthdrTrait` trait.
-
 pub mod base;
-
 pub mod errors;
 pub mod ring;
-
 
 use core::fmt::Debug;
 use std::cell::UnsafeCell;
 use std::ffi::CStr;
 use std::marker::PhantomData;
 
-use crate::types::{NethunsQueue, NethunsSocketOptions, NethunsStat};
+use crate::types::{NethunsQueue, NethunsStat};
 
 use self::base::{NethunsSocketBase, RecvPacket, RecvPacketData};
 use self::errors::{
-    NethunsBindError, NethunsFlushError, NethunsOpenError, NethunsRecvError,
+    NethunsBindError, NethunsFlushError, NethunsRecvError,
     NethunsSendError,
 };
 
 
-cfg_if::cfg_if! {
-    if #[cfg(feature="netmap")] {
-        mod netmap;
-        
-        use netmap::bindable_socket::BindableNethunsSocketNetmap;
-        
-        use netmap::pkthdr::Pkthdr;
-    }
-    else {
-        std::compile_error!("The support for the specified I/O framework is not available yet. Check the documentation for more information.");
-    }
-}
+mod api;
+pub use api::nethuns_socket_open;
+pub(self) use api::Pkthdr;
 
 
-/// Open a new Nethuns socket, by calling the `open` function
-/// of the struct belonging to the I/O framework selected at compile time.
-///
-/// # Arguments
-/// * `opt`: The options for the socket.
-///
-/// # Returns
-/// * `Ok(Box<dyn BindableNethunsSocket>)` - A new nethuns socket, in no error occurs.
-/// * `Err(NethunsOpenError::InvalidOptions)` - If at least one of the options holds a invalid value.
-/// * `Err(NethunsOpenError::Error)` - If an unexpected error occurs.
-pub fn nethuns_socket_open(
-    opt: NethunsSocketOptions,
-) -> Result<Box<dyn BindableNethunsSocket>, NethunsOpenError> {
-    cfg_if::cfg_if! {
-        if #[cfg(feature="netmap")] {
-            BindableNethunsSocketNetmap::open(opt)
-        }
-        else {
-            std::compile_error!("The support for the specified I/O framework is not available yet. Check the documentation for more information.");
-        }
-    }
-}
-
+/// Type for a Nethuns socket not binded to a specific device and queue.
+pub type BindableNethunsSocket = Box<dyn BindableNethunsSocketTrait>;
 
 /// Trait which defines the interface for a Nethuns socket
 /// not binded to a specific device and queue.
 ///
 /// In order to properly use the socket, you need to bind it first
-/// to a specific device and queue by calling [`BindableNethunsSocket::bind()`].
-pub trait BindableNethunsSocket: Debug {
+/// to a specific device and queue by calling [`BindableNethunsSocketTrait::bind()`].
+pub trait BindableNethunsSocketTrait: Debug {
     /// Bind an opened socket to a specific queue / any queue of interface/device `dev`.
     ///
     /// # Returns
@@ -81,7 +41,7 @@ pub trait BindableNethunsSocket: Debug {
         self: Box<Self>,
         dev: &str,
         queue: NethunsQueue,
-    ) -> Result<NethunsSocket, (NethunsBindError, Box<dyn BindableNethunsSocket>)>;
+    ) -> Result<NethunsSocket, (NethunsBindError, Box<dyn BindableNethunsSocketTrait>)>;
     
     /// Get an immutable reference to the base descriptor of the socket.
     fn base(&self) -> &NethunsSocketBase;
@@ -305,34 +265,4 @@ pub trait PkthdrTrait: Debug + Send + Sync {
     
     fn offvlan_tpid(&self) -> u16;
     fn offvlan_tci(&self) -> u16;
-}
-
-
-#[cfg(test)]
-mod test {
-    use is_trait::is_trait;
-    
-    #[test]
-    /// Make sure that the NethunsSocket trait is implemented correctly.
-    fn assert_nethuns_socket_trait() {
-        cfg_if::cfg_if! {
-            if #[cfg(feature="netmap")] {
-                assert!(
-                    is_trait!(
-                        super::netmap::nethuns_socket::NethunsSocketNetmap,
-                        super::NethunsSocketTrait
-                    )
-                );
-            }
-            else {
-                std::compile_error!("The support for the specified I/O framework is not available yet. Check the documentation for more information.");
-            }
-        }
-    }
-    
-    #[test]
-    /// Make sure that the Pkthdr struct implements the PkthdrTrait trait.
-    fn assert_pkthdr_trait() {
-        assert!(is_trait!(super::Pkthdr, super::PkthdrTrait));
-    }
 }

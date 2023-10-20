@@ -12,7 +12,7 @@ pub enum NethunsOpenError {
     Error(String),
 }
 
-/// Error type for [crate::sockets::BindableNethunsSocket::bind]
+/// Error type for [crate::sockets::BindableNethunsSocketTrait::bind]
 #[derive(Debug, Error)]
 pub enum NethunsBindError {
     #[error(

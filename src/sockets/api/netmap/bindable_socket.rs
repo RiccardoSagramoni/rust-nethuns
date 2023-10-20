@@ -12,7 +12,7 @@ use crate::nethuns::__nethuns_set_if_promisc;
 use crate::sockets::base::NethunsSocketBase;
 use crate::sockets::errors::{NethunsBindError, NethunsOpenError};
 use crate::sockets::ring::NethunsRing;
-use crate::sockets::{BindableNethunsSocket, NethunsSocket};
+use crate::sockets::{BindableNethunsSocketTrait, NethunsSocket};
 use crate::types::{NethunsQueue, NethunsSocketMode, NethunsSocketOptions};
 
 use super::nethuns_socket::NethunsSocketNetmap;
@@ -31,12 +31,12 @@ impl BindableNethunsSocketNetmap {
     /// * `opt`: The options for the socket.
     ///
     /// # Returns
-    /// * `Ok(Box<dyn BindableNethunsSocket>)` - A new nethuns socket, in no error occurs.
+    /// * `Ok(Box<dyn BindableNethunsSocketTrait>)` - A new nethuns socket, in no error occurs.
     /// * `Err(NethunsOpenError::InvalidOptions)` - If at least one of the options holds a invalid value.
     /// * `Err(NethunsOpenError::Error)` - If an unexpected error occurs.
     pub fn open(
         opt: NethunsSocketOptions,
-    ) -> Result<Box<dyn BindableNethunsSocket>, NethunsOpenError> {
+    ) -> Result<Box<dyn BindableNethunsSocketTrait>, NethunsOpenError> {
         let rx = opt.mode == NethunsSocketMode::RxTx
             || opt.mode == NethunsSocketMode::RxOnly;
         let tx = opt.mode == NethunsSocketMode::RxTx
@@ -72,12 +72,12 @@ impl BindableNethunsSocketNetmap {
 }
 
 
-impl BindableNethunsSocket for BindableNethunsSocketNetmap {
+impl BindableNethunsSocketTrait for BindableNethunsSocketNetmap {
     fn bind(
         mut self: Box<Self>,
         dev: &str,
         queue: NethunsQueue,
-    ) -> Result<NethunsSocket, (NethunsBindError, Box<dyn BindableNethunsSocket>)>
+    ) -> Result<NethunsSocket, (NethunsBindError, Box<dyn BindableNethunsSocketTrait>)>
     {
         // Prepare flag and prefix for device name
         let flags = if !self.tx() {
