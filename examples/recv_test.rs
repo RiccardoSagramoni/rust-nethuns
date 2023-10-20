@@ -2,7 +2,7 @@ use std::env;
 
 use etherparse::Ethernet2Header;
 use nethuns::sockets::base::RecvPacket;
-use nethuns::sockets::nethuns_socket_open;
+use nethuns::sockets::{nethuns_socket_open, NethunsSocket};
 use nethuns::types::{
     NethunsCaptureDir, NethunsCaptureMode, NethunsQueue, NethunsSocketMode,
     NethunsSocketOptions,
@@ -50,7 +50,7 @@ fn main() {
 }
 
 
-fn dump_packet(pkt: &RecvPacket) {
+fn dump_packet(pkt: &RecvPacket<NethunsSocket>) {
     let pkthdr = pkt.pkthdr();
     let packet = pkt.packet();
     

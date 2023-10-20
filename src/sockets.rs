@@ -108,7 +108,7 @@ impl NethunsSocket {
         }
     }
     
-    pub fn recv(&self) -> Result<RecvPacket, NethunsRecvError> {
+    pub fn recv(&self) -> Result<RecvPacket<NethunsSocket>, NethunsRecvError> {
         unsafe { (*UnsafeCell::raw_get(&self.inner)).recv() }
             .map(|data| RecvPacket::new(data, PhantomData))
     }

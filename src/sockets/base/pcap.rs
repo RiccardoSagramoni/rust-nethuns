@@ -38,13 +38,13 @@ impl NethunsSocketPcap {
         })
     }
     
-    pub fn read(&mut self) -> Result<RecvPacket, NethunsPcapReadError> {
+    pub fn read(&self) -> Result<RecvPacket<NethunsSocketPcap>, NethunsPcapReadError> {
         unsafe { (*UnsafeCell::raw_get(&self.inner)).read() }
             .map(|p| RecvPacket::new(p, PhantomData))
     }
     
     pub fn write(
-        &mut self,
+        &self,
         header: &nethuns_pcap_pkthdr,
         packet: &[u8],
     ) -> Result<usize, NethunsPcapWriteError> {
@@ -52,7 +52,7 @@ impl NethunsSocketPcap {
     }
     
     pub fn store(
-        &mut self,
+        &self,
         pkthdr: &dyn PkthdrTrait,
         packet: &[u8],
     ) -> Result<u32, NethunsPcapStoreError> {
@@ -66,7 +66,7 @@ impl NethunsSocketPcap {
     /// * `Ok(u64)` - the new position from the start of the file.
     /// * `Err(NethunsPcapRewindError::NotSupported)` - if the `NETHUNS_USE_BUILTIN_PCAP_READER` feature is not enabled (STANDARD_PCAP_READER only).
     /// * `Err(NethunsPcapRewindError::FileError)` - if an I/O error occurs while accessing the file (BUILTIN_PCAP_READER only).
-    pub fn rewind(&mut self) -> Result<u64, NethunsPcapRewindError> {
+    pub fn rewind(&self) -> Result<u64, NethunsPcapRewindError> {
         unsafe { (*UnsafeCell::raw_get(&self.inner)).rewind() }
     }
 }
@@ -74,7 +74,7 @@ impl NethunsSocketPcap {
 
 #[derive(Derivative)]
 #[derivative(Debug)]
-pub(self) struct NethunsSocketPcapInner {
+struct NethunsSocketPcapInner {
     base: NethunsSocketBase,
     
     #[derivative(Debug = "ignore")]
@@ -90,7 +90,7 @@ pub(self) struct NethunsSocketPcapInner {
 /// Depending on the `NETHUNS_USE_BUILTIN_PCAP_READER` feature,
 /// the implementation of this trait will use the standard pcap reader
 /// (STANDARD_PCAP_READER) or a custom built-in pcap reader (BUILTIN_PCAP_READER).
-pub(self) trait NethunsSocketPcapTrait: Debug + Send {
+trait NethunsSocketPcapTrait: Debug + Send {
     /// Open the socket for reading captured packets from a file.
     ///
     /// # Arguments

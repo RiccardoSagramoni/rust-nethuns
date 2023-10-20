@@ -11,7 +11,7 @@ use getset::{CopyGetters, Getters, Setters};
 use crate::types::{NethunsQueue, NethunsSocketOptions};
 
 use super::ring::{AtomicRingSlotStatus, NethunsRing, RingSlotStatus};
-use super::{NethunsSocket, PkthdrTrait};
+use super::PkthdrTrait;
 
 
 /// Closure type for the filtering of received packets.
@@ -68,23 +68,22 @@ pub struct NethunsSocketBase {
 /// - `pkthdr`: the packet header metadata. Its internal format depends on the selected I/O framework.
 /// - `packet`: the Ethernet packet payload.
 #[derive(Debug, Getters)]
-pub struct RecvPacket<'a> {
+pub struct RecvPacket<'a, T> {
     data: RecvPacketData,
     
-    phantom_data: PhantomData<&'a NethunsSocket>,
+    phantom_data: PhantomData<&'a T>,
 }
 
-unsafe impl Send for RecvPacket<'_> {}
-unsafe impl Sync for RecvPacket<'_> {}
+unsafe impl<T: Send> Send for RecvPacket<'_, T> {}
 
-impl RecvPacket<'_> {
+impl<T> RecvPacket<'_, T> {
     /// Create a new `RecvPacket` instance.
     ///
     /// TODO
     pub fn new(
         data: RecvPacketData,
-        phantom_data: PhantomData<&'_ NethunsSocket>,
-    ) -> RecvPacket {
+        phantom_data: PhantomData<&'_ T>,
+    ) -> RecvPacket<T> {
         RecvPacket { data, phantom_data }
     }
     
@@ -104,7 +103,7 @@ impl RecvPacket<'_> {
     }
 }
 
-impl Display for RecvPacket<'_> {
+impl<T> Display for RecvPacket<'_, T> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(
             f,
