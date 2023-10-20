@@ -186,7 +186,7 @@ pub enum RingSlotStatus {
 
 /// A wrapper around [`RingSlotStatus`] which can be safely shared between threads.
 ///
-/// This type uses an `AtomicU8` to store the enum value.
+/// This type uses an [`AtomicU8`] to store the enum value.
 pub struct AtomicRingSlotStatus(AtomicU8);
 
 impl AtomicRingSlotStatus {

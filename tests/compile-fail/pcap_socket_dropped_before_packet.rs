@@ -1,7 +1,6 @@
 use nethuns::sockets::base::pcap::NethunsSocketPcap;
 use nethuns::types::NethunsSocketOptions;
 
-#[test]
 fn main() {
     let opt = NethunsSocketOptions::default();
     

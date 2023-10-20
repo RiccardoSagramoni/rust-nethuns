@@ -7,8 +7,8 @@ use std::{mem, thread};
 use bus::{Bus, BusReader};
 
 use nethuns::sockets::base::RecvPacket;
+use nethuns::sockets::{BindableNethunsSocket, NethunsSocket};
 
-use nethuns::sockets::{nethuns_socket_open, NethunsSocket};
 use nethuns::types::{
     NethunsCaptureDir, NethunsCaptureMode, NethunsQueue, NethunsSocketMode,
     NethunsSocketOptions,
@@ -40,7 +40,7 @@ fn main() {
     };
     
     // Open socket
-    let socket = nethuns_socket_open(opt)
+    let socket = BindableNethunsSocket::open(opt)
         .expect("Failed to open nethuns socket")
         .bind(&conf.dev, NethunsQueue::Any)
         .expect("Failed to bind nethuns socket");

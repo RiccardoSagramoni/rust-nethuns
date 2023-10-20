@@ -143,7 +143,7 @@ fn run_capture_mode(conf: Configuration) {
     .expect("unable to open `output` socket");
     
     let in_socket =
-        nethuns_socket_open(opt).expect("unable to open `input` socket");
+        BindableNethunsSocket::open(opt).expect("unable to open `input` socket");
     let mut in_socket = in_socket
         .bind(&conf.target_name, NethunsQueue::Any)
         .unwrap_or_else(|_| {

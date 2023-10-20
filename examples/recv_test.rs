@@ -2,7 +2,7 @@ use std::env;
 
 use etherparse::Ethernet2Header;
 use nethuns::sockets::base::RecvPacket;
-use nethuns::sockets::{nethuns_socket_open, NethunsSocket};
+use nethuns::sockets::{BindableNethunsSocket, NethunsSocket};
 use nethuns::types::{
     NethunsCaptureDir, NethunsCaptureMode, NethunsQueue, NethunsSocketMode,
     NethunsSocketOptions,
@@ -27,7 +27,7 @@ fn main() {
         tx_qdisc_bypass: false,
         ..Default::default()
     };
-    let socket = nethuns_socket_open(opt)
+    let socket = BindableNethunsSocket::open(opt)
         .expect("Failed to open socket")
         .bind(
             &env::args()

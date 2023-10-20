@@ -3,7 +3,7 @@ use std::io;
 use core::fmt::Debug;
 use thiserror::Error;
 
-/// Error type for [`nethuns_socket_open`](crate::sockets::nethuns_socket_open)
+/// Error type for [`BindableNethunsSocket::open`](crate::sockets::BindableNethunsSocket::open)
 #[derive(Debug, Error)]
 pub enum NethunsOpenError {
     #[error("[open] invalid options: {0}")]

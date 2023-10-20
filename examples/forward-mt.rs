@@ -7,8 +7,8 @@ use std::{mem, thread};
 use bus::{Bus, BusReader};
 
 use nethuns::sockets::base::RecvPacket;
+use nethuns::sockets::{BindableNethunsSocket, NethunsSocket};
 
-use nethuns::sockets::{nethuns_socket_open, NethunsSocket};
 use nethuns::types::{
     NethunsCaptureDir, NethunsCaptureMode, NethunsQueue, NethunsSocketMode,
     NethunsSocketOptions,
@@ -40,7 +40,7 @@ fn main() {
         ..Default::default()
     };
     
-    let socket = nethuns_socket_open(opt.clone())
+    let socket = BindableNethunsSocket::open(opt.clone())
         .unwrap()
         .bind(&conf.dev_in, NethunsQueue::Any)
         .unwrap();
@@ -48,7 +48,8 @@ fn main() {
     
     thread::scope(|s| {
         // Create SPSC ring buffer
-        let (mut producer, consumer) = RingBuffer::<RecvPacket<NethunsSocket>>::new(65536);
+        let (mut producer, consumer) =
+            RingBuffer::<RecvPacket<NethunsSocket>>::new(65536);
         
         // Create channel for thread communication
         let mut bus: Bus<()> = Bus::new(5);
@@ -168,7 +169,7 @@ fn consumer_body(
     mut rx: BusReader<()>,
     total_fwd: Arc<Mutex<u64>>,
 ) {
-    let socket = nethuns_socket_open(opt)
+    let socket = BindableNethunsSocket::open(opt)
         .unwrap()
         .bind(dev, NethunsQueue::Any)
         .unwrap();
