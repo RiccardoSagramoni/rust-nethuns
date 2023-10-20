@@ -70,7 +70,7 @@ pub enum NethunsFlushError {
 }
 
 
-/// Error type for [`NethunsSocketPcap::open`](crate::sockets::base::pcap::NethunsSocketPcap::open)
+/// Error type for [`NethunsSocketPcap::open`](crate::sockets::pcap::NethunsSocketPcap::open)
 #[derive(Debug, Error)]
 pub enum NethunsPcapOpenError {
     // STANDARD_PCAP_READER
@@ -96,7 +96,7 @@ where
 }
 
 
-/// Error type for [`NethunsSocketPcap::read`](crate::sockets::base::pcap::NethunsSocketPcap::read)
+/// Error type for [`NethunsSocketPcap::read`](crate::sockets::pcap::NethunsSocketPcap::read)
 #[derive(Debug, Error)]
 pub enum NethunsPcapReadError {
     #[error("[pcap_read] head ring in use")]
@@ -135,7 +135,7 @@ impl From<io::Error> for NethunsPcapReadError {
 }
 
 
-/// Error type for [`NethunsSocketPcap::write`](crate::sockets::base::pcap::NethunsSocketPcap::write)
+/// Error type for [`NethunsSocketPcap::write`](crate::sockets::pcap::NethunsSocketPcap::write)
 #[derive(Debug, Error)]
 pub enum NethunsPcapWriteError {
     // STANDARD_PCAP_READER
@@ -148,7 +148,7 @@ pub enum NethunsPcapWriteError {
 }
 
 
-/// Error type for [`NethunsSocketPcapTrait::store`](crate::sockets::base::pcap::NethunsSocketPcap::store)
+/// Error type for [`NethunsSocketPcapTrait::store`](crate::sockets::pcap::NethunsSocketPcap::store)
 #[derive(Debug, Error)]
 pub enum NethunsPcapStoreError {
     // STANDARD_PCAP_READER
@@ -161,7 +161,7 @@ pub enum NethunsPcapStoreError {
 }
 
 
-/// Error type for [`NethunsSocketPcapTrait::rewind`](crate::sockets::base::pcap::NethunsSocketPcap::rewind)
+/// Error type for [`NethunsSocketPcapTrait::rewind`](crate::sockets::pcap::NethunsSocketPcap::rewind)
 #[derive(Debug, Error)]
 pub enum NethunsPcapRewindError {
     // STANDARD_PCAP_READER

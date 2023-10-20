@@ -1,6 +1,11 @@
 pub mod base;
 pub mod errors;
+pub mod pcap;
 pub mod ring;
+
+mod api;
+pub use api::nethuns_socket_open;
+
 
 use core::fmt::Debug;
 use std::cell::UnsafeCell;
@@ -13,10 +18,6 @@ use self::base::{NethunsSocketBase, RecvPacket, RecvPacketData};
 use self::errors::{
     NethunsBindError, NethunsFlushError, NethunsRecvError, NethunsSendError,
 };
-
-
-mod api;
-pub use api::nethuns_socket_open;
 
 
 /// Type for a Nethuns socket not binded to a specific device and queue.
@@ -36,7 +37,7 @@ impl BindableNethunsSocket {
     fn new(inner: Box<dyn BindableNethunsSocketTrait>) -> Self {
         Self { inner }
     }
-
+    
     /// Bind an opened socket to a specific queue / any queue of interface/device `dev`.
     ///
     /// # Returns
@@ -53,13 +54,13 @@ impl BindableNethunsSocket {
             (error, BindableNethunsSocket::new(socket))
         })
     }
-
+    
     delegate::delegate! {
         to self.inner {
             /// Check if the socket is in RX mode
             #[inline(always)]
             pub fn rx(&self) -> bool;
-
+            
             /// Check if the socket is in TX mode
             #[inline(always)]
             pub fn tx(&self) -> bool;
@@ -86,16 +87,16 @@ trait BindableNethunsSocketTrait: Debug + Send {
         NethunsSocket,
         (NethunsBindError, Box<dyn BindableNethunsSocketTrait>),
     >;
-
+    
     /// Get an immutable reference to the base descriptor of the socket.
     fn base(&self) -> &NethunsSocketBase;
-
+    
     /// Check if the socket is in RX mode
     #[inline(always)]
     fn rx(&self) -> bool {
         self.base().rx_ring().is_some()
     }
-
+    
     /// Check if the socket is in TX mode
     #[inline(always)]
     fn tx(&self) -> bool {
@@ -120,8 +121,8 @@ impl NethunsSocket {
             inner: UnsafeCell::new(inner),
         }
     }
-
-
+    
+    
     /// Get the next unprocessed received packet.
     ///
     /// # Returns
@@ -136,8 +137,8 @@ impl NethunsSocket {
         unsafe { (*UnsafeCell::raw_get(&self.inner)).recv() }
             .map(|data| RecvPacket::new(data, PhantomData))
     }
-
-
+    
+    
     /// Queue up a packet for transmission.
     ///
     /// # Returns
@@ -147,8 +148,8 @@ impl NethunsSocket {
     pub fn send(&self, packet: &[u8]) -> Result<(), NethunsSendError> {
         unsafe { (*UnsafeCell::raw_get(&self.inner)).send(packet) }
     }
-
-
+    
+    
     /// Send all queued up packets.
     ///
     /// # Returns
@@ -159,8 +160,8 @@ impl NethunsSocket {
     pub fn flush(&self) -> Result<(), NethunsFlushError> {
         unsafe { (*UnsafeCell::raw_get(&self.inner)).flush() }
     }
-
-
+    
+    
     /// Mark the packet contained in the a specific slot
     /// of the TX ring as *ready for transmission*.
     ///
@@ -178,8 +179,8 @@ impl NethunsSocket {
     ) -> Result<(), NethunsSendError> {
         unsafe { (*UnsafeCell::raw_get(&self.inner)).send_slot(id, len) }
     }
-
-
+    
+    
     /// Set the optional packet filtering function.
     ///
     /// # Parameters
@@ -189,14 +190,14 @@ impl NethunsSocket {
         unsafe { (*UnsafeCell::raw_get(&self.inner)).base_mut() }
             .set_filter(filter);
     }
-
-
+    
+    
     /// Get the file descriptor of the socket.
     pub fn fd(&self) -> std::os::raw::c_int {
         unsafe { (*UnsafeCell::raw_get(&self.inner)).fd() }
     }
-
-
+    
+    
     /// Get a mutable reference to the buffer inside
     /// a specific ring slot which will contain the packet
     /// to be sent.
@@ -213,8 +214,8 @@ impl NethunsSocket {
         // Enforce unique access to the socket, since we are modifying a packet buffer
         UnsafeCell::get_mut(&mut self.inner).get_packet_buffer_ref(pktid)
     }
-
-
+    
+    
     /// Join a fanout group.
     ///
     /// # Arguments
@@ -223,31 +224,31 @@ impl NethunsSocket {
     pub fn fanout(&self, group: i32, fanout: &CStr) -> bool {
         unsafe { (*UnsafeCell::raw_get(&self.inner)).fanout(group, fanout) }
     }
-
-
+    
+    
     /// Dump the rings of the socket.
     pub fn dump_rings(&self) {
         unsafe { (*UnsafeCell::raw_get(&self.inner)).dump_rings() }
     }
-
+    
     /// Get some statistics about the socket
     /// or `None` on error.
     pub fn stats(&self) -> Option<NethunsStat> {
         unsafe { (*UnsafeCell::raw_get(&self.inner)).stats() }
     }
-
-
+    
+    
     #[inline(always)]
     pub(crate) fn base(&self) -> &NethunsSocketBase {
         unsafe { (*UnsafeCell::raw_get(&self.inner)).base() }
     }
-
+    
     /// Check if the socket is in TX mode
     #[inline(always)]
     pub fn tx(&self) -> bool {
         unsafe { (*UnsafeCell::raw_get(&self.inner)).tx() }
     }
-
+    
     /// Check if the socket is in RX mode
     #[inline(always)]
     pub fn rx(&self) -> bool {
@@ -268,8 +269,8 @@ trait NethunsSocketTrait: Debug + Send {
     /// * `Err(NethunsRecvError::FrameworkError)` - If an error from the unsafe interaction with underlying I/O framework occurs.
     /// * `Err(NethunsRecvError::Error)` - If an unexpected error occurs.
     fn recv(&mut self) -> Result<RecvPacketData, NethunsRecvError>;
-
-
+    
+    
     /// Queue up a packet for transmission.
     ///
     /// # Returns
@@ -277,8 +278,8 @@ trait NethunsSocketTrait: Debug + Send {
     /// * `Err(NethunsSendError::NotTx)` -  If the socket is not configured in TX mode. Check the configuration parameters passed to [`nethuns_socket_open`].
     /// * `Err(NethunsSendError::InUse)` - If the slot at the tail of the TX ring is not released yet and it's currently in use by the application.
     fn send(&mut self, packet: &[u8]) -> Result<(), NethunsSendError>;
-
-
+    
+    
     /// Send all queued up packets.
     ///
     /// # Returns
@@ -287,8 +288,8 @@ trait NethunsSocketTrait: Debug + Send {
     /// * `Err(NethunsFlushError::FrameworkError)` - If an error from the unsafe interaction with underlying I/O framework occurs.
     /// * `Err(NethunsFlushError::Error)` - If an unexpected error occurs.
     fn flush(&mut self) -> Result<(), NethunsFlushError>;
-
-
+    
+    
     /// Mark the packet contained in the a specific slot
     /// of the TX ring as *ready for transmission*.
     ///
@@ -304,12 +305,12 @@ trait NethunsSocketTrait: Debug + Send {
         id: usize,
         len: usize,
     ) -> Result<(), NethunsSendError>;
-
-
+    
+    
     /// Get the file descriptor of the socket.
     fn fd(&self) -> std::os::raw::c_int;
-
-
+    
+    
     /// Get a mutable reference to the buffer inside
     /// a specific ring slot which will contain the packet
     /// to be sent.
@@ -323,29 +324,29 @@ trait NethunsSocketTrait: Debug + Send {
     /// * `Some(&mut [u8])` - buffer reference.
     /// * `None` - if the socket is not in TX mode.
     fn get_packet_buffer_ref(&self, pktid: usize) -> Option<&mut [u8]>;
-
-
+    
+    
     /// Join a fanout group.
     ///
     /// # Arguments
     /// * `group` - The group id.
     /// * `fanout` - A string encoding the details of the fanout mode.
     fn fanout(&mut self, group: i32, fanout: &CStr) -> bool;
-
-
+    
+    
     /// Dump the rings of the socket.
     fn dump_rings(&mut self);
-
+    
     /// Get some statistics about the socket
     /// or `None` on error.
     fn stats(&self) -> Option<NethunsStat>;
-
-
+    
+    
     /// Get an immutable reference to the base socket descriptor.
     fn base(&self) -> &NethunsSocketBase;
     /// Get a mutable reference to the base socket descriptor.
     fn base_mut(&mut self) -> &mut NethunsSocketBase;
-
+    
     /// Check if the socket is in TX mode
     #[inline(always)]
     fn tx(&self) -> bool {
@@ -370,14 +371,14 @@ pub trait PkthdrTrait: Debug + Send + Sync {
     fn tstamp_set_sec(&mut self, sec: u32);
     fn tstamp_set_usec(&mut self, usec: u32);
     fn tstamp_set_nsec(&mut self, nsec: u32);
-
+    
     fn snaplen(&self) -> u32;
     fn len(&self) -> u32;
     fn set_snaplen(&mut self, len: u32);
     fn set_len(&mut self, len: u32);
-
+    
     fn rxhash(&self) -> u32;
-
+    
     fn offvlan_tpid(&self) -> u16;
     fn offvlan_tci(&self) -> u16;
 }

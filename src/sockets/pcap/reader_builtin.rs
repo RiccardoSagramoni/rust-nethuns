@@ -25,7 +25,7 @@ use super::{
 };
 
 
-// Define the type of the built-in pcap reader
+// Define the type of the pcap reader
 pub type PcapReaderType = File;
 
 
