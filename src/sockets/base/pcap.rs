@@ -1,10 +1,12 @@
 mod constants;
 
 use core::fmt::Debug;
+use std::cell::UnsafeCell;
+use std::marker::PhantomData;
 
 use cfg_if::cfg_if;
 use derivative::Derivative;
-use getset::{CopyGetters, Getters};
+use getset::CopyGetters;
 
 use crate::sockets::errors::{
     NethunsPcapOpenError, NethunsPcapReadError, NethunsPcapRewindError,
@@ -13,18 +15,69 @@ use crate::sockets::errors::{
 use crate::sockets::PkthdrTrait;
 use crate::types::NethunsSocketOptions;
 
-use super::{NethunsSocketBase, RecvPacket};
+use super::{NethunsSocketBase, RecvPacket, RecvPacketData};
 
 
 /// Nethuns socket for packet capture (PCAP).
-#[derive(Derivative, Getters)]
-#[derivative(Debug)]
-#[getset(get = "pub")]
+#[derive(Debug)]
+#[repr(transparent)]
 pub struct NethunsSocketPcap {
+    inner: UnsafeCell<NethunsSocketPcapInner>,
+}
+
+impl NethunsSocketPcap {
+    pub fn open(
+        opt: NethunsSocketOptions,
+        filename: &str,
+        writing_mode: bool,
+    ) -> Result<Self, NethunsPcapOpenError> {
+        NethunsSocketPcapInner::open(opt, filename, writing_mode).map(|inner| {
+            Self {
+                inner: UnsafeCell::new(inner),
+            }
+        })
+    }
+    
+    pub fn read(&mut self) -> Result<RecvPacket, NethunsPcapReadError> {
+        unsafe { (*UnsafeCell::raw_get(&self.inner)).read() }
+            .map(|p| RecvPacket::new(p, PhantomData))
+    }
+    
+    pub fn write(
+        &mut self,
+        header: &nethuns_pcap_pkthdr,
+        packet: &[u8],
+    ) -> Result<usize, NethunsPcapWriteError> {
+        unsafe { (*UnsafeCell::raw_get(&self.inner)).write(header, packet) }
+    }
+    
+    pub fn store(
+        &mut self,
+        pkthdr: &dyn PkthdrTrait,
+        packet: &[u8],
+    ) -> Result<u32, NethunsPcapStoreError> {
+        unsafe { (*UnsafeCell::raw_get(&self.inner)).store(pkthdr, packet) }
+    }
+    
+    
+    /// Rewind the reader to the beginning of the pcap file.
+    ///
+    /// # Returns
+    /// * `Ok(u64)` - the new position from the start of the file.
+    /// * `Err(NethunsPcapRewindError::NotSupported)` - if the `NETHUNS_USE_BUILTIN_PCAP_READER` feature is not enabled (STANDARD_PCAP_READER only).
+    /// * `Err(NethunsPcapRewindError::FileError)` - if an I/O error occurs while accessing the file (BUILTIN_PCAP_READER only).
+    pub fn rewind(&mut self) -> Result<u64, NethunsPcapRewindError> {
+        unsafe { (*UnsafeCell::raw_get(&self.inner)).rewind() }
+    }
+}
+
+
+#[derive(Derivative)]
+#[derivative(Debug)]
+pub(self) struct NethunsSocketPcapInner {
     base: NethunsSocketBase,
     
     #[derivative(Debug = "ignore")]
-    #[getset(skip)]
     reader: PcapReaderType,
     
     snaplen: u32,
@@ -37,7 +90,7 @@ pub struct NethunsSocketPcap {
 /// Depending on the `NETHUNS_USE_BUILTIN_PCAP_READER` feature,
 /// the implementation of this trait will use the standard pcap reader
 /// (STANDARD_PCAP_READER) or a custom built-in pcap reader (BUILTIN_PCAP_READER).
-pub trait NethunsSocketPcapTrait: Debug + Send {
+pub(self) trait NethunsSocketPcapTrait: Debug + Send {
     /// Open the socket for reading captured packets from a file.
     ///
     /// # Arguments
@@ -68,7 +121,7 @@ pub trait NethunsSocketPcapTrait: Debug + Send {
     /// * `Err(NethunsPcapOpenError::PcapError)` - if an error occurs while parsing the pcap file (STANDARD_PCAP_READER only).
     /// * `Err(NethunsPcapOpenError::FileError)` - if an error occurs while accessing the file (BUILTIN_PCAP_READER only).
     /// * `Err(NethunsPcapOpenError::Eof)` - if the end of the file is reached.
-    fn read(&mut self) -> Result<RecvPacket, NethunsPcapReadError>;
+    fn read(&mut self) -> Result<RecvPacketData, NethunsPcapReadError>;
     
     
     /// Write a packet already in pcap format to a pcap file.

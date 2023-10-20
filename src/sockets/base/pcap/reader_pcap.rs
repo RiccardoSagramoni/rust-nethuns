@@ -5,8 +5,8 @@ use std::{cmp, mem};
 use pcap_parser::traits::PcapReaderIterator;
 use pcap_parser::{LegacyPcapReader, PcapBlockOwned, PcapError};
 
-use crate::sockets::base::pcap::{NethunsSocketPcap, NethunsSocketPcapTrait};
-use crate::sockets::base::{NethunsSocketBase, RecvPacket};
+use crate::sockets::base::pcap::NethunsSocketPcapTrait;
+use crate::sockets::base::{NethunsSocketBase, RecvPacketData};
 use crate::sockets::errors::{
     NethunsPcapOpenError, NethunsPcapReadError, NethunsPcapRewindError,
     NethunsPcapStoreError, NethunsPcapWriteError,
@@ -16,14 +16,14 @@ use crate::sockets::PkthdrTrait;
 use crate::types::NethunsSocketOptions;
 
 use super::constants::NSEC_TCPDUMP_MAGIC;
-use super::nethuns_pcap_pkthdr;
+use super::{nethuns_pcap_pkthdr, NethunsSocketPcapInner};
 
 
 // Define the type of the default pcap reader
 pub type PcapReaderType = LegacyPcapReader<File>;
 
 
-impl NethunsSocketPcapTrait for NethunsSocketPcap {
+impl NethunsSocketPcapTrait for NethunsSocketPcapInner {
     fn open(
         opt: NethunsSocketOptions,
         filename: &str,
@@ -59,7 +59,7 @@ impl NethunsSocketPcapTrait for NethunsSocketPcap {
             Err(e) => return Err(NethunsPcapOpenError::from(e)),
         };
         
-        Ok(NethunsSocketPcap {
+        Ok(NethunsSocketPcapInner {
             base,
             reader,
             snaplen,
@@ -68,7 +68,7 @@ impl NethunsSocketPcapTrait for NethunsSocketPcap {
     }
     
     
-    fn read(&mut self) -> Result<RecvPacket, NethunsPcapReadError> {
+    fn read(&mut self) -> Result<RecvPacketData, NethunsPcapReadError> {
         let rx_ring = self
             .base
             .rx_ring
@@ -124,7 +124,7 @@ impl NethunsSocketPcapTrait for NethunsSocketPcap {
         
         let slot = rx_ring.get_slot(head_idx);
         
-        Ok(RecvPacket::new(
+        Ok(RecvPacketData::new(
             rx_ring.rings.head() as _,
             Box::new(slot.pkthdr),
             &slot.packet[..bytes as _],

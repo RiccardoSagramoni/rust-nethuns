@@ -1,5 +1,4 @@
-// TODO unsafecell pcap
-// pub mod pcap;
+pub mod pcap;
 
 use std::ffi::CString;
 use std::fmt::{self, Debug, Display};
