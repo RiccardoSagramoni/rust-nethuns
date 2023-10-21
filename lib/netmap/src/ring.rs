@@ -4,9 +4,8 @@ use std::ptr::NonNull;
 use crate::bindings::{netmap_ring, netmap_slot, nm_ring_next};
 use crate::slot::NetmapSlot;
 
-/// Safe wrapper for `netmap_ring` structure from the C library.
-///
-/// Implements transmit and receive rings, with read/write pointers,
+/// Safe wrapper for [`netmap_ring`].
+/// It implements transmit and receive rings, with read/write pointers,
 /// metadata and an array of slots describing the buffers.
 ///
 /// ```C
@@ -23,9 +22,10 @@ use crate::slot::NetmapSlot;
 ///     struct timeval  ts;         /* (k) time of last rxsync()     */
 ///     ...
 ///     struct netmap_slot slot[0]; /* array of slots                */
-///     }
+/// }
 /// ```
 #[derive(Debug)]
+#[repr(transparent)]
 pub struct NetmapRing {
     netmap_ring: NonNull<netmap_ring>,
 }

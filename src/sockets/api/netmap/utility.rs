@@ -3,8 +3,7 @@
 use std::ptr::NonNull;
 
 use c_netmap_wrapper::macros::netmap_rxring;
-use c_netmap_wrapper::nmport::NmPortDescriptor;
-use c_netmap_wrapper::ring::NetmapRing;
+use c_netmap_wrapper::{NetmapRing, NmPortDescriptor};
 
 use crate::sockets::errors::NethunsRecvError;
 
@@ -101,10 +100,8 @@ pub(super) use nethuns_blocks_free;
 /// A `*mut u8` raw pointer pointing to the requested buffer
 macro_rules! nethuns_get_buf_addr_netmap {
     ($some_ring: expr, $tx_ring: expr, $pktid: expr) => {
-        netmap_buf(
-            $some_ring,
-            $tx_ring.get_slot($pktid).pkthdr.buf_idx as _,
-        ) as *mut u8
+        netmap_buf($some_ring, $tx_ring.get_slot($pktid).pkthdr.buf_idx as _)
+            as *mut u8
     };
 }
 pub(super) use nethuns_get_buf_addr_netmap;

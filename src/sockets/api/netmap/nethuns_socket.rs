@@ -6,9 +6,7 @@ use std::{cmp, mem, slice};
 use c_netmap_wrapper::bindings::{nm_pkt_copy, NS_BUF_CHANGED};
 use c_netmap_wrapper::constants::{NIOCRXSYNC, NIOCTXSYNC};
 use c_netmap_wrapper::macros::{netmap_buf, netmap_txring};
-use c_netmap_wrapper::netmap_buf_pkt;
-use c_netmap_wrapper::nmport::NmPortDescriptor;
-use c_netmap_wrapper::ring::NetmapRing;
+use c_netmap_wrapper::{netmap_buf_pkt, NetmapRing, NmPortDescriptor};
 
 use crate::misc::circular_buffer::CircularBuffer;
 use crate::nethuns::__nethuns_clear_if_promisc;
