@@ -155,7 +155,7 @@ fn main() {
                     &totals[th_idx as usize],
                     rx,
                 )
-                .expect(format!("Thread {th_idx} execution failed").as_str());
+                .unwrap_or_else(|_| panic!("Thread {th_idx} execution failed"));
             }));
         }
         
@@ -416,7 +416,7 @@ fn mt_execution(
             conf,
             sockid as _,
             &socket.lock().expect("Mutex::lock failed for `socket`"),
-            &total,
+            total,
             &mut count_to_dump,
         ) {
             Ok(_) => (),
@@ -449,7 +449,12 @@ fn recv_pkt(
     let old_total = total.fetch_add(1, Ordering::AcqRel);
     
     if conf.debug {
-        println!("Thread: {}, total: {}, pkt: {}", sockid, old_total, pkt.id());
+        println!(
+            "Thread: {}, total: {}, pkt: {}",
+            sockid,
+            old_total,
+            pkt.id()
+        );
         println!("Packet IP addr: {}", print_addrs(pkt.packet())?);
     }
     

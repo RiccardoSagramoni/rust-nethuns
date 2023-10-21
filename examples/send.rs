@@ -11,7 +11,7 @@ use nethuns::types::{
     NethunsCaptureDir, NethunsCaptureMode, NethunsQueue, NethunsSocketMode,
     NethunsSocketOptions,
 };
-use num_format::{ToFormattedString, Locale};
+use num_format::{Locale, ToFormattedString};
 
 
 const HELP_BRIEF: &str = "\
@@ -101,9 +101,10 @@ fn main() {
             let rx = bus.add_rx();
             let totals = totals.clone();
             threads.push(thread::spawn(move || {
-                mt_send(&args, opt, th_idx, &payload, rx, totals).expect(
-                    format!("Thread {th_idx} execution failed").as_str(),
-                );
+                mt_send(&args, opt, th_idx, &payload, rx, totals)
+                    .unwrap_or_else(|_| {
+                        panic!("Thread {th_idx} execution failed")
+                    });
             }));
         }
         
@@ -351,7 +352,7 @@ fn mt_send(
     totals: Arc<Vec<AtomicU64>>,
 ) -> Result<(), anyhow::Error> {
     // Setup and fill transmission ring
-    let mut socket = fill_tx_ring(args, opt, th_idx, payload)?;
+    let socket = fill_tx_ring(args, opt, th_idx, payload)?;
     
     // Packet id (only for zero-copy transmission)
     let mut pktid = 0_usize;
@@ -367,14 +368,14 @@ fn mt_send(
         if args.zerocopy {
             transmit_zc(
                 args,
-                &mut socket,
+                &socket,
                 &mut pktid,
                 payload.len(),
                 &totals,
                 th_idx as _,
             )?
         } else {
-            transmit_c(args, &mut socket, payload, &totals, th_idx as _)?
+            transmit_c(args, &socket, payload, &totals, th_idx as _)?
         }
     }
     
@@ -448,7 +449,7 @@ fn transmit_zc(
 ) -> Result<(), anyhow::Error> {
     // Prepare batch
     for _ in 0..args.batch_size {
-        if let Err(_) = socket.send_slot(*pktid, pkt_size) {
+        if socket.send_slot(*pktid, pkt_size).is_err() {
             break;
         }
         (*pktid) += 1;
