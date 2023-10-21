@@ -1,15 +1,16 @@
-use std::ops::DerefMut;
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::mpsc::TryRecvError;
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
 use std::time::{Duration, SystemTime};
 use std::{mem, thread};
 
 use bus::{Bus, BusReader};
-use nethuns::sockets::nethuns_socket_open;
+use nethuns::sockets::BindableNethunsSocket;
 use nethuns::types::{
     NethunsCaptureDir, NethunsCaptureMode, NethunsQueue, NethunsSocketMode,
     NethunsSocketOptions,
 };
+use num_format::{Locale, ToFormattedString};
 
 
 #[derive(Debug, Default)]
@@ -37,19 +38,19 @@ fn main() {
     };
     
     // Open sockets
-    let mut in_socket = nethuns_socket_open(opt.clone())
+    let in_socket = BindableNethunsSocket::open(opt.clone())
         .unwrap()
         .bind(&conf.dev_in, NethunsQueue::Any)
         .unwrap();
-    let mut out_socket = nethuns_socket_open(opt)
+    let out_socket = BindableNethunsSocket::open(opt)
         .unwrap()
         .bind(&conf.dev_out, NethunsQueue::Any)
         .unwrap();
     
     
     let mut bus: Bus<()> = Bus::new(5);
-    let total_rcv = Arc::new(Mutex::new(0_u64));
-    let total_fwd = Arc::new(Mutex::new(0_u64));
+    let total_rcv = Arc::new(AtomicU64::new(0));
+    let total_fwd = Arc::new(AtomicU64::new(0));
     
     let meter_th = {
         let total_rcv = total_rcv.clone();
@@ -72,16 +73,16 @@ fn main() {
         }
         
         if let Ok(pkt) = in_socket.recv() {
-            *(total_rcv.lock().expect("lock failed")) += 1;
+            total_rcv.fetch_add(1, Ordering::AcqRel);
             loop {
-                match out_socket.send(pkt.packet().borrow_packet()) {
+                match out_socket.send(pkt.packet()) {
                     Ok(_) => break,
                     Err(_) => {
                         out_socket.flush().unwrap();
                     }
                 }
             }
-            *(total_fwd.lock().expect("lock failed")) += 1;
+            total_fwd.fetch_add(1, Ordering::AcqRel);
         }
     }
     
@@ -102,8 +103,8 @@ fn get_configuration() -> Configuration {
 
 
 fn meter(
-    total_rcv: Arc<Mutex<u64>>,
-    total_fwd: Arc<Mutex<u64>>,
+    total_rcv: Arc<AtomicU64>,
+    total_fwd: Arc<AtomicU64>,
     mut rx: BusReader<()>,
 ) {
     let mut now = SystemTime::now();
@@ -124,9 +125,13 @@ fn meter(
         now = next_sys_time;
         
         // Print statistics
-        let total_rcv = mem::replace(total_rcv.lock().unwrap().deref_mut(), 0);
-        let total_fwd = mem::replace(total_fwd.lock().unwrap().deref_mut(), 0);
-        println!("pkt/sec: {total_rcv} fwd/sec: {total_fwd} ");
+        let total_rcv = total_rcv.swap(0, Ordering::AcqRel);
+        let total_fwd = total_fwd.swap(0, Ordering::AcqRel);
+        println!(
+            "pkt/sec: {} fwd/sec: {} ",
+            total_rcv.to_formatted_string(&Locale::en),
+            total_fwd.to_formatted_string(&Locale::en)
+        );
     }
 }
 

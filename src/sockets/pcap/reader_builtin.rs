@@ -1,35 +1,32 @@
 use std::fs::{File, OpenOptions};
 use std::io::prelude::*;
 use std::io::SeekFrom;
-use std::sync::{atomic, Arc, RwLock};
+use std::sync::atomic::Ordering;
 use std::{cmp, mem};
 
-use crate::misc::bind_packet_lifetime_to_slot;
-use crate::sockets::base::pcap::constants::{
-    KUZNETZOV_TCPDUMP_MAGIC, NSEC_TCPDUMP_MAGIC, TCPDUMP_MAGIC,
-};
-use crate::sockets::base::{
-    NethunsSocketBase, RecvPacket, RecvPacketDataBuilder,
-};
+use crate::sockets::base::{NethunsSocketBase, RecvPacketData};
 use crate::sockets::errors::{
     NethunsPcapOpenError, NethunsPcapReadError, NethunsPcapRewindError,
     NethunsPcapStoreError, NethunsPcapWriteError,
 };
-use crate::sockets::ring::{NethunsRing, NethunsRingSlot};
+use crate::sockets::ring::{NethunsRing, RingSlotStatus};
 use crate::sockets::PkthdrTrait;
 use crate::types::NethunsSocketOptions;
 
+use super::constants::{
+    KUZNETZOV_TCPDUMP_MAGIC, NSEC_TCPDUMP_MAGIC, TCPDUMP_MAGIC,
+};
 use super::{
     nethuns_pcap_patched_pkthdr, nethuns_pcap_pkthdr, nethuns_pcap_timeval,
-    NethunsSocketPcap, NethunsSocketPcapTrait,
+    NethunsSocketPcapInner, NethunsSocketPcapTrait,
 };
 
 
-// Define the type of the built-in pcap reader
+// Define the type of the pcap reader
 pub type PcapReaderType = File;
 
 
-impl NethunsSocketPcapTrait for NethunsSocketPcap {
+impl NethunsSocketPcapTrait for NethunsSocketPcapInner {
     fn open(
         opt: NethunsSocketOptions,
         filename: &str,
@@ -109,7 +106,7 @@ impl NethunsSocketPcapTrait for NethunsSocketPcap {
             ..Default::default()
         };
         
-        Ok(NethunsSocketPcap {
+        Ok(NethunsSocketPcapInner {
             base,
             reader,
             snaplen,
@@ -118,21 +115,15 @@ impl NethunsSocketPcapTrait for NethunsSocketPcap {
     }
     
     
-    fn read(&mut self) -> Result<RecvPacket, NethunsPcapReadError> {
+    fn read(&mut self) -> Result<RecvPacketData, NethunsPcapReadError> {
         let rx_ring =
             self.base.rx_ring.as_mut().expect(
                 "[pcap_read] rx_ring should have been set during `open`",
             );
         
         let caplen = self.base.opt.packetsize;
-        let arc_slot = rx_ring.get_slot(rx_ring.rings.head());
-        if arc_slot
-            .read()
-            .unwrap()
-            .inuse
-            .load(atomic::Ordering::Acquire)
-            != 0
-        {
+        let slot = rx_ring.get_slot_mut(rx_ring.rings().head());
+        if slot.inuse.load(Ordering::Acquire) != RingSlotStatus::Free {
             return Err(NethunsPcapReadError::InUse);
         }
         
@@ -148,54 +139,38 @@ impl NethunsSocketPcapTrait for NethunsSocketPcap {
         
         let bytes = cmp::min(caplen, header.hdr.caplen);
         
-        match arc_slot.write() {
-            Ok(mut slot) => {
-                self.reader.read_exact(&mut slot.packet[..bytes as _])?;
-                
-                // Store the information related to the new packet
-                // in a free ring slot of the base nethuns socket
-                slot.pkthdr.tstamp_set_sec(header.hdr.ts.tv_sec as _);
-                
-                if self.magic == NSEC_TCPDUMP_MAGIC {
-                    slot.pkthdr.tstamp_set_nsec(header.hdr.ts.tv_usec as _);
-                } else {
-                    slot.pkthdr.tstamp_set_usec(header.hdr.ts.tv_usec as _);
-                }
-                
-                slot.pkthdr.set_len(header.hdr.len);
-                slot.pkthdr.set_snaplen(bytes);
-                
-                if header.hdr.caplen > caplen {
-                    let skip = header.hdr.caplen as i64 - caplen as i64;
-                    self.reader.seek(SeekFrom::Current(skip))?;
-                }
-                
-                slot.inuse.store(1, atomic::Ordering::Release);
-                rx_ring.rings.advance_head();
-            }
-            Err(e) => {
-                panic!("`RwLock::write` failed: {:?}", e);
-            }
+        self.reader.read_exact(&mut slot.packet[..bytes as _])?;
+        
+        // Store the information related to the new packet
+        // in a free ring slot of the base nethuns socket
+        slot.pkthdr.tstamp_set_sec(header.hdr.ts.tv_sec as _);
+        
+        if self.magic == NSEC_TCPDUMP_MAGIC {
+            slot.pkthdr.tstamp_set_nsec(header.hdr.ts.tv_usec as _);
+        } else {
+            slot.pkthdr.tstamp_set_usec(header.hdr.ts.tv_usec as _);
         }
         
+        slot.pkthdr.set_len(header.hdr.len);
+        slot.pkthdr.set_snaplen(bytes);
         
-        let pkthdr = Box::new(arc_slot.read().unwrap().pkthdr);
-        
-        let packet_data = RecvPacketDataBuilder {
-            slot: arc_slot,
-            packet_builder: |s: &Arc<RwLock<NethunsRingSlot>>| unsafe {
-                bind_packet_lifetime_to_slot(
-                    &s.read().unwrap().packet[..bytes as _],
-                    s,
-                )
-            },
+        if header.hdr.caplen > caplen {
+            let skip = header.hdr.caplen as i64 - caplen as i64;
+            self.reader.seek(SeekFrom::Current(skip))?;
         }
-        .build();
         
-        Ok(RecvPacket::new(
-            rx_ring.rings.head() as _,
+        slot.inuse.store(RingSlotStatus::InUse, Ordering::Release);
+        
+        let pkthdr = Box::new(slot.pkthdr);
+        let packet = &slot.packet[..bytes as _] as *const _;
+        let inuse = slot.inuse.clone();
+        rx_ring.rings_mut().advance_head();
+        
+        Ok(RecvPacketData::new(
+            rx_ring.rings().head(),
             pkthdr,
-            packet_data,
+            packet,
+            inuse,
         ))
     }
     

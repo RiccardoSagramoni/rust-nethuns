@@ -2,7 +2,7 @@ use std::env;
 
 use etherparse::Ethernet2Header;
 use nethuns::sockets::base::RecvPacket;
-use nethuns::sockets::nethuns_socket_open;
+use nethuns::sockets::{BindableNethunsSocket, NethunsSocket};
 use nethuns::types::{
     NethunsCaptureDir, NethunsCaptureMode, NethunsQueue, NethunsSocketMode,
     NethunsSocketOptions,
@@ -27,15 +27,15 @@ fn main() {
         tx_qdisc_bypass: false,
         ..Default::default()
     };
-    let socket = nethuns_socket_open(opt).unwrap();
-    let mut socket = socket
+    let socket = BindableNethunsSocket::open(opt)
+        .expect("Failed to open socket")
         .bind(
             &env::args()
                 .nth(1)
                 .expect("Usage: ./recv_test <device_name>"),
             NethunsQueue::Any,
         )
-        .unwrap();
+        .expect("Failed to bind socket");
     
     for _ in 0..5000 {
         match socket.recv() {
@@ -50,9 +50,9 @@ fn main() {
 }
 
 
-fn dump_packet(pkt: &RecvPacket) {
+fn dump_packet(pkt: &RecvPacket<NethunsSocket>) {
     let pkthdr = pkt.pkthdr();
-    let packet = pkt.packet().borrow_packet();
+    let packet = pkt.packet();
     
     print!(
         concat!(
@@ -67,9 +67,9 @@ fn dump_packet(pkt: &RecvPacket) {
         pkthdr.offvlan_tpid(),
         nethuns_vlan_tci(packet),
         nethuns_vlan_tpid(packet),
-        nethuns_vlan_tci_(pkthdr.as_ref(), packet),
-        nethuns_vlan_tpid_(pkthdr.as_ref(), packet),
-        nethuns_vlan_vid(nethuns_vlan_tci_(pkthdr.as_ref(), packet)),
+        nethuns_vlan_tci_(pkthdr, packet),
+        nethuns_vlan_tpid_(pkthdr, packet),
+        nethuns_vlan_vid(nethuns_vlan_tci_(pkthdr, packet)),
         pkthdr.rxhash()
     );
     

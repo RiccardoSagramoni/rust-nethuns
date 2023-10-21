@@ -1,0 +1,12 @@
+error[E0505]: cannot move out of `socket` because it is borrowed
+  --> tests/compile-fail/socket_dropped_before_packet.rs:13:10
+   |
+7  |     let socket = BindableNethunsSocket::open(opt)
+   |         ------ binding `socket` declared here
+...
+12 |     let p = socket.recv().unwrap();
+   |             ------ borrow of `socket` occurs here
+13 |     drop(socket);
+   |          ^^^^^^ move out of `socket` occurs here
+14 |     drop(p);
+   |          - borrow later used here

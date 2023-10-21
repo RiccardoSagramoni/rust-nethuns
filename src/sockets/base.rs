@@ -1,22 +1,15 @@
-pub mod pcap;
-
 use std::ffi::CString;
 use std::fmt::{self, Debug, Display};
-use std::sync::{atomic, Arc, RwLock};
+use std::marker::PhantomData;
+use std::sync::{atomic, Arc};
 
 use derivative::Derivative;
 use getset::{CopyGetters, Getters, Setters};
-use ouroboros::self_referencing;
 
-use crate::types::{NethunsQueue, NethunsSocketOptions};
+use crate::types::{NethunsFilter, NethunsQueue, NethunsSocketOptions};
 
-use super::ring::{NethunsRing, NethunsRingSlot};
+use super::ring::{AtomicRingSlotStatus, NethunsRing, RingSlotStatus};
 use super::PkthdrTrait;
-
-
-/// Closure type for the filtering of received packets.
-/// Returns true if the packet should be received, false if it should be discarded.
-type NethunsFilter = dyn Fn(&dyn PkthdrTrait, &[u8]) -> bool + Send;
 
 
 /// Base structure for a `NethunsSocket`.
@@ -57,79 +50,98 @@ pub struct NethunsSocketBase {
 // filter_ctx removed => use closures with move semantics
 
 
-/// Packet received when calling `recv()` on a `NethunsSocket` object.
+/// Packet received when calling [`NethunsSocket::recv()`](crate::sockets::NethunsSocket::recv)
+/// or [`NethunsSocketPcap::read()`](crate::sockets::pcap::NethunsSocketPcap::read).
 ///
-/// It's valid as long as the related `NethunsRingSlot` object is alive.
-///
-/// You can use the `RecvPacket::try_new()` method to create a new instance.
-///
-/// # Fields
-/// - `id`: the id of the packet.
-/// - `pkthdr`: the packet header metadata. Its internal format depends on the selected I/O framework.
-/// - `packet`: the Ethernet packet payload.
-#[derive(Debug, Getters)]
-#[getset(get = "pub")]
-pub struct RecvPacket {
-    id: usize,
-    pkthdr: Box<dyn PkthdrTrait>,
-    packet: RecvPacketData,
+/// The struct contains a [`PhantomData`] marker associated with the socket itself,
+/// so that the `RecvPacket` item is valid as long as the socket is alive.
+#[derive(Debug)]
+pub struct RecvPacket<'a, T> {
+    data: RecvPacketData,
+    
+    phantom_data: PhantomData<&'a T>,
 }
 
-impl Display for RecvPacket {
+/// # Safety
+/// 
+/// The `packet` raw pointer is valid as long as the `RecvPacket`
+/// item is valid and the library guarantees that we are the only
+/// holders of such pointer for the lifetime of the `RecvPacket` item.
+/// Thus, it can be safely send between threads.
+unsafe impl<T: Send> Send for RecvPacket<'_, T> {}
+
+impl<T> RecvPacket<'_, T> {
+    pub(crate) fn new(
+        data: RecvPacketData,
+        phantom_data: PhantomData<&'_ T>,
+    ) -> RecvPacket<T> {
+        RecvPacket { data, phantom_data }
+    }
+    
+    #[inline(always)]
+    pub fn id(&self) -> usize {
+        self.data.id
+    }
+    
+    #[inline(always)]
+    pub fn pkthdr(&self) -> &dyn PkthdrTrait {
+        self.data.pkthdr.as_ref()
+    }
+    
+    #[inline(always)]
+    pub fn packet(&self) -> &'_ [u8] {
+        unsafe { &*self.data.packet }
+    }
+}
+
+impl<T> Display for RecvPacket<'_, T> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(
             f,
-            "{{\n    id: {},\n    pkthdr: {:?},\n    packet: {}\n}}",
-            self.id, self.pkthdr, self.packet
+            "{{\n    id: {},\n    pkthdr: {:?},\n    packet: {:?}\n}}",
+            self.id(),
+            self.pkthdr(),
+            self.packet()
         )
     }
 }
 
 
-#[self_referencing(pub_extras)]
+/// Packet received when calling [`NethunsSocket::recv()`](crate::sockets::NethunsSocket::recv)
+/// or [`NethunsSocketPcap::read()`](crate::sockets::pcap::NethunsSocketPcap::read)
+/// with static lifetime.
+/// 
+/// It **must** be wrapped inside `RecvPacket` struct before being handed to the user.
 #[derive(Debug)]
-pub struct RecvPacketData {
-    slot: Arc<RwLock<NethunsRingSlot>>,
-    #[borrows(slot)]
-    pub packet: &'this [u8],
+pub(crate) struct RecvPacketData {
+    id: usize,
+    pkthdr: Box<dyn PkthdrTrait>,
+    packet: *const [u8],
+    
+    slot_status_flag: Arc<AtomicRingSlotStatus>,
 }
 
-impl Display for RecvPacketData {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        self.with(|safe_self| {
-            write!(f, "{:?}", &safe_self.packet)
-        })
+impl RecvPacketData {
+    pub(super) fn new(
+        id: usize,
+        pkthdr: Box<dyn PkthdrTrait>,
+        packet: *const [u8],
+        slot_status_flag: Arc<AtomicRingSlotStatus>,
+    ) -> Self {
+        Self {
+            id,
+            pkthdr,
+            packet,
+            slot_status_flag,
+        }
     }
 }
 
-impl Drop for RecvPacket {
+impl Drop for RecvPacketData {
     /// Release the buffer obtained by calling `recv()`.
     fn drop(&mut self) {
         // Unset the `inuse` flag of the related ring slot
-        self.packet
-            .borrow_slot()
-            .write()
-            .unwrap()
-            .inuse
-            .store(0, atomic::Ordering::Release);
-    }
-}
-
-
-impl RecvPacket {
-    /// Create a new `RecvPacket` instance.
-    ///
-    /// # Arguments
-    ///
-    /// - `id`: The ID of the received packet.
-    /// - `pkthdr`: A boxed trait object representing packet header metadata.
-    /// - `packet`: A byte slice containing the received packet.
-    /// - `slot`: A weak reference to the Nethuns ring slot where the packet is stored. This is required to automatically release the packet once it goes out of scope.
-    pub fn new(
-        id: usize,
-        pkthdr: Box<dyn PkthdrTrait>,
-        packet: RecvPacketData,
-    ) -> RecvPacket {
-        RecvPacket { id, pkthdr, packet }
+        self.slot_status_flag
+            .store(RingSlotStatus::Free, atomic::Ordering::Release);
     }
 }

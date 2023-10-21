@@ -1,16 +1,17 @@
 use std::io::Write;
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::mpsc::TryRecvError;
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
 use std::time::{Duration, SystemTime};
 use std::{env, thread};
 
 use bus::{Bus, BusReader};
-use nethuns::sockets::ring::txring_get_size;
-use nethuns::sockets::{nethuns_socket_open, NethunsSocket};
+use nethuns::sockets::{BindableNethunsSocket, NethunsSocket};
 use nethuns::types::{
     NethunsCaptureDir, NethunsCaptureMode, NethunsQueue, NethunsSocketMode,
     NethunsSocketOptions,
 };
+use num_format::{ToFormattedString, Locale};
 
 
 const HELP_BRIEF: &str = "\
@@ -63,8 +64,13 @@ fn main() {
     let (args, payload, opt) = configure_example();
     
     // Stats counter
-    let totals: Arc<Mutex<Vec<u64>>> =
-        Arc::new(Mutex::new(vec![0; args.num_sockets as _]));
+    let totals = {
+        let mut v: Vec<AtomicU64> = Vec::with_capacity(args.num_sockets as _);
+        for _ in 0..args.num_sockets {
+            v.push(AtomicU64::new(0));
+        }
+        Arc::new(v)
+    };
     
     // Define bus for SPMC communication between threads
     let mut bus: Bus<()> = Bus::new(5);
@@ -230,9 +236,8 @@ fn set_sigint_handler(mut bus: Bus<()>) {
 ///   It's shared between threads.
 /// - `rx`: BusReader for SPMC (single-producer/multiple-consumers)
 ///   communication between threads.
-fn meter(totals: Arc<Mutex<Vec<u64>>>, mut rx: BusReader<()>) {
+fn meter(totals: Arc<Vec<AtomicU64>>, mut rx: BusReader<()>) {
     let mut now = SystemTime::now();
-    let mut old_total: u64 = 0;
     
     loop {
         match rx.try_recv() {
@@ -250,9 +255,14 @@ fn meter(totals: Arc<Mutex<Vec<u64>>>, mut rx: BusReader<()>) {
         now = next_sys_time;
         
         // Print number of sent packets
-        let new_total: u64 = totals.lock().expect("lock failed").iter().sum();
-        println!("pkt/sec: {}", new_total - old_total);
-        old_total = new_total;
+        let total: u64 = {
+            let mut sum: u64 = 0;
+            for v in totals.iter() {
+                sum += v.swap(0, Ordering::AcqRel);
+            }
+            sum
+        };
+        println!("pkt/sec: {}", total.to_formatted_string(&Locale::en));
     }
 }
 
@@ -275,10 +285,10 @@ fn st_send(
     opt: NethunsSocketOptions,
     payload: &[u8],
     mut bus_rx: BusReader<()>,
-    totals: Arc<Mutex<Vec<u64>>>,
+    totals: Arc<Vec<AtomicU64>>,
 ) -> Result<(), anyhow::Error> {
     // Vector for storing socket ids
-    let mut out_sockets: Vec<Box<dyn NethunsSocket>> =
+    let mut out_sockets: Vec<NethunsSocket> =
         Vec::with_capacity(args.num_sockets as _);
     // One packet index per socket (pos of next slot/packet to send in tx ring)
     let mut pktid: Vec<usize> = vec![0; args.num_sockets as _];
@@ -296,12 +306,14 @@ fn st_send(
         }
         
         // Transmit packets from each socket
-        for (i, socket) in out_sockets.iter_mut().enumerate() {
+        for (i, socket) in out_sockets.iter().enumerate() {
             if args.zerocopy {
                 transmit_zc(
                     args,
                     socket,
-                    pktid.get_mut(i).expect("pktid.get_mut() failed"),
+                    pktid
+                        .get_mut(i)
+                        .ok_or(anyhow::anyhow!("pktid is None (index {i})"))?,
                     payload.len(),
                     &totals,
                     i,
@@ -336,7 +348,7 @@ fn mt_send(
     th_idx: u32,
     payload: &[u8],
     mut rx: BusReader<()>,
-    totals: Arc<Mutex<Vec<u64>>>,
+    totals: Arc<Vec<AtomicU64>>,
 ) -> Result<(), anyhow::Error> {
     // Setup and fill transmission ring
     let mut socket = fill_tx_ring(args, opt, th_idx, payload)?;
@@ -386,9 +398,9 @@ fn fill_tx_ring(
     opt: NethunsSocketOptions,
     socket_idx: u32,
     payload: &[u8],
-) -> Result<Box<dyn NethunsSocket>, anyhow::Error> {
+) -> Result<NethunsSocket, anyhow::Error> {
     // Open socket
-    let socket = nethuns_socket_open(opt)?;
+    let socket = BindableNethunsSocket::open(opt)?;
     
     // Bind socket
     let queue = if args.num_sockets > 1 {
@@ -396,11 +408,11 @@ fn fill_tx_ring(
     } else {
         NethunsQueue::Any
     };
-    let socket = socket.bind(&args.interface, queue).map_err(|(e, _)| e)?;
+    let mut socket = socket.bind(&args.interface, queue).map_err(|(e, _)| e)?;
     
     // fill the slots in the tx ring (optimized send only)
     if args.zerocopy {
-        let size = txring_get_size(&*socket).expect("socket not in tx mode");
+        let size = socket.txring_get_size().expect("socket not in tx mode");
         
         for j in 0..size {
             // tell me where to copy the j-th packet to be transmitted
@@ -428,21 +440,20 @@ fn fill_tx_ring(
 /// - `socket_idx`: Socket index.
 fn transmit_zc(
     args: &Args,
-    socket: &mut Box<dyn NethunsSocket>,
+    socket: &NethunsSocket,
     pktid: &mut usize,
     pkt_size: usize,
-    totals: &Arc<Mutex<Vec<u64>>>,
+    totals: &Arc<Vec<AtomicU64>>,
     socket_idx: usize,
 ) -> Result<(), anyhow::Error> {
     // Prepare batch
     for _ in 0..args.batch_size {
-        if let Err(e) = socket.send_slot(*pktid, pkt_size) {
-            dbg!(e);
+        if let Err(_) = socket.send_slot(*pktid, pkt_size) {
             break;
         }
         (*pktid) += 1;
-        if let Some(t) = totals.lock().unwrap().get_mut(socket_idx) {
-            *t += 1;
+        if let Some(t) = totals.get(socket_idx) {
+            t.fetch_add(1, Ordering::AcqRel);
         }
     }
     // Send batch
@@ -461,9 +472,9 @@ fn transmit_zc(
 /// - `socket_idx`: Socket index.
 fn transmit_c(
     args: &Args,
-    socket: &mut Box<dyn NethunsSocket>,
+    socket: &NethunsSocket,
     payload: &[u8],
-    totals: &Arc<Mutex<Vec<u64>>>,
+    totals: &Arc<Vec<AtomicU64>>,
     socket_idx: usize,
 ) -> Result<(), anyhow::Error> {
     // Prepare batch
@@ -472,8 +483,8 @@ fn transmit_c(
             eprintln!("Error in transmission for socket {socket_idx}: {e}");
             break;
         }
-        if let Some(t) = totals.lock().unwrap().get_mut(socket_idx) {
-            *t += 1;
+        if let Some(t) = totals.get(socket_idx) {
+            t.fetch_add(1, Ordering::AcqRel);
         }
     }
     // Send batch

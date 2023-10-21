@@ -1,18 +1,19 @@
-use std::ops::DerefMut;
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::mpsc::TryRecvError;
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
 use std::time::{Duration, SystemTime};
 use std::{mem, thread};
 
 use bus::{Bus, BusReader};
 
 use nethuns::sockets::base::RecvPacket;
+use nethuns::sockets::{BindableNethunsSocket, NethunsSocket};
 
-use nethuns::sockets::nethuns_socket_open;
 use nethuns::types::{
     NethunsCaptureDir, NethunsCaptureMode, NethunsQueue, NethunsSocketMode,
     NethunsSocketOptions,
 };
+use num_format::{Locale, ToFormattedString};
 use rtrb::{Consumer, RingBuffer};
 
 
@@ -40,65 +41,68 @@ fn main() {
         ..Default::default()
     };
     
-    // Create SPSC ring buffer
-    let (mut producer, consumer) = RingBuffer::<RecvPacket>::new(65536);
-    
-    // Create channel for thread communication
-    let mut bus: Bus<()> = Bus::new(5);
-    let total_rcv = Arc::new(Mutex::new(0_u64));
-    let total_fwd = Arc::new(Mutex::new(0_u64));
-    
-    // Spawn meter thread
-    let meter_th = {
-        let total_rcv = total_rcv.clone();
-        let total_fwd = total_fwd.clone();
-        let rx = bus.add_rx();
-        thread::spawn(move || {
-            meter(total_rcv, total_fwd, rx);
-        })
-    };
-    
-    // Spawn consumer thread
-    let consumer_th = {
-        let opt = opt.clone();
-        let dev = conf.dev_out.clone();
-        let rx = bus.add_rx();
-        thread::spawn(move || {
-            consumer_body(opt, &dev, consumer, rx, total_fwd);
-        })
-    };
-    
-    // Set handler for Ctrl-C
-    let mut bus_rx = bus.add_rx();
-    set_sigint_handler(bus);
-    
-    
-    let mut socket = nethuns_socket_open(opt)
+    let socket = BindableNethunsSocket::open(opt.clone())
         .unwrap()
         .bind(&conf.dev_in, NethunsQueue::Any)
         .unwrap();
     
-    loop {
-        // Check if Ctrl-C was pressed
-        match bus_rx.try_recv() {
-            Ok(_) | Err(TryRecvError::Disconnected) => break,
-            _ => {}
-        }
+    
+    thread::scope(|s| {
+        // Create SPSC ring buffer
+        let (mut producer, consumer) =
+            RingBuffer::<RecvPacket<NethunsSocket>>::new(65536);
         
-        if let Ok(pkt) = socket.recv() {
-            *total_rcv.lock().expect("lock failed") += 1;
-            // Push packet in queue
-            while !producer.is_abandoned() {
-                if !producer.is_full() {
-                    producer.push(pkt).unwrap();
-                    break;
+        // Create channel for thread communication
+        let mut bus: Bus<()> = Bus::new(5);
+        let total_rcv = Arc::new(AtomicU64::new(0));
+        let total_fwd = Arc::new(AtomicU64::new(0));
+        
+        // Spawn meter thread
+        let meter_total_rcv = total_rcv.clone();
+        let meter_total_fwd = total_fwd.clone();
+        let meter_rx = bus.add_rx();
+        s.spawn(move || {
+            meter(meter_total_rcv, meter_total_fwd, meter_rx);
+        });
+        
+        // Spawn consumer thread
+        let consumer_opt = opt;
+        let consumer_dev = conf.dev_out.clone();
+        let consumer_rx = bus.add_rx();
+        s.spawn(move || {
+            consumer_body(
+                consumer_opt,
+                &consumer_dev,
+                consumer,
+                consumer_rx,
+                total_fwd,
+            );
+        });
+        
+        // Set handler for Ctrl-C
+        let mut bus_rx = bus.add_rx();
+        set_sigint_handler(bus);
+        
+        
+        loop {
+            // Check if Ctrl-C was pressed
+            match bus_rx.try_recv() {
+                Ok(_) | Err(TryRecvError::Disconnected) => break,
+                _ => {}
+            }
+            
+            if let Ok(pkt) = socket.recv() {
+                total_rcv.fetch_add(1, Ordering::AcqRel);
+                // Push packet in queue
+                while !producer.is_abandoned() {
+                    if !producer.is_full() {
+                        producer.push(pkt).unwrap();
+                        break;
+                    }
                 }
             }
         }
-    }
-    
-    consumer_th.join().expect("unable to join consumer thread");
-    meter_th.join().expect("unable to join meter thread");
+    });
 }
 
 
@@ -115,8 +119,8 @@ fn get_configuration() -> Configuration {
 
 
 fn meter(
-    total_rcv: Arc<Mutex<u64>>,
-    total_fwd: Arc<Mutex<u64>>,
+    total_rcv: Arc<AtomicU64>,
+    total_fwd: Arc<AtomicU64>,
     mut rx: BusReader<()>,
 ) {
     let mut now = SystemTime::now();
@@ -137,9 +141,13 @@ fn meter(
         now = next_sys_time;
         
         // Print statistics
-        let total_rcv = mem::replace(total_rcv.lock().unwrap().deref_mut(), 0);
-        let total_fwd = mem::replace(total_fwd.lock().unwrap().deref_mut(), 0);
-        println!("pkt/sec: {total_rcv} fwd/sec: {total_fwd} ");
+        let total_rcv = total_rcv.swap(0, Ordering::AcqRel);
+        let total_fwd = total_fwd.swap(0, Ordering::AcqRel);
+        println!(
+            "pkt/sec: {} fwd/sec: {} ",
+            total_rcv.to_formatted_string(&Locale::en),
+            total_fwd.to_formatted_string(&Locale::en)
+        );
     }
 }
 
@@ -162,11 +170,11 @@ fn set_sigint_handler(mut bus: Bus<()>) {
 fn consumer_body(
     opt: NethunsSocketOptions,
     dev: &str,
-    mut consumer: Consumer<RecvPacket>,
+    mut consumer: Consumer<RecvPacket<NethunsSocket>>,
     mut rx: BusReader<()>,
-    total_fwd: Arc<Mutex<u64>>,
+    total_fwd: Arc<AtomicU64>,
 ) {
-    let mut socket = nethuns_socket_open(opt)
+    let socket = BindableNethunsSocket::open(opt)
         .unwrap()
         .bind(dev, NethunsQueue::Any)
         .unwrap();
@@ -180,14 +188,14 @@ fn consumer_body(
         // Read packet
         if let Ok(pkt) = consumer.pop() {
             loop {
-                match socket.send(pkt.packet().borrow_packet()) {
+                match socket.send(pkt.packet()) {
                     Ok(_) => break,
                     Err(_) => {
                         socket.flush().unwrap();
                     }
                 }
             }
-            *total_fwd.lock().unwrap() += 1;
+            total_fwd.fetch_add(1, Ordering::AcqRel);
         }
     }
 }

@@ -1,4 +1,5 @@
 use std::net::{Ipv4Addr, Ipv6Addr};
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::mpsc::TryRecvError;
 use std::sync::{Arc, Mutex};
 use std::thread;
@@ -7,11 +8,12 @@ use std::time::{Duration, SystemTime};
 use bus::{Bus, BusReader};
 use etherparse::{IpHeader, PacketHeaders};
 use nethuns::sockets::errors::NethunsRecvError;
-use nethuns::sockets::{nethuns_socket_open, NethunsSocket};
+use nethuns::sockets::{BindableNethunsSocket, NethunsSocket};
 use nethuns::types::{
     NethunsCaptureDir, NethunsCaptureMode, NethunsQueue, NethunsSocketMode,
     NethunsSocketOptions,
 };
+use num_format::{Locale, ToFormattedString};
 
 
 const HELP_BRIEF: &str = "\
@@ -86,7 +88,7 @@ fn main() {
     };
     
     // Open sockets
-    let mut sockets: Vec<Mutex<Box<dyn NethunsSocket>>> =
+    let mut sockets: Vec<Mutex<NethunsSocket>> =
         Vec::with_capacity(conf.num_sockets as _);
     for i in 0..sockets.capacity() {
         sockets.push(Mutex::new(setup_rx_ring(
@@ -99,9 +101,9 @@ fn main() {
     
     
     // Stats counter
-    let mut totals: Vec<Mutex<u64>> = Vec::with_capacity(conf.num_sockets as _);
+    let mut totals: Vec<AtomicU64> = Vec::with_capacity(conf.num_sockets as _);
     for _ in 0..totals.capacity() {
-        totals.push(Mutex::new(0));
+        totals.push(AtomicU64::new(0));
     }
     let totals = Arc::new(totals);
     
@@ -235,8 +237,8 @@ fn setup_rx_ring(
     conf: &Configuration,
     opt: NethunsSocketOptions,
     sockid: u32,
-) -> Box<dyn NethunsSocket> {
-    let socket = nethuns_socket_open(opt)
+) -> NethunsSocket {
+    let socket = BindableNethunsSocket::open(opt)
         .expect("Failed to open nethuns socket")
         .bind(
             &conf.interface,
@@ -281,9 +283,8 @@ fn set_sigint_handler(mut bus: Bus<()>) {
 }
 
 
-fn global_meter(totals: Arc<Vec<Mutex<u64>>>, mut sigint_rx: BusReader<()>) {
+fn global_meter(totals: Arc<Vec<AtomicU64>>, mut sigint_rx: BusReader<()>) {
     let mut now = SystemTime::now();
-    let mut old_total: u64 = 0;
     
     loop {
         match sigint_rx.try_recv() {
@@ -301,12 +302,9 @@ fn global_meter(totals: Arc<Vec<Mutex<u64>>>, mut sigint_rx: BusReader<()>) {
         now = next_sys_time;
         
         // Print number of sent packets
-        let new_total = totals
-            .iter()
-            .map(|t| *t.lock().expect("Mutex::lock failed"))
-            .sum();
-        println!("pkt/sec: {}", new_total - old_total);
-        old_total = new_total;
+        let total: u64 =
+            totals.iter().map(|t| t.swap(0, Ordering::AcqRel)).sum();
+        println!("pkt/sec: {}", total.to_formatted_string(&Locale::en));
     }
 }
 
@@ -314,13 +312,11 @@ fn global_meter(totals: Arc<Vec<Mutex<u64>>>, mut sigint_rx: BusReader<()>) {
 /// Print aggregated stats and per-socket detailed stats
 fn sock_meter(
     sockid: u32,
-    socket: &Mutex<Box<dyn NethunsSocket>>,
-    totals: Arc<Vec<Mutex<u64>>>,
+    socket: &Mutex<NethunsSocket>,
+    totals: Arc<Vec<AtomicU64>>,
     mut rx: BusReader<()>,
 ) {
     let mut now = SystemTime::now();
-    let mut old_total: u64 = 0;
-    let mut old_total_sock: u64 = 0;
     
     loop {
         match rx.try_recv() {
@@ -338,16 +334,10 @@ fn sock_meter(
         now = next_sys_time;
         
         // Print number of sent packets + stats about the requestes socket
-        let new_total = totals
-            .iter()
-            .map(|t| *t.lock().expect("Mutex::lock failed for `totals`"))
-            .sum();
-        print!("pkt/sec: {} ", new_total - old_total);
-        old_total = new_total;
-        
-        let new_total_sock = *totals[sockid as usize]
-            .lock()
-            .expect("Mutex::lock failed for `totals`");
+        let total_sock = totals[sockid as usize].load(Ordering::Acquire);
+        let total: u64 =
+            totals.iter().map(|t| t.swap(0, Ordering::AcqRel)).sum();
+        print!("pkt/sec: {} ", total.to_formatted_string(&Locale::en));
         
         let stats = socket
             .lock()
@@ -356,22 +346,20 @@ fn sock_meter(
             .expect("NethunsSocket::stats failed");
         println!(
             "{{ pkt/sec: {}, rx: {}, tx: {}, drop: {}, ifdrop: {}, rx_inv: {}, tx_inv: {}, freeze: {} }}",
-            new_total_sock - old_total_sock,
+            total_sock,
             stats.rx_packets(), stats.tx_packets(),
             stats.rx_dropped(), stats.rx_if_dropped(),
             stats.rx_invalid(), stats.tx_invalid(),
             stats.freeze()
         );
-        
-        old_total_sock = new_total_sock;
     }
 }
 
 
 fn st_execution(
     conf: &Configuration,
-    sockets: Arc<Vec<Mutex<Box<dyn NethunsSocket>>>>,
-    totals: Arc<Vec<Mutex<u64>>>,
+    sockets: Arc<Vec<Mutex<NethunsSocket>>>,
+    totals: Arc<Vec<AtomicU64>>,
     mut sigint_rx: BusReader<()>,
 ) -> anyhow::Result<()> {
     let mut count_to_dump: u64 = 0;
@@ -384,20 +372,11 @@ fn st_execution(
         }
         
         for (id, (sock, tot)) in sockets.iter().zip(totals.iter()).enumerate() {
-            let mut sock = sock
-                .lock()
-                .map_err(|e| anyhow::anyhow!("Error locking mutex: {e}"))?;
-            let mut tot = tot
+            let sock = sock
                 .lock()
                 .map_err(|e| anyhow::anyhow!("Error locking mutex: {e}"))?;
             
-            match recv_pkt(
-                conf,
-                id,
-                sock.as_mut(),
-                &mut tot,
-                &mut count_to_dump,
-            ) {
+            match recv_pkt(conf, id, &sock, tot, &mut count_to_dump) {
                 Ok(_) => (),
                 Err(e) => match e.downcast_ref::<NethunsRecvError>() {
                     Some(NethunsRecvError::InUse)
@@ -420,8 +399,8 @@ fn st_execution(
 fn mt_execution(
     conf: &Configuration,
     sockid: u32,
-    socket: &Mutex<Box<dyn NethunsSocket>>,
-    total: &Mutex<u64>,
+    socket: &Mutex<NethunsSocket>,
+    total: &AtomicU64,
     mut sigint_rx: BusReader<()>,
 ) -> anyhow::Result<()> {
     let mut count_to_dump: u64 = 0;
@@ -436,11 +415,8 @@ fn mt_execution(
         match recv_pkt(
             conf,
             sockid as _,
-            socket
-                .lock()
-                .expect("Mutex::lock failed for `socket`")
-                .as_mut(),
-            &mut total.lock().expect("Mutex::lock failed for `total`"),
+            &socket.lock().expect("Mutex::lock failed for `socket`"),
+            &total,
             &mut count_to_dump,
         ) {
             Ok(_) => (),
@@ -464,21 +440,19 @@ fn mt_execution(
 fn recv_pkt(
     conf: &Configuration,
     sockid: usize,
-    socket: &mut dyn NethunsSocket,
-    total: &mut u64,
+    socket: &NethunsSocket,
+    total: &AtomicU64,
     count_to_dump: &mut u64,
 ) -> anyhow::Result<()> {
     let pkt = socket.recv()?;
     
+    let old_total = total.fetch_add(1, Ordering::AcqRel);
+    
     if conf.debug {
-        println!("Thread: {}, total: {}, pkt: {}", sockid, total, pkt.id());
-        println!(
-            "Packet IP addr: {}",
-            print_addrs(pkt.packet().borrow_packet())?
-        );
+        println!("Thread: {}, total: {}, pkt: {}", sockid, old_total, pkt.id());
+        println!("Packet IP addr: {}", print_addrs(pkt.packet())?);
     }
     
-    *total += 1;
     *count_to_dump += 1;
     if *count_to_dump == 10_000_000 {
         // do something periodically
