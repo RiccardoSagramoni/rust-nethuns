@@ -62,8 +62,13 @@ fn main() {
     let (args, payload, opt) = configure_example();
     
     // Stats counter
-    let totals: Arc<Mutex<Vec<u64>>> =
-        Arc::new(Mutex::new(vec![0; args.num_sockets as _]));
+    let totals = {
+        let mut v: Vec<Mutex<u64>> = Vec::with_capacity(args.num_sockets as _);
+        for _ in 0..args.num_sockets {
+            v.push(Mutex::new(0));
+        }
+        Arc::new(v)
+    };
     
     // Define bus for SPMC communication between threads
     let mut bus: Bus<()> = Bus::new(5);
@@ -229,7 +234,7 @@ fn set_sigint_handler(mut bus: Bus<()>) {
 ///   It's shared between threads.
 /// - `rx`: BusReader for SPMC (single-producer/multiple-consumers)
 ///   communication between threads.
-fn meter(totals: Arc<Mutex<Vec<u64>>>, mut rx: BusReader<()>) {
+fn meter(totals: Arc<Vec<Mutex<u64>>>, mut rx: BusReader<()>) {
     let mut now = SystemTime::now();
     let mut old_total: u64 = 0;
     
@@ -249,7 +254,14 @@ fn meter(totals: Arc<Mutex<Vec<u64>>>, mut rx: BusReader<()>) {
         now = next_sys_time;
         
         // Print number of sent packets
-        let new_total: u64 = totals.lock().expect("lock failed").iter().sum();
+        let new_total: u64 = {
+            let mut sum: u64 = 0;
+            for m in totals.iter() {
+                let v = m.lock().expect("Failed to lock mutex");
+                sum += *v;
+            }
+            sum
+        };
         println!("pkt/sec: {}", new_total - old_total);
         old_total = new_total;
     }
@@ -274,7 +286,7 @@ fn st_send(
     opt: NethunsSocketOptions,
     payload: &[u8],
     mut bus_rx: BusReader<()>,
-    totals: Arc<Mutex<Vec<u64>>>,
+    totals: Arc<Vec<Mutex<u64>>>,
 ) -> Result<(), anyhow::Error> {
     // Vector for storing socket ids
     let mut out_sockets: Vec<NethunsSocket> =
@@ -295,12 +307,14 @@ fn st_send(
         }
         
         // Transmit packets from each socket
-        for (i, socket) in out_sockets.iter_mut().enumerate() {
+        for (i, socket) in out_sockets.iter().enumerate() {
             if args.zerocopy {
                 transmit_zc(
                     args,
                     socket,
-                    pktid.get_mut(i).expect("pktid.get_mut() failed"),
+                    pktid
+                        .get_mut(i)
+                        .ok_or(anyhow::anyhow!("pktid is None (index {i})"))?,
                     payload.len(),
                     &totals,
                     i,
@@ -335,7 +349,7 @@ fn mt_send(
     th_idx: u32,
     payload: &[u8],
     mut rx: BusReader<()>,
-    totals: Arc<Mutex<Vec<u64>>>,
+    totals: Arc<Vec<Mutex<u64>>>,
 ) -> Result<(), anyhow::Error> {
     // Setup and fill transmission ring
     let mut socket = fill_tx_ring(args, opt, th_idx, payload)?;
@@ -430,17 +444,17 @@ fn transmit_zc(
     socket: &NethunsSocket,
     pktid: &mut usize,
     pkt_size: usize,
-    totals: &Arc<Mutex<Vec<u64>>>,
+    totals: &Arc<Vec<Mutex<u64>>>,
     socket_idx: usize,
 ) -> Result<(), anyhow::Error> {
     // Prepare batch
     for _ in 0..args.batch_size {
-        if let Err(e) = socket.send_slot(*pktid, pkt_size) {
-            dbg!(e);
+        if let Err(_) = socket.send_slot(*pktid, pkt_size) {
             break;
         }
         (*pktid) += 1;
-        if let Some(t) = totals.lock().unwrap().get_mut(socket_idx) {
+        if let Some(mutex) = totals.get(socket_idx) {
+            let mut t = mutex.lock().map_err(|e| anyhow::anyhow!("{:?}", e))?;
             *t += 1;
         }
     }
@@ -462,7 +476,7 @@ fn transmit_c(
     args: &Args,
     socket: &NethunsSocket,
     payload: &[u8],
-    totals: &Arc<Mutex<Vec<u64>>>,
+    totals: &Arc<Vec<Mutex<u64>>>,
     socket_idx: usize,
 ) -> Result<(), anyhow::Error> {
     // Prepare batch
@@ -471,7 +485,8 @@ fn transmit_c(
             eprintln!("Error in transmission for socket {socket_idx}: {e}");
             break;
         }
-        if let Some(t) = totals.lock().unwrap().get_mut(socket_idx) {
+        if let Some(mutex) = totals.get(socket_idx) {
+            let mut t = mutex.lock().map_err(|e| anyhow::anyhow!("{:?}", e))?;
             *t += 1;
         }
     }

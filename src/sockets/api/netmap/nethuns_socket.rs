@@ -302,7 +302,7 @@ impl NethunsSocketTrait for NethunsSocketNetmap {
                 let slot =
                     unsafe { &mut *(netmap_slot.ptr as *mut NethunsRingSlot) };
                 mem::swap(&mut netmap_slot.buf_idx, &mut slot.pkthdr.buf_idx);
-                slot.inuse.store(RingSlotStatus::InUse, Ordering::Release);
+                slot.inuse.store(RingSlotStatus::Free, Ordering::Release);
                 
                 scan = unsafe { ring.nm_ring_next(scan) };
             }
