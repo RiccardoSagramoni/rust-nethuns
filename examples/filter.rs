@@ -1,8 +1,8 @@
-use std::ops::DerefMut;
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::mpsc::TryRecvError;
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
 use std::time::{Duration, SystemTime};
-use std::{env, mem, thread};
+use std::{env, thread};
 
 use bus::{Bus, BusReader};
 use nethuns::sockets::errors::NethunsRecvError;
@@ -15,6 +15,7 @@ use nethuns::vlan::{
     nethuns_vlan_tci, nethuns_vlan_tci_, nethuns_vlan_tpid, nethuns_vlan_tpid_,
     nethuns_vlan_vid,
 };
+use num_format::{Locale, ToFormattedString};
 use rand::Rng;
 
 fn main() {
@@ -48,7 +49,7 @@ fn main() {
     
     
     // Stats counter
-    let total = Arc::new(Mutex::<u64>::new(0));
+    let total = Arc::new(AtomicU64::new(0));
     // Define bus for SPMC communication between threads
     let mut bus: Bus<()> = Bus::new(5);
     
@@ -76,9 +77,7 @@ fn main() {
         
         match socket.recv() {
             Ok(_) => {
-                let mut total = total.lock().expect("lock failed");
-                *total += 1;
-                
+                total.fetch_add(1, Ordering::AcqRel);
                 total2 += 1;
                 
                 if total2 == 10_000_000 {
@@ -103,7 +102,7 @@ fn main() {
 
 
 /// Print statistics about received packets
-fn meter(total: Arc<Mutex<u64>>, mut rx: BusReader<()>) {
+fn meter(total: Arc<AtomicU64>, mut rx: BusReader<()>) {
     let mut now = SystemTime::now();
     
     loop {
@@ -122,8 +121,8 @@ fn meter(total: Arc<Mutex<u64>>, mut rx: BusReader<()>) {
         now = next_sys_time;
         
         // Print number of sent packets
-        let x = mem::replace(total.lock().unwrap().deref_mut(), 0);
-        println!("pkt/sec: {}", x);
+        let total = total.swap(0, Ordering::AcqRel);
+        println!("pkt/sec: {}", total.to_formatted_string(&Locale::en));
     }
 }
 

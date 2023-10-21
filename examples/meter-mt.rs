@@ -1,18 +1,17 @@
-use std::ops::DerefMut;
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::mpsc::TryRecvError;
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
 use std::time::{Duration, SystemTime};
 use std::{mem, thread};
 
 use bus::{Bus, BusReader};
-
 use nethuns::sockets::base::RecvPacket;
 use nethuns::sockets::{BindableNethunsSocket, NethunsSocket};
-
 use nethuns::types::{
     NethunsCaptureDir, NethunsCaptureMode, NethunsQueue, NethunsSocketMode,
     NethunsSocketOptions,
 };
+use num_format::{Locale, ToFormattedString};
 use rtrb::{Consumer, RingBuffer};
 
 
@@ -52,7 +51,7 @@ fn main() {
         
         // Create channel for thread communication
         let mut bus: Bus<()> = Bus::new(5);
-        let total = Arc::new(Mutex::new(0_u64));
+        let total = Arc::new(AtomicU64::new(0));
         
         // Spawn meter thread
         let total1 = total.clone();
@@ -103,7 +102,7 @@ fn get_configuration() -> Configuration {
 }
 
 
-fn meter(total: Arc<Mutex<u64>>, mut rx: BusReader<()>) {
+fn meter(total: Arc<AtomicU64>, mut rx: BusReader<()>) {
     let mut now = SystemTime::now();
     
     loop {
@@ -122,8 +121,8 @@ fn meter(total: Arc<Mutex<u64>>, mut rx: BusReader<()>) {
         now = next_sys_time;
         
         // Print statistics
-        let total = mem::replace(total.lock().unwrap().deref_mut(), 0);
-        println!("pkt/sec: {total}");
+        let total = total.swap(0, Ordering::AcqRel);
+        println!("pkt/sec: {}", total.to_formatted_string(&Locale::en));
     }
 }
 
@@ -146,7 +145,7 @@ fn set_sigint_handler(mut bus: Bus<()>) {
 fn consumer_body(
     mut consumer: Consumer<RecvPacket<NethunsSocket>>,
     mut rx: BusReader<()>,
-    total: Arc<Mutex<u64>>,
+    total: Arc<AtomicU64>,
 ) {
     loop {
         match rx.try_recv() {
@@ -156,7 +155,7 @@ fn consumer_body(
         
         // Read packet
         if consumer.pop().is_ok() {
-            *total.lock().unwrap() += 1;
+            total.fetch_add(1, Ordering::AcqRel);
         }
     }
 }

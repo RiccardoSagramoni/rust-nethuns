@@ -1,6 +1,7 @@
 use std::io::Write;
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::mpsc::TryRecvError;
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
 use std::time::{Duration, SystemTime};
 use std::{env, thread};
 
@@ -10,6 +11,7 @@ use nethuns::types::{
     NethunsCaptureDir, NethunsCaptureMode, NethunsQueue, NethunsSocketMode,
     NethunsSocketOptions,
 };
+use num_format::{ToFormattedString, Locale};
 
 
 const HELP_BRIEF: &str = "\
@@ -63,9 +65,9 @@ fn main() {
     
     // Stats counter
     let totals = {
-        let mut v: Vec<Mutex<u64>> = Vec::with_capacity(args.num_sockets as _);
+        let mut v: Vec<AtomicU64> = Vec::with_capacity(args.num_sockets as _);
         for _ in 0..args.num_sockets {
-            v.push(Mutex::new(0));
+            v.push(AtomicU64::new(0));
         }
         Arc::new(v)
     };
@@ -234,9 +236,8 @@ fn set_sigint_handler(mut bus: Bus<()>) {
 ///   It's shared between threads.
 /// - `rx`: BusReader for SPMC (single-producer/multiple-consumers)
 ///   communication between threads.
-fn meter(totals: Arc<Vec<Mutex<u64>>>, mut rx: BusReader<()>) {
+fn meter(totals: Arc<Vec<AtomicU64>>, mut rx: BusReader<()>) {
     let mut now = SystemTime::now();
-    let mut old_total: u64 = 0;
     
     loop {
         match rx.try_recv() {
@@ -254,16 +255,14 @@ fn meter(totals: Arc<Vec<Mutex<u64>>>, mut rx: BusReader<()>) {
         now = next_sys_time;
         
         // Print number of sent packets
-        let new_total: u64 = {
+        let total: u64 = {
             let mut sum: u64 = 0;
-            for m in totals.iter() {
-                let v = m.lock().expect("Failed to lock mutex");
-                sum += *v;
+            for v in totals.iter() {
+                sum += v.swap(0, Ordering::AcqRel);
             }
             sum
         };
-        println!("pkt/sec: {}", new_total - old_total);
-        old_total = new_total;
+        println!("pkt/sec: {}", total.to_formatted_string(&Locale::en));
     }
 }
 
@@ -286,7 +285,7 @@ fn st_send(
     opt: NethunsSocketOptions,
     payload: &[u8],
     mut bus_rx: BusReader<()>,
-    totals: Arc<Vec<Mutex<u64>>>,
+    totals: Arc<Vec<AtomicU64>>,
 ) -> Result<(), anyhow::Error> {
     // Vector for storing socket ids
     let mut out_sockets: Vec<NethunsSocket> =
@@ -349,7 +348,7 @@ fn mt_send(
     th_idx: u32,
     payload: &[u8],
     mut rx: BusReader<()>,
-    totals: Arc<Vec<Mutex<u64>>>,
+    totals: Arc<Vec<AtomicU64>>,
 ) -> Result<(), anyhow::Error> {
     // Setup and fill transmission ring
     let mut socket = fill_tx_ring(args, opt, th_idx, payload)?;
@@ -444,7 +443,7 @@ fn transmit_zc(
     socket: &NethunsSocket,
     pktid: &mut usize,
     pkt_size: usize,
-    totals: &Arc<Vec<Mutex<u64>>>,
+    totals: &Arc<Vec<AtomicU64>>,
     socket_idx: usize,
 ) -> Result<(), anyhow::Error> {
     // Prepare batch
@@ -453,9 +452,8 @@ fn transmit_zc(
             break;
         }
         (*pktid) += 1;
-        if let Some(mutex) = totals.get(socket_idx) {
-            let mut t = mutex.lock().map_err(|e| anyhow::anyhow!("{:?}", e))?;
-            *t += 1;
+        if let Some(t) = totals.get(socket_idx) {
+            t.fetch_add(1, Ordering::AcqRel);
         }
     }
     // Send batch
@@ -476,7 +474,7 @@ fn transmit_c(
     args: &Args,
     socket: &NethunsSocket,
     payload: &[u8],
-    totals: &Arc<Vec<Mutex<u64>>>,
+    totals: &Arc<Vec<AtomicU64>>,
     socket_idx: usize,
 ) -> Result<(), anyhow::Error> {
     // Prepare batch
@@ -485,9 +483,8 @@ fn transmit_c(
             eprintln!("Error in transmission for socket {socket_idx}: {e}");
             break;
         }
-        if let Some(mutex) = totals.get(socket_idx) {
-            let mut t = mutex.lock().map_err(|e| anyhow::anyhow!("{:?}", e))?;
-            *t += 1;
+        if let Some(t) = totals.get(socket_idx) {
+            t.fetch_add(1, Ordering::AcqRel);
         }
     }
     // Send batch

@@ -1,6 +1,6 @@
-use std::ops::DerefMut;
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::mpsc::TryRecvError;
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
 use std::time::{Duration, SystemTime};
 use std::{mem, thread};
 
@@ -13,6 +13,7 @@ use nethuns::types::{
     NethunsCaptureDir, NethunsCaptureMode, NethunsQueue, NethunsSocketMode,
     NethunsSocketOptions,
 };
+use num_format::{Locale, ToFormattedString};
 use rtrb::{Consumer, RingBuffer};
 
 
@@ -53,8 +54,8 @@ fn main() {
         
         // Create channel for thread communication
         let mut bus: Bus<()> = Bus::new(5);
-        let total_rcv = Arc::new(Mutex::new(0_u64));
-        let total_fwd = Arc::new(Mutex::new(0_u64));
+        let total_rcv = Arc::new(AtomicU64::new(0));
+        let total_fwd = Arc::new(AtomicU64::new(0));
         
         // Spawn meter thread
         let meter_total_rcv = total_rcv.clone();
@@ -91,7 +92,7 @@ fn main() {
             }
             
             if let Ok(pkt) = socket.recv() {
-                *total_rcv.lock().expect("lock failed") += 1;
+                total_rcv.fetch_add(1, Ordering::AcqRel);
                 // Push packet in queue
                 while !producer.is_abandoned() {
                     if !producer.is_full() {
@@ -118,8 +119,8 @@ fn get_configuration() -> Configuration {
 
 
 fn meter(
-    total_rcv: Arc<Mutex<u64>>,
-    total_fwd: Arc<Mutex<u64>>,
+    total_rcv: Arc<AtomicU64>,
+    total_fwd: Arc<AtomicU64>,
     mut rx: BusReader<()>,
 ) {
     let mut now = SystemTime::now();
@@ -140,9 +141,13 @@ fn meter(
         now = next_sys_time;
         
         // Print statistics
-        let total_rcv = mem::replace(total_rcv.lock().unwrap().deref_mut(), 0);
-        let total_fwd = mem::replace(total_fwd.lock().unwrap().deref_mut(), 0);
-        println!("pkt/sec: {total_rcv} fwd/sec: {total_fwd} ");
+        let total_rcv = total_rcv.swap(0, Ordering::AcqRel);
+        let total_fwd = total_fwd.swap(0, Ordering::AcqRel);
+        println!(
+            "pkt/sec: {} fwd/sec: {} ",
+            total_rcv.to_formatted_string(&Locale::en),
+            total_fwd.to_formatted_string(&Locale::en)
+        );
     }
 }
 
@@ -167,7 +172,7 @@ fn consumer_body(
     dev: &str,
     mut consumer: Consumer<RecvPacket<NethunsSocket>>,
     mut rx: BusReader<()>,
-    total_fwd: Arc<Mutex<u64>>,
+    total_fwd: Arc<AtomicU64>,
 ) {
     let socket = BindableNethunsSocket::open(opt)
         .unwrap()
@@ -190,7 +195,7 @@ fn consumer_body(
                     }
                 }
             }
-            *total_fwd.lock().unwrap() += 1;
+            total_fwd.fetch_add(1, Ordering::AcqRel);
         }
     }
 }
