@@ -4,8 +4,6 @@ use std::slice::Iter;
 
 use derivative::Derivative;
 
-// TODO update docs and comments
-
 
 /// An optimized circular buffer with head and tail indexes.
 ///
