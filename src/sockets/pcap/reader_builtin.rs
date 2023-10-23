@@ -1,3 +1,7 @@
+//! This module contains the implementation of [`NethunsSocketPcapInner`]
+//! when the built-in pcap reader is requested 
+//! (i.e. `NETHUNS_USE_BUILTIN_PCAP_READER` feature is enabled).
+
 use std::fs::{File, OpenOptions};
 use std::io::prelude::*;
 use std::io::SeekFrom;
@@ -122,7 +126,8 @@ impl NethunsSocketPcapTrait for NethunsSocketPcapInner {
             );
         
         let caplen = self.base.opt.packetsize;
-        let slot = rx_ring.get_slot_mut(rx_ring.rings().head());
+        let head_idx = rx_ring.head();
+        let slot = rx_ring.get_slot_mut(head_idx);
         if slot.inuse.load(Ordering::Acquire) != RingSlotStatus::Free {
             return Err(NethunsPcapReadError::InUse);
         }
@@ -161,16 +166,15 @@ impl NethunsSocketPcapTrait for NethunsSocketPcapInner {
         
         slot.inuse.store(RingSlotStatus::InUse, Ordering::Release);
         
-        let pkthdr = Box::new(slot.pkthdr);
-        let packet = &slot.packet[..bytes as _] as *const _;
-        let inuse = slot.inuse.clone();
         rx_ring.rings_mut().advance_head();
         
+        let slot = rx_ring.get_slot(head_idx);
+        
         Ok(RecvPacketData::new(
-            rx_ring.rings().head(),
-            pkthdr,
-            packet,
-            inuse,
+            rx_ring.head(),
+            Box::new(slot.pkthdr),
+            &slot.packet[..bytes as _],
+            slot.inuse.clone(),
         ))
     }
     
