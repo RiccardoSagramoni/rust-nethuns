@@ -162,9 +162,9 @@ fn run_capture_mode(conf: Configuration) {
     let mut i = 0;
     while i < 10 {
         if let Ok(pkt) = in_socket.recv() {
-            println!("{}", dump_packet(pkt.pkthdr(), pkt.packet()));
+            println!("{}", dump_packet(pkt.pkthdr(), pkt.buffer()));
             out_socket
-                .store(pkt.pkthdr(), pkt.packet())
+                .store(pkt.pkthdr(), pkt.buffer())
                 .expect("pcap store failed");
             i += 1;
         }

@@ -1,0 +1,11 @@
+error[E0505]: cannot move out of `packet` because it is borrowed
+  --> tests/compile-fail/packet_dropped_before_buffer.rs:14:10
+   |
+12 |     let packet = socket.recv().unwrap();
+   |         ------ binding `packet` declared here
+13 |     let buffer = packet.packet();
+   |                  ------ borrow of `packet` occurs here
+14 |     drop(packet);
+   |          ^^^^^^ move out of `packet` occurs here
+15 |     drop(buffer);
+   |          ------ borrow later used here

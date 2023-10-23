@@ -52,7 +52,7 @@ fn main() {
 
 fn dump_packet(pkt: &RecvPacket<NethunsSocket>) {
     let pkthdr = pkt.pkthdr();
-    let packet = pkt.packet();
+    let packet = pkt.buffer();
     
     print!(
         concat!(

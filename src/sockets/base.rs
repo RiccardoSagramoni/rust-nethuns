@@ -1,3 +1,4 @@
+use core::slice;
 use std::ffi::CString;
 use std::fmt::{self, Debug, Display};
 use std::marker::PhantomData;
@@ -63,18 +64,18 @@ pub struct RecvPacket<'a, T> {
 }
 
 /// # Safety
-/// 
+///
 /// The `packet` raw pointer is valid as long as the `RecvPacket`
 /// item is valid and the library guarantees that we are the only
 /// holders of such pointer for the lifetime of the `RecvPacket` item.
 /// Thus, it can be safely send between threads.
 unsafe impl<T: Send> Send for RecvPacket<'_, T> {}
 
-impl<T> RecvPacket<'_, T> {
-    pub(crate) fn new(
+impl<'a, T> RecvPacket<'a, T> {
+    pub(super) fn new(
         data: RecvPacketData,
-        phantom_data: PhantomData<&'_ T>,
-    ) -> RecvPacket<T> {
+        phantom_data: PhantomData<&'a T>,
+    ) -> Self {
         RecvPacket { data, phantom_data }
     }
     
@@ -89,8 +90,11 @@ impl<T> RecvPacket<'_, T> {
     }
     
     #[inline(always)]
-    pub fn packet(&self) -> &'_ [u8] {
-        unsafe { &*self.data.packet }
+    pub fn buffer(&self) -> &[u8] {
+        // [SAFETY]: the `self.data.packet` raw pointer points to a buffer
+        // inside the socket which the current `RecvPacket` is bound to.
+        // Thus, the generated re
+        unsafe { slice::from_raw_parts(self.data.buffer_ptr, self.data.buffer_len) }
     }
 }
 
@@ -98,10 +102,10 @@ impl<T> Display for RecvPacket<'_, T> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(
             f,
-            "{{\n    id: {},\n    pkthdr: {:?},\n    packet: {:?}\n}}",
+            "{{\n    id: {},\n    pkthdr: {:?},\n    buffer: {:?}\n}}",
             self.id(),
             self.pkthdr(),
-            self.packet()
+            self.buffer()
         )
     }
 }
@@ -110,28 +114,31 @@ impl<T> Display for RecvPacket<'_, T> {
 /// Packet received when calling [`NethunsSocket::recv()`](crate::sockets::NethunsSocket::recv)
 /// or [`NethunsSocketPcap::read()`](crate::sockets::pcap::NethunsSocketPcap::read)
 /// with static lifetime.
-/// 
+///
 /// It **must** be wrapped inside `RecvPacket` struct before being handed to the user.
 #[derive(Debug)]
-pub(crate) struct RecvPacketData {
+pub(super) struct RecvPacketData {
     id: usize,
     pkthdr: Box<dyn PkthdrTrait>,
-    packet: *const [u8],
+    
+    buffer_ptr: *const u8,
+    buffer_len: usize,
     
     slot_status_flag: Arc<AtomicRingSlotStatus>,
 }
 
 impl RecvPacketData {
-    pub(super) fn new(
+    pub fn new(
         id: usize,
         pkthdr: Box<dyn PkthdrTrait>,
-        packet: *const [u8],
+        buffer: &[u8],
         slot_status_flag: Arc<AtomicRingSlotStatus>,
     ) -> Self {
         Self {
             id,
             pkthdr,
-            packet,
+            buffer_ptr: buffer.as_ptr(),
+            buffer_len: buffer.len(),
             slot_status_flag,
         }
     }
