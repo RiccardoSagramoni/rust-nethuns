@@ -1,3 +1,4 @@
+
 use std::env;
 
 use etherparse::Ethernet2Header;
@@ -37,14 +38,9 @@ fn main() {
         )
         .expect("Failed to bind socket");
     
-    for _ in 0..5000 {
-        match socket.recv() {
-            Ok(p) => {
-                dump_packet(&p);
-            }
-            Err(e) => {
-                eprintln!("[ERROR]: {}", e);
-            }
+    loop {
+        if let Ok(p) = socket.recv() {
+            dump_packet(&p);
         }
     }
 }
