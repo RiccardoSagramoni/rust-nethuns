@@ -174,7 +174,7 @@ impl NethunsSocketTrait for NethunsSocketNetmap {
         
         Ok(RecvPacketData::new(
             rx_ring.rings().head() as _,
-            Box::new(slot.pkthdr),
+            &slot.pkthdr,
             pkt,
             slot.inuse.clone(),
         ))

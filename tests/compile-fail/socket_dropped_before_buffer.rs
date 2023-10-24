@@ -10,7 +10,7 @@ fn main() {
         .unwrap();
     
     let packet = socket.recv().unwrap();
-    let buffer = packet.packet();
+    let buffer = packet.buffer();
     drop(socket);
     drop(buffer);
 }

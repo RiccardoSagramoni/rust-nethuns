@@ -172,7 +172,7 @@ impl NethunsSocketPcapTrait for NethunsSocketPcapInner {
         
         Ok(RecvPacketData::new(
             rx_ring.head(),
-            Box::new(slot.pkthdr),
+            &slot.pkthdr,
             &slot.packet[..bytes as _],
             slot.inuse.clone(),
         ))

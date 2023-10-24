@@ -86,14 +86,15 @@ impl<'a, T> RecvPacket<'a, T> {
     
     #[inline(always)]
     pub fn pkthdr(&self) -> &dyn PkthdrTrait {
-        self.data.pkthdr.as_ref()
+        // [SAFETY]: the `self.data.pkthdr` raw pointer points to
+        // a field to the socket which the current `RecvPacket` is bound to.
+        unsafe { &*self.data.pkthdr }
     }
     
     #[inline(always)]
     pub fn buffer(&self) -> &[u8] {
-        // [SAFETY]: the `self.data.packet` raw pointer points to a buffer
+        // [SAFETY]: the `self.data.buffer_ptr` raw pointer points to a buffer
         // inside the socket which the current `RecvPacket` is bound to.
-        // Thus, the generated re
         unsafe { slice::from_raw_parts(self.data.buffer_ptr, self.data.buffer_len) }
     }
 }
@@ -119,7 +120,7 @@ impl<T> Display for RecvPacket<'_, T> {
 #[derive(Debug)]
 pub(super) struct RecvPacketData {
     id: usize,
-    pkthdr: Box<dyn PkthdrTrait>,
+    pkthdr: *const dyn PkthdrTrait,
     
     buffer_ptr: *const u8,
     buffer_len: usize,
@@ -130,7 +131,7 @@ pub(super) struct RecvPacketData {
 impl RecvPacketData {
     pub fn new(
         id: usize,
-        pkthdr: Box<dyn PkthdrTrait>,
+        pkthdr: *const dyn PkthdrTrait,
         buffer: &[u8],
         slot_status_flag: Arc<AtomicRingSlotStatus>,
     ) -> Self {
