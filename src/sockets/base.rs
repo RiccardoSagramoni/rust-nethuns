@@ -9,6 +9,7 @@ use getset::{CopyGetters, Getters, Setters};
 
 use crate::types::{NethunsFilter, NethunsQueue, NethunsSocketOptions};
 
+use super::api::Pkthdr;
 use super::ring::{AtomicRingSlotStatus, NethunsRing, RingSlotStatus};
 use super::PkthdrTrait;
 
@@ -95,7 +96,9 @@ impl<'a, T> RecvPacket<'a, T> {
     pub fn buffer(&self) -> &[u8] {
         // [SAFETY]: the `self.data.buffer_ptr` raw pointer points to a buffer
         // inside the socket which the current `RecvPacket` is bound to.
-        unsafe { slice::from_raw_parts(self.data.buffer_ptr, self.data.buffer_len) }
+        unsafe {
+            slice::from_raw_parts(self.data.buffer_ptr, self.data.buffer_len)
+        }
     }
 }
 
@@ -131,13 +134,13 @@ pub(super) struct RecvPacketData {
 impl RecvPacketData {
     pub fn new(
         id: usize,
-        pkthdr: *const dyn PkthdrTrait,
+        pkthdr: &Pkthdr,
         buffer: &[u8],
         slot_status_flag: Arc<AtomicRingSlotStatus>,
     ) -> Self {
         Self {
             id,
-            pkthdr,
+            pkthdr: pkthdr as *const Pkthdr,
             buffer_ptr: buffer.as_ptr(),
             buffer_len: buffer.len(),
             slot_status_flag,
