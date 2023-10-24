@@ -75,7 +75,7 @@ fn main() {
         if let Ok(pkt) = in_socket.recv() {
             total_rcv.fetch_add(1, Ordering::AcqRel);
             loop {
-                match out_socket.send(pkt.packet()) {
+                match out_socket.send(pkt.buffer()) {
                     Ok(_) => break,
                     Err(_) => {
                         out_socket.flush().unwrap();

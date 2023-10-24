@@ -455,7 +455,7 @@ fn recv_pkt(
             old_total,
             pkt.id()
         );
-        println!("Packet IP addr: {}", print_addrs(pkt.packet())?);
+        println!("Packet IP addr: {}", print_addrs(pkt.buffer())?);
     }
     
     *count_to_dump += 1;

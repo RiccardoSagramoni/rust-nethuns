@@ -1,10 +1,10 @@
 //! This module contains the implementation of [`NethunsSocketPcapInner`]
-//! when the default pcap reader is required 
+//! when the default pcap reader is requested
 //! (i.e. `NETHUNS_USE_BUILTIN_PCAP_READER` feature is **not** enabled).
 
+use std::cmp;
 use std::fs::File;
 use std::sync::atomic;
-use std::{cmp, mem};
 
 use pcap_parser::traits::PcapReaderIterator;
 use pcap_parser::{LegacyPcapReader, PcapBlockOwned, PcapError};
@@ -81,7 +81,7 @@ impl NethunsSocketPcapTrait for NethunsSocketPcapInner {
             .expect("[read] rx_ring should have been set during `open`");
         
         let caplen = self.base.opt.packetsize;
-        let head_idx = rx_ring.rings().head();
+        let head_idx = rx_ring.head();
         let slot = rx_ring.get_slot_mut(head_idx);
         if slot.inuse.load(atomic::Ordering::Acquire) != RingSlotStatus::Free {
             return Err(NethunsPcapReadError::InUse);
@@ -122,8 +122,6 @@ impl NethunsSocketPcapTrait for NethunsSocketPcapInner {
         
         slot.inuse
             .store(RingSlotStatus::InUse, atomic::Ordering::Release);
-        #[allow(dropping_references)]
-        mem::drop(slot);
         
         rx_ring.rings_mut().advance_head();
         
@@ -131,7 +129,7 @@ impl NethunsSocketPcapTrait for NethunsSocketPcapInner {
         
         Ok(RecvPacketData::new(
             rx_ring.rings().head() as _,
-            Box::new(slot.pkthdr),
+            &slot.pkthdr,
             &slot.packet[..bytes as _],
             slot.inuse.clone(),
         ))

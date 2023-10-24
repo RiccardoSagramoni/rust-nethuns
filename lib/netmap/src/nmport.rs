@@ -6,8 +6,9 @@ use crate::bindings::{
     nmport_close, nmport_d, nmport_open_desc, nmport_prepare,
 };
 
-/// Safe wrapper for nmport_d. It describes a netmap port.
+/// Safe wrapper for [`nmport_d`]. It describes a netmap port.
 #[derive(Debug)]
+#[repr(transparent)]
 pub struct NmPortDescriptor {
     nmport_d: NonNull<nmport_d>,
 }

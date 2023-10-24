@@ -3,8 +3,7 @@ use std::ptr::NonNull;
 use std::{thread, time};
 
 use c_netmap_wrapper::macros::{netmap_buf, netmap_rxring};
-use c_netmap_wrapper::nmport::NmPortDescriptor;
-use c_netmap_wrapper::ring::NetmapRing;
+use c_netmap_wrapper::{NetmapRing, NmPortDescriptor};
 
 use crate::misc::circular_buffer::CircularBuffer;
 use crate::misc::nethuns_dev_queue_name;
@@ -77,8 +76,10 @@ impl BindableNethunsSocketTrait for BindableNethunsSocketNetmap {
         mut self: Box<Self>,
         dev: &str,
         queue: NethunsQueue,
-    ) -> Result<NethunsSocket, (NethunsBindError, Box<dyn BindableNethunsSocketTrait>)>
-    {
+    ) -> Result<
+        NethunsSocket,
+        (NethunsBindError, Box<dyn BindableNethunsSocketTrait>),
+    > {
         // Prepare flag and prefix for device name
         let flags = if !self.tx() {
             "/R".to_owned()

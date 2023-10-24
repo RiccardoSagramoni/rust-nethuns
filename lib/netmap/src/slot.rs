@@ -3,7 +3,9 @@ use std::ptr::NonNull;
 
 use crate::bindings::netmap_slot;
 
-/// Safe wrapper for `netmap_slot` struct. It's a buffer descriptor.
+/// Safe wrapper for [`netmap_slot`] struct. It's a buffer descriptor.
+#[derive(Debug)]
+#[repr(transparent)]
 pub struct NetmapSlot {
     netmap_slot: NonNull<netmap_slot>,
 }

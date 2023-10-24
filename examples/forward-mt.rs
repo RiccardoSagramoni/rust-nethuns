@@ -188,7 +188,7 @@ fn consumer_body(
         // Read packet
         if let Ok(pkt) = consumer.pop() {
             loop {
-                match socket.send(pkt.packet()) {
+                match socket.send(pkt.buffer()) {
                     Ok(_) => break,
                     Err(_) => {
                         socket.flush().unwrap();
