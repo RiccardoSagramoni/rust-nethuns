@@ -1,10 +1,10 @@
 //! This module contains the implementation of [`NethunsSocketPcapInner`]
-//! when the default pcap reader is requested 
+//! when the default pcap reader is requested
 //! (i.e. `NETHUNS_USE_BUILTIN_PCAP_READER` feature is **not** enabled).
 
+use std::cmp;
 use std::fs::File;
 use std::sync::atomic;
-use std::cmp;
 
 use pcap_parser::traits::PcapReaderIterator;
 use pcap_parser::{LegacyPcapReader, PcapBlockOwned, PcapError};
@@ -129,7 +129,7 @@ impl NethunsSocketPcapTrait for NethunsSocketPcapInner {
         
         Ok(RecvPacketData::new(
             rx_ring.rings().head() as _,
-            Box::new(slot.pkthdr),
+            &slot.pkthdr,
             &slot.packet[..bytes as _],
             slot.inuse.clone(),
         ))

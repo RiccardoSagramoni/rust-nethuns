@@ -51,7 +51,6 @@ default = [
     "netmap",            # FIXME remove from default features
     "libc/extra_traits",
     "rustix/net",
-    "NETHUNS_USE_BUILTIN_PCAP_READER" # FIXME remove from default features
 ]
 netmap = ["dep:c_netmap_wrapper"]
 libpcap = []
