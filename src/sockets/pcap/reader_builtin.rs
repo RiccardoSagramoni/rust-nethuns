@@ -280,8 +280,8 @@ unsafe fn any_as_u8_slice_mut<'a, T: Sized>(p: &'a mut T) -> &mut [u8] {
 /// insert unwanted padding; these files need to be interchangeable
 /// across architectures.
 #[allow(non_camel_case_types)]
-#[repr(C)]
 #[derive(Debug, Default, Clone, Copy)]
+#[repr(C)]
 struct pcap_file_header {
     magic: u32,
     version_major: libc::c_ushort,

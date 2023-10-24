@@ -243,9 +243,9 @@ cfg_if!(
 
 /// Pcap packet header
 #[allow(non_camel_case_types, clippy::len_without_is_empty)]
-#[repr(C)] // needed for safe transmutation to &[u8] and for compatibility with C programs
 #[derive(Clone, Copy, Debug, Default, CopyGetters)]
 #[getset(get_copy = "pub")]
+#[repr(C)] // needed for safe transmutation to &[u8] and for compatibility with C programs
 pub struct nethuns_pcap_pkthdr {
     /// timestamp
     ts: nethuns_pcap_timeval,
@@ -258,9 +258,9 @@ pub struct nethuns_pcap_pkthdr {
 
 /// Patched pcap packet header for the Kuznetzov's implementation of TCPDUMP format
 #[allow(non_camel_case_types)]
-#[repr(C)] // needed for safe transmutation to &[u8] and for compatibility with C programs
 #[derive(Clone, Copy, Debug, Default, CopyGetters)]
 #[getset(get_copy = "pub")]
+#[repr(C)] // needed for safe transmutation to &[u8] and for compatibility with C programs
 pub struct nethuns_pcap_patched_pkthdr {
     hdr: nethuns_pcap_pkthdr,
     index: i32,
@@ -270,9 +270,9 @@ pub struct nethuns_pcap_patched_pkthdr {
 
 
 #[allow(non_camel_case_types)]
-#[repr(C)] // needed for safe transmutation to &[u8] and for compatibility with C programs
 #[derive(Clone, Copy, Debug, Default, CopyGetters)]
 #[getset(get_copy = "pub")]
+#[repr(C)] // needed for safe transmutation to &[u8] and for compatibility with C programs
 pub struct nethuns_pcap_timeval {
     tv_sec: i64,
     tv_usec: i64,

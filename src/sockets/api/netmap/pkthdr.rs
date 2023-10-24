@@ -4,8 +4,8 @@ use crate::sockets::PkthdrTrait;
 
 
 /// Packet header containing metadata
-#[repr(C)]
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
+#[repr(C)]
 pub struct PkthdrNetmap {
     pub(super) ts: timeval,
     pub(super) len: u32,
