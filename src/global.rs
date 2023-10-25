@@ -20,8 +20,11 @@ pub struct NethunsNetInfo {
 
 /// Networking information of all the available Nethuns-enabled devices.
 /// Global R/W allowed in a thread-safe manner (mutex).
-pub static NETHUNS_GLOBAL: Mutex<Lazy<HashMap<CString, NethunsNetInfo>>> =
-    Mutex::new(Lazy::new(HashMap::new));
+pub static NETHUNS_GLOBAL: Mutex<
+    Lazy<HashMap<CString, NethunsNetInfo, ahash::RandomState>>,
+> = Mutex::new(Lazy::new(
+    || HashMap::with_hasher(ahash::RandomState::new()),
+));
 
 
 /// Set RLIMIT_MEMLOCK to infinity at application startup.
