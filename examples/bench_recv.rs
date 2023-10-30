@@ -1,10 +1,8 @@
-use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::mpsc::TryRecvError;
-use std::sync::Arc;
 use std::time::{Duration, SystemTime};
-use std::{env, thread};
+use std::{env, mem};
 
-use bus::{Bus, BusReader};
+use bus::Bus;
 use nethuns::sockets::errors::NethunsRecvError;
 use nethuns::sockets::BindableNethunsSocket;
 use nethuns::types::{
@@ -37,24 +35,19 @@ fn main() {
         .bind(&dev, NethunsQueue::Any)
         .unwrap();
     
-    // Stats counter
-    let total = Arc::new(AtomicU64::new(0));
-    
     // Define bus for SPMC communication between threads
     let mut sigint_bus: Bus<()> = Bus::new(5);
-    
-    // Create a thread for computing statistics
-    let meter_thread = {
-        let total = total.clone();
-        let sigint_rx = sigint_bus.add_rx();
-        thread::spawn(move || meter(total, sigint_rx))
-    };
     
     // Set handler for Ctrl-C
     let mut sigint_rx = sigint_bus.add_rx();
     set_sigint_handler(sigint_bus);
     
     // Start receiving
+    let mut total: u64 = 0;
+    let mut time_for_logging = SystemTime::now()
+        .checked_add(Duration::from_secs(1))
+        .unwrap();
+    
     loop {
         // Check if Ctrl-C was pressed
         match sigint_rx.try_recv() {
@@ -62,9 +55,17 @@ fn main() {
             _ => {}
         }
         
+        if time_for_logging < SystemTime::now() {
+            let total = mem::replace(&mut total, 0);
+            println!("pkt/sec: {}", total.to_formatted_string(&Locale::en));
+            time_for_logging = SystemTime::now()
+                .checked_add(Duration::from_secs(1))
+                .unwrap();
+        }
+        
         match socket.recv() {
             Ok(_) => {
-                total.fetch_add(1, Ordering::AcqRel);
+                total += 1;
             }
             Err(NethunsRecvError::InUse)
             | Err(NethunsRecvError::NoPacketsAvailable)
@@ -72,8 +73,6 @@ fn main() {
             Err(e) => panic!("Error: {e}"),
         }
     }
-    
-    meter_thread.join().unwrap();
 }
 
 
@@ -90,29 +89,4 @@ fn set_sigint_handler(mut bus: Bus<()>) {
         bus.broadcast(());
     })
     .expect("Error setting Ctrl-C handler");
-}
-
-
-fn meter(total: Arc<AtomicU64>, mut sigint_rx: BusReader<()>) {
-    let mut now = SystemTime::now();
-    
-    loop {
-        match sigint_rx.try_recv() {
-            Ok(_) | Err(TryRecvError::Disconnected) => break,
-            _ => (),
-        }
-        
-        // Sleep for 1 second
-        let next_sys_time = now
-            .checked_add(Duration::from_secs(1))
-            .expect("SystemTime::checked_add() failed");
-        if let Ok(delay) = next_sys_time.duration_since(now) {
-            thread::sleep(delay);
-        }
-        now = next_sys_time;
-        
-        // Print number of sent packets
-        let total = total.swap(0, Ordering::AcqRel);
-        println!("pkt/sec: {}", total.to_formatted_string(&Locale::en));
-    }
 }
