@@ -12,7 +12,15 @@ use nethuns::types::{
 use num_format::{Locale, ToFormattedString};
 
 
+#[cfg(feature = "dhat-heap")]
+#[global_allocator]
+static ALLOC: dhat::Alloc = dhat::Alloc;
+
+
 fn main() {
+    #[cfg(feature = "dhat-heap")]
+    let _profiler = dhat::Profiler::new_heap(); 
+    
     let dev = env::args().nth(1).expect("Usage: ./bench_recv <dev>");
     
     let nethuns_opt = NethunsSocketOptions {
