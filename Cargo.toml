@@ -6,7 +6,7 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 
-[profile.callgrind] # Produce binaries for Valgrind+Callgrind profiling
+[profile.perf] # Produce binaries for profiling
 inherits = "release"
 debug = true
 
@@ -38,6 +38,7 @@ cfg-if = "1.0.0"
 anyhow = "1.0.75"
 bus = "2.4.1"
 ctrlc = "3.4.1"
+dhat = "0.3.2"
 num-format = "0.4.4"
 pico-args = "0.5.0"
 rand = "0.8.5"
@@ -57,6 +58,7 @@ libpcap = []
 xdp = []
 tpacket_v3 = []
 NETHUNS_USE_BUILTIN_PCAP_READER = []
+dhat-heap = []    # if you are doing heap profiling
 
 
 [[example]]
