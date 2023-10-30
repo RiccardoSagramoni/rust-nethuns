@@ -174,7 +174,7 @@ fn main() {
 }
 
 
-// Parses the command-line arguments and build an instance of the `Args`
+/// Parses the command-line arguments and build an instance of the `Args`
 /// struct.
 ///
 /// It uses the `pico_args` crate to handle argument parsing.

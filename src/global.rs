@@ -28,8 +28,11 @@ pub static NETHUNS_GLOBAL: Mutex<
 
 
 /// Set `RLIMIT_MEMLOCK` to infinity at application startup.
+/// 
+/// This function is automatically called before any application code is execution,
+/// thanks to the [small-ctor crate](https://github.com/mitsuhiko/small-ctor).
 ///
-/// This function requires `CAP_SYS_RESOURCE` capability
+/// `CAP_SYS_RESOURCE` capability is required to run this function,
 /// because of the call to [`libc::setrlimit`]
 /// (see [setrlimit(2) - Linux man page](https://linux.die.net/man/2/setrlimit)
 /// for more details).
