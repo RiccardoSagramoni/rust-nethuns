@@ -15,23 +15,38 @@
 #include <vector>
 
 
+// nethuns socket
 nethuns_socket_t* my_socket;
 nethuns_socket_options netopt;
 char* errbuf;
 
+// configuration
 std::string interface = "";
+
+// stats collection
+uint64_t total = 0;
+#define     COLLECTION_DURATION_SECS    10*60
+#define     COLLECTION_RATE_SECS        10
+
 
 // terminate application
 volatile bool term = false;
-
-// compute stats
-unsigned long total = 0;
 
 // termination signal handler
 void terminate(int exit_signal)
 {
     (void)exit_signal;
     term = true;
+}
+
+void terminate_program(std::chrono::system_clock::time_point stop_timestamp) {
+    std::this_thread::sleep_until(stop_timestamp);
+    term = true;
+}
+
+
+inline std::chrono::system_clock::time_point next_meter_log() {
+    return std::chrono::system_clock::now() + std::chrono::seconds(COLLECTION_RATE_SECS);
 }
 
 
@@ -78,16 +93,22 @@ int main(int argc, char *argv[])
     if (nethuns_bind(my_socket, interface.c_str(), NETHUNS_ANY_QUEUE) < 0) {
         throw nethuns_exception(my_socket);
     }
+    
+    // set up timer for stopping data collection after 10 minutes
+    std::thread stop_th(
+        terminate_program, 
+        std::chrono::system_clock::now() + std::chrono::seconds(COLLECTION_DURATION_SECS)
+    );
 
     // case single thread (main) with generic number of sockets
     try {
-        auto time_to_log = std::chrono::system_clock::now() += std::chrono::seconds(1);
+        auto time_to_log = next_meter_log();
         
         while (!term) {
             if (time_to_log < std::chrono::system_clock::now()) {
-                std::cout << "pkt/sec: " << total << std::endl;
+                std::cout << total << std::endl;
                 total = 0;
-                time_to_log = std::chrono::system_clock::now() += std::chrono::seconds(1);
+                time_to_log = next_meter_log();
             }
             
             const nethuns_pkthdr_t *pkthdr = nullptr;
@@ -116,6 +137,6 @@ int main(int argc, char *argv[])
     }
     
     nethuns_close(my_socket);
-    
+    stop_th.join();
     return 0;
 }

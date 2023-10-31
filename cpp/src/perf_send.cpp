@@ -31,14 +31,22 @@ const std::string help_brief = "Usage:  nethuns-send [ options ]\n" \
                                 "\t\t\t[ -m ] \t\t\t enable multithreading \n" \
                                 "\t\t\t[ -z ] \t\t\t enable send zero-copy \n";
 
+// nethuns socket
 nethuns_socket_t* out = new nethuns_socket_t();
 struct nethuns_socket_options netopt;
 char* errbufs = new char[NETHUNS_ERRBUF_SIZE];
 
+// configuration
 uint64_t pktid = 0;
 std::string interface = "";
 int batch_size = 1;
 bool zerocopy = false;
+
+// stats collection
+uint64_t total = 0;
+#define     COLLECTION_DURATION_SECS    10*60
+#define     COLLECTION_RATE_SECS        10
+
 
 // terminate application
 volatile bool term = false;
@@ -50,8 +58,10 @@ void terminate(int exit_signal)
     term = true;
 }
 
-// compute stats
-uint64_t total = 0;
+void terminate_program(std::chrono::system_clock::time_point stop_timestamp) {
+    std::this_thread::sleep_until(stop_timestamp);
+    term = true;
+}
 
 
 // setup and fill transmission ring
@@ -103,6 +113,10 @@ inline void transmit_c(const unsigned char *payload, int pkt_size)
         total++;
     }
     nethuns_flush(out);             // send batch
+}
+
+inline std::chrono::system_clock::time_point next_meter_log() {
+    return std::chrono::system_clock::now() + std::chrono::seconds(COLLECTION_RATE_SECS);
 }
 
 
@@ -174,17 +188,26 @@ int main(int argc, char *argv[])
     ,   .reuse_maps      = false
     ,   .pin_dir         = nullptr
     };
+       
+    // Init nethuns socket
+    fill_tx_ring(payload, 34);
         
+    // set up timer for stopping data collection after 10 minutes
+    std::thread stop_th(
+        terminate_program, 
+        std::chrono::system_clock::now() + std::chrono::seconds(COLLECTION_DURATION_SECS)
+    );
+    
+     
     try {
-        fill_tx_ring(payload, 34);
-        
-        auto time_to_log = std::chrono::system_clock::now() += std::chrono::seconds(1);
+        auto time_to_log = next_meter_log();
         
         while (!term) {
+            // print stats every second
             if (time_to_log < std::chrono::system_clock::now()) {
-                std::cout << "pkt/sec: " << total << std::endl;
+                std::cout << total << std::endl;
                 total = 0;
-                time_to_log = std::chrono::system_clock::now() += std::chrono::seconds(1);
+                time_to_log = next_meter_log();
             }
             
             if (zerocopy) {
@@ -206,5 +229,6 @@ int main(int argc, char *argv[])
     }
     
     nethuns_close(out);
+    stop_th.join();
     return 0;
 }

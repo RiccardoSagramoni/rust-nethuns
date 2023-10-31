@@ -1,15 +1,13 @@
 use std::io::Write;
-use std::sync::mpsc::TryRecvError;
+use std::sync::mpsc::{self, Sender, TryRecvError};
 use std::time::{Duration, SystemTime};
-use std::{env, mem};
+use std::{env, mem, thread};
 
-use bus::Bus;
 use nethuns::sockets::{BindableNethunsSocket, NethunsSocket};
 use nethuns::types::{
     NethunsCaptureDir, NethunsCaptureMode, NethunsQueue, NethunsSocketMode,
     NethunsSocketOptions,
 };
-use num_format::{Locale, ToFormattedString};
 
 
 #[cfg(feature = "dhat-heap")]
@@ -43,19 +41,30 @@ fn main() {
     
     let (args, payload, opt) = configure_example();
     
-    // Define bus for SPMC communication between threads
-    let mut bus: Bus<()> = Bus::new(5);
-    
-    // case single thread (main) with generic number of sockets
-    let mut bus_rx = bus.add_rx();
-    set_sigint_handler(bus);
-    
-    
     // Setup and fill transmission rings for each socket
     let socket = prepare_tx_socket(&args, opt, &payload).unwrap();
+    let mut pktid: usize = 0; // pos of next slot/packet to send in tx ring
     
-    // One packet index per socket (pos of next slot/packet to send in tx ring)
-    let mut pktid: usize = 0;
+    
+    // Define channel for MPSC communication between threads
+    let (sigint_sender, sigint_receiver) = mpsc::channel::<()>();
+    
+    // Set timer for stopping data collection after 10 minutes
+    let _ = {
+        let sigint_sender = sigint_sender.clone();
+        let stop_time = SystemTime::now()
+            .checked_add(Duration::from_secs(10 * 60))
+            .unwrap();
+        thread::spawn(move || {
+            if let Ok(delay) = stop_time.duration_since(SystemTime::now()) {
+                thread::sleep(delay);
+            }
+            sigint_sender.send(()).unwrap();
+        })
+    };
+    // Set handler for Ctrl-C
+    set_sigint_handler(sigint_sender);
+    
     
     let mut total: u64 = 0;
     let mut time_for_logging = SystemTime::now()
@@ -63,8 +72,8 @@ fn main() {
         .unwrap();
     
     loop {
-        // Check if Ctrl-C was pressed
-        match bus_rx.try_recv() {
+        // Check condition for program termination
+        match sigint_receiver.try_recv() {
             Ok(_) | Err(TryRecvError::Disconnected) => break,
             _ => {}
         }
@@ -72,7 +81,7 @@ fn main() {
         // Check if enough time has passed for printing stats
         if time_for_logging < SystemTime::now() {
             let total = mem::replace(&mut total, 0);
-            println!("pkt/sec: {}", total.to_formatted_string(&Locale::en));
+            println!("{total}");
             time_for_logging = SystemTime::now()
                 .checked_add(Duration::from_secs(1))
                 .unwrap();
@@ -180,14 +189,10 @@ fn parse_args() -> Result<Args, anyhow::Error> {
 /// Set an handler for the SIGINT signal (Ctrl-C),
 /// which will notify the other threads
 /// to gracefully stop their execution.
-///
-/// # Arguments
-/// - `bus`: Bus for SPMC (single-producer/multiple-consumers) communication
-///   between threads.
-fn set_sigint_handler(mut bus: Bus<()>) {
+fn set_sigint_handler(sender: Sender<()>) {
     ctrlc::set_handler(move || {
         println!("Ctrl-C detected. Shutting down...");
-        bus.broadcast(());
+        sender.send(()).unwrap();
     })
     .expect("Error setting Ctrl-C handler");
 }
