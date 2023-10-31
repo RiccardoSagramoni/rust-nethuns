@@ -39,5 +39,7 @@ include_directories(/usr/local/lib .)
 link_directories(/usr/local/lib)
 
 add_executable(nethuns-perf_recv      src/perf_recv.cpp)
+add_executable(nethuns-perf_send      src/perf_send.cpp)
 
 target_link_libraries(nethuns-perf_recv   ${NETHUNS_LIBS} -pthread)
+target_link_libraries(nethuns-perf_send   ${NETHUNS_LIBS} -pthread)
