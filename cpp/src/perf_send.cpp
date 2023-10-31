@@ -3,6 +3,7 @@
 #include <getopt.h>
 #include <signal.h>
 
+#include <atomic>
 #include <thread>
 #include <chrono>
 #include <iostream>
@@ -44,23 +45,23 @@ bool zerocopy = false;
 
 // stats collection
 uint64_t total = 0;
-#define     METER_DURATION_SECS    10*60
+#define     METER_DURATION_SECS    10 * 60 + 1
 #define     METER_RATE_SECS        10
 
 
 // terminate application
-volatile bool term = false;
+std::atomic<bool> term(false);
 
 // termination signal handler
 void terminate(int exit_signal)
 {
     (void)exit_signal;
-    term = true;
+    term.store(true, std::memory_order_relaxed);
 }
 
 void terminate_program(std::chrono::system_clock::time_point stop_timestamp) {
     std::this_thread::sleep_until(stop_timestamp);
-    term = true;
+    term.store(true, std::memory_order_relaxed);
 }
 
 
@@ -202,7 +203,7 @@ int main(int argc, char *argv[])
     try {
         auto time_to_log = next_meter_log();
         
-        while (!term) {
+        while (!term.load(std::memory_order_relaxed)) {
             // print stats every second
             if (time_to_log < std::chrono::system_clock::now()) {
                 std::cout << total << std::endl;

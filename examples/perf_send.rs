@@ -1,5 +1,6 @@
 use std::io::Write;
-use std::sync::mpsc::{self, Sender, TryRecvError};
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::Arc;
 use std::time::{Duration, SystemTime};
 use std::{env, mem, thread};
 
@@ -14,7 +15,7 @@ use nethuns::types::{
 #[global_allocator]
 static ALLOC: dhat::Alloc = dhat::Alloc;
 
-const METER_DURATION_SECS: u64 = 10 * 60;
+const METER_DURATION_SECS: u64 = 10 * 60 + 1;
 const METER_RATE_SECS: u64 = 10;
 
 
@@ -49,12 +50,15 @@ fn main() {
     let mut pktid: usize = 0; // pos of next slot/packet to send in tx ring
     
     
-    // Define channel for MPSC communication between threads
-    let (sigint_sender, sigint_receiver) = mpsc::channel::<()>();
+    // Define atomic variable for program termination
+    let term = Arc::new(AtomicBool::new(false));
+    
+    // Set handler for Ctrl-C
+    set_sigint_handler(term.clone());
     
     // Set timer for stopping data collection after 10 minutes
     let _ = {
-        let sigint_sender = sigint_sender.clone();
+        let term = term.clone();
         let stop_time = SystemTime::now()
             .checked_add(Duration::from_secs(METER_DURATION_SECS))
             .unwrap();
@@ -62,11 +66,9 @@ fn main() {
             if let Ok(delay) = stop_time.duration_since(SystemTime::now()) {
                 thread::sleep(delay);
             }
-            sigint_sender.send(()).unwrap();
+            term.store(true, Ordering::Relaxed);
         })
     };
-    // Set handler for Ctrl-C
-    set_sigint_handler(sigint_sender);
     
     
     let mut total: u64 = 0;
@@ -76,9 +78,8 @@ fn main() {
     
     loop {
         // Check condition for program termination
-        match sigint_receiver.try_recv() {
-            Ok(_) | Err(TryRecvError::Disconnected) => break,
-            _ => {}
+        if term.load(Ordering::Relaxed) {
+            break;
         }
         
         // Check if enough time has passed for printing stats
@@ -192,10 +193,10 @@ fn parse_args() -> Result<Args, anyhow::Error> {
 /// Set an handler for the SIGINT signal (Ctrl-C),
 /// which will notify the other threads
 /// to gracefully stop their execution.
-fn set_sigint_handler(sender: Sender<()>) {
+fn set_sigint_handler(term: Arc<AtomicBool>) {
     ctrlc::set_handler(move || {
         println!("Ctrl-C detected. Shutting down...");
-        sender.send(()).unwrap();
+        term.store(true, Ordering::Relaxed);
     })
     .expect("Error setting Ctrl-C handler");
 }
