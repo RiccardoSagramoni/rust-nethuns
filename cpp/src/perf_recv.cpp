@@ -25,8 +25,8 @@ std::string interface = "";
 
 // stats collection
 uint64_t total = 0;
-#define     COLLECTION_DURATION_SECS    10*60
-#define     COLLECTION_RATE_SECS        10
+#define     METER_DURATION_SECS    10*60
+#define     METER_RATE_SECS        10
 
 
 // terminate application
@@ -46,7 +46,7 @@ void terminate_program(std::chrono::system_clock::time_point stop_timestamp) {
 
 
 inline std::chrono::system_clock::time_point next_meter_log() {
-    return std::chrono::system_clock::now() + std::chrono::seconds(COLLECTION_RATE_SECS);
+    return std::chrono::system_clock::now() + std::chrono::seconds(METER_RATE_SECS);
 }
 
 
@@ -97,7 +97,7 @@ int main(int argc, char *argv[])
     // set up timer for stopping data collection after 10 minutes
     std::thread stop_th(
         terminate_program, 
-        std::chrono::system_clock::now() + std::chrono::seconds(COLLECTION_DURATION_SECS)
+        std::chrono::system_clock::now() + std::chrono::seconds(METER_DURATION_SECS)
     );
 
     // case single thread (main) with generic number of sockets
@@ -137,6 +137,5 @@ int main(int argc, char *argv[])
     }
     
     nethuns_close(my_socket);
-    stop_th.join();
     return 0;
 }

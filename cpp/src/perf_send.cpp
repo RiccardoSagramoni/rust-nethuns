@@ -44,8 +44,8 @@ bool zerocopy = false;
 
 // stats collection
 uint64_t total = 0;
-#define     COLLECTION_DURATION_SECS    10*60
-#define     COLLECTION_RATE_SECS        10
+#define     METER_DURATION_SECS    10*60
+#define     METER_RATE_SECS        10
 
 
 // terminate application
@@ -116,7 +116,7 @@ inline void transmit_c(const unsigned char *payload, int pkt_size)
 }
 
 inline std::chrono::system_clock::time_point next_meter_log() {
-    return std::chrono::system_clock::now() + std::chrono::seconds(COLLECTION_RATE_SECS);
+    return std::chrono::system_clock::now() + std::chrono::seconds(METER_RATE_SECS);
 }
 
 
@@ -195,7 +195,7 @@ int main(int argc, char *argv[])
     // set up timer for stopping data collection after 10 minutes
     std::thread stop_th(
         terminate_program, 
-        std::chrono::system_clock::now() + std::chrono::seconds(COLLECTION_DURATION_SECS)
+        std::chrono::system_clock::now() + std::chrono::seconds(METER_DURATION_SECS)
     );
     
      
@@ -229,6 +229,5 @@ int main(int argc, char *argv[])
     }
     
     nethuns_close(out);
-    stop_th.join();
     return 0;
 }

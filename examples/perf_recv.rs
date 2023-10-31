@@ -14,6 +14,9 @@ use nethuns::types::{
 #[global_allocator]
 static ALLOC: dhat::Alloc = dhat::Alloc;
 
+const METER_DURATION_SECS: u64 = 10 * 60;
+const METER_RATE_SECS: u64 = 10;
+
 
 fn main() {
     #[cfg(feature = "dhat-heap")]
@@ -49,7 +52,7 @@ fn main() {
     let _ = {
         let sigint_sender = sigint_sender.clone();
         let stop_time = SystemTime::now()
-            .checked_add(Duration::from_secs(10 * 60))
+            .checked_add(Duration::from_secs(METER_DURATION_SECS))
             .unwrap();
         thread::spawn(move || {
             if let Ok(delay) = stop_time.duration_since(SystemTime::now()) {
@@ -65,7 +68,7 @@ fn main() {
     // Start receiving
     let mut total: u64 = 0;
     let mut time_for_logging = SystemTime::now()
-        .checked_add(Duration::from_secs(1))
+        .checked_add(Duration::from_secs(METER_RATE_SECS))
         .unwrap();
     
     loop {
@@ -79,7 +82,7 @@ fn main() {
             let total = mem::replace(&mut total, 0);
             println!("{total}");
             time_for_logging = SystemTime::now()
-                .checked_add(Duration::from_secs(1))
+                .checked_add(Duration::from_secs(METER_RATE_SECS))
                 .unwrap();
         }
         
