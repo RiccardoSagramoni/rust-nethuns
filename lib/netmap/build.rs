@@ -34,7 +34,7 @@ fn main() {
         .wrap_static_fns(true)
         // Tell cargo to invalidate the built crate whenever any of the
         // included header files changed.
-        .parse_callbacks(Box::new(bindgen::CargoCallbacks))
+        .parse_callbacks(Box::new(bindgen::CargoCallbacks::new()))
         // Allow only netmap headers to be included in the binding
         .allowlist_file("[^\\s]*netmap[^\\s]*")
 		// Generate documentation comments for bindings
