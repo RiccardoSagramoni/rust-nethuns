@@ -20,17 +20,23 @@ pub struct NethunsNetInfo {
 
 /// Networking information of all the available Nethuns-enabled devices.
 /// Global R/W allowed in a thread-safe manner (mutex).
-pub static NETHUNS_GLOBAL: Mutex<Lazy<HashMap<CString, NethunsNetInfo>>> =
-    Mutex::new(Lazy::new(HashMap::new));
+pub static NETHUNS_GLOBAL: Mutex<
+    Lazy<HashMap<CString, NethunsNetInfo, ahash::RandomState>>,
+> = Mutex::new(Lazy::new(
+    || HashMap::with_hasher(ahash::RandomState::new()),
+));
 
 
-/// Set RLIMIT_MEMLOCK to infinity at application startup.
+/// Set `RLIMIT_MEMLOCK` to infinity at application startup.
+/// 
+/// This function is automatically called before any application code is execution,
+/// thanks to the [small-ctor crate](https://github.com/mitsuhiko/small-ctor).
 ///
-/// This function requires CAP_SYS_RESOURCE capability
-/// because the call to [`libc::setrlimit`]
+/// `CAP_SYS_RESOURCE` capability is required to run this function,
+/// because of the call to [`libc::setrlimit`]
 /// (see [setrlimit(2) - Linux man page](https://linux.die.net/man/2/setrlimit)
 /// for more details).
-/// Since this usually means that we must run the tests with root privileges,
+/// Since this would mean that we must run the tests with root privileges,
 /// this function is disabled while testing.
 #[cfg(target_os = "linux")]
 #[cfg(not(test))]
@@ -44,7 +50,7 @@ unsafe fn setrlimit() {
     if ret != 0 {
         libc::fprintf(
             libc::fdopen(libc::STDERR_FILENO, "w+".as_ptr() as _) as _,
-            "nethuns: setrlimit(RLIMIT_MEMLOCK) \"%s\"\n".as_ptr() as _,
+            "nethuns: setrlimit(RLIMIT_MEMLOCK) \"%s\"\n\0".as_ptr() as _,
             libc::strerror(*libc::__errno_location()),
         );
         libc::exit(1);

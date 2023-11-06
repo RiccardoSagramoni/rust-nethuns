@@ -10,6 +10,7 @@ fn main() {
 /// If none or more than one feature flag have been enabled for the underlying
 /// I/O framework.
 fn assert_io_framework_mutual_exclusivity() {
+    #[allow(unused_mut)]
     let mut found: u8 = 0;
     
     cfg_if::cfg_if! {
