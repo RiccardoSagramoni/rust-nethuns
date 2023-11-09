@@ -31,6 +31,7 @@ once_cell = "1.18.0"
 pcap-parser = "0.14.1"
 rustix = "0.38.21"
 small_ctor = "0.1.1"
+static_assertions = "1.1.0"
 thiserror = "1.0.50"
 
 

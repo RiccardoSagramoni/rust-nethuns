@@ -38,6 +38,9 @@ pub struct BindableNethunsSocket<State: RcState> {
     inner: BindableNethunsSocketInner<State>,
 }
 
+// Make sure the BindableNethunsSocket is Send
+static_assertions::assert_impl_all!(BindableNethunsSocket<state::Shared>: Send);
+
 impl<State: RcState> BindableNethunsSocket<State> {
     /// Open a new Nethuns socket, by calling the `open` function
     /// of the struct belonging to the I/O framework selected at compile time.
