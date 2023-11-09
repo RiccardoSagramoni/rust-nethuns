@@ -11,8 +11,7 @@
 use std::ffi::CStr;
 use std::fmt::Debug;
 
-use nethuns_hybrid_rc::state_trait::RcState;
-
+use crate::misc::hybrid_rc::state_trait::RcState;
 use crate::types::{NethunsQueue, NethunsSocketOptions, NethunsStat};
 
 use super::base::{NethunsSocketBase, RecvPacketData};

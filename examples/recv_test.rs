@@ -3,7 +3,7 @@ use std::env;
 
 use etherparse::Ethernet2Header;
 use nethuns::sockets::base::RecvPacket;
-use nethuns::sockets::{BindableNethunsSocket, NethunsSocket};
+use nethuns::sockets::{BindableNethunsSocket, NethunsSocket, Local};
 use nethuns::types::{
     NethunsCaptureDir, NethunsCaptureMode, NethunsQueue, NethunsSocketMode,
     NethunsSocketOptions,
@@ -12,7 +12,6 @@ use nethuns::vlan::{
     nethuns_vlan_tci, nethuns_vlan_tci_, nethuns_vlan_tpid, nethuns_vlan_tpid_,
     nethuns_vlan_vid,
 };
-use nethuns_hybrid_rc::state::{Local, Shared};
 
 
 fn main() {

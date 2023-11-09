@@ -1,6 +1,7 @@
 pub(crate) mod circular_buffer;
+pub(crate) mod hybrid_rc;
 
-use nethuns_hybrid_rc::state_trait::RcState;
+use hybrid_rc::state_trait::RcState;
 
 use crate::sockets::NethunsSocket;
 use crate::types::NethunsQueue;

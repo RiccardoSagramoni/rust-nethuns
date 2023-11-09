@@ -1,7 +1,7 @@
 use std::time::Duration;
 use std::{env, thread};
 
-use nethuns::sockets::BindableNethunsSocket;
+use nethuns::sockets::{BindableNethunsSocket, Local, NethunsSocket};
 use nethuns::types::{
     NethunsCaptureDir, NethunsCaptureMode, NethunsQueue, NethunsSocketMode,
     NethunsSocketOptions,
@@ -29,7 +29,7 @@ fn main() {
         tx_qdisc_bypass: false,
         ..Default::default()
     };
-    let socket = BindableNethunsSocket::open(opt)
+    let socket: NethunsSocket<Local> = BindableNethunsSocket::open(opt)
         .expect("Failed to open socket")
         .bind(
             &env::args()

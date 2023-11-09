@@ -13,8 +13,7 @@ use std::cell::UnsafeCell;
 use std::ffi::CStr;
 use std::marker::PhantomData;
 
-use nethuns_hybrid_rc::state_trait::RcState;
-
+use crate::misc::hybrid_rc::state_trait::RcState;
 use crate::types::{
     NethunsFilter, NethunsQueue, NethunsSocketOptions, NethunsStat,
 };
@@ -32,18 +31,18 @@ use self::errors::{
 
 /// Mark [`BindableNethunsSocket`], [`NethunsSocket`] or [`RecvPacket`] as local,
 /// i.e. as referenceable from a single thread.
-/// 
+///
 /// Derived from the [`HybridRc`](https://docs.rs/hybrid-rc/) crate.
-/// 
+///
 /// # Original documentation
-pub use nethuns_hybrid_rc::state::Local;
+pub use crate::misc::hybrid_rc::state::Local;
 /// Mark [`BindableNethunsSocket`], [`NethunsSocket`] or [`RecvPacket`] as shared,
 /// i.e. as referenceable from multiple threads.
 ///
 /// Derived from the [`HybridRc`](https://docs.rs/hybrid-rc/) crate.
-/// 
+///
 /// # Original documentation
-pub use nethuns_hybrid_rc::state::Shared;
+pub use crate::misc::hybrid_rc::state::Shared;
 
 
 /// Type for a Nethuns socket not binded to a specific device and queue.

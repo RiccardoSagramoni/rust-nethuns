@@ -2,12 +2,12 @@ use std::sync::atomic::{AtomicU8, Ordering};
 use std::{cmp, ptr};
 
 use getset::{Getters, MutGetters};
-use nethuns_hybrid_rc::state_trait::RcState;
-use nethuns_hybrid_rc::HybridRc;
 
 use super::api::Pkthdr;
 
 use crate::misc::circular_buffer::CircularBuffer;
+use crate::misc::hybrid_rc::state_trait::RcState;
+use crate::misc::hybrid_rc::HybridRc;
 
 
 /// Ring abstraction for Nethuns sockets.

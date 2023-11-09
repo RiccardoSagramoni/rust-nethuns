@@ -4,9 +4,9 @@ use std::{thread, time};
 
 use c_netmap_wrapper::macros::{netmap_buf, netmap_rxring};
 use c_netmap_wrapper::{NetmapRing, NmPortDescriptor};
-use nethuns_hybrid_rc::state_trait::RcState;
 
 use crate::misc::circular_buffer::CircularBuffer;
+use crate::misc::hybrid_rc::state_trait::RcState;
 use crate::misc::nethuns_dev_queue_name;
 use crate::nethuns::__nethuns_set_if_promisc;
 use crate::sockets::api::BindableNethunsSocketInnerTrait;

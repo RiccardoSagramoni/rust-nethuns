@@ -7,10 +7,10 @@ use std::sync::atomic;
 
 use derivative::Derivative;
 use getset::{CopyGetters, Getters, Setters};
-use nethuns_hybrid_rc::state::{Local, Shared};
-use nethuns_hybrid_rc::state_trait::RcState;
-use nethuns_hybrid_rc::HybridRc;
 
+use crate::misc::hybrid_rc::state::{Local, Shared};
+use crate::misc::hybrid_rc::state_trait::RcState;
+use crate::misc::hybrid_rc::HybridRc;
 use crate::types::{NethunsFilter, NethunsQueue, NethunsSocketOptions};
 
 use super::api::Pkthdr;
