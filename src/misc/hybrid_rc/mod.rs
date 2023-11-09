@@ -35,20 +35,6 @@
  * reference counter. This means that it is thread-safe, while one thread is exempted from
  * the disadvantage of atomic operations being more expensive than ordinary memory accesses.
  *
- * # `no_std` Support
- *
- * This crate provides limited support for `no_std` environments. In this mode `Arc::to_local()` and
- * `Weak::upgrade_local()` only succeed if no `Rc` exists on *any* thread, as threads cannot be
- * reliably identified without `std`.
- *
- * To enable `no_std` mode, disable the default enabled `std` feature in Cargo.toml. A global
- * allocator is required.
- *
- * ```toml
- * [dependencies]
- * hybrid-rc = { version = "…", default-features = false }
- * ```
- *
  * # Examples
  *
  * Multiple threads need a reference to a shared value while one thread needs to clone references
@@ -127,22 +113,19 @@ use alloc::borrow::{Cow, ToOwned};
 use alloc::boxed::Box;
 use alloc::string::String;
 use alloc::vec::Vec;
-use core::any::Any;
-use core::borrow::Borrow;
-use core::cell::Cell;
-use core::convert::{Infallible, TryFrom};
-use core::hash::{Hash, Hasher};
-use core::marker::PhantomData;
-use core::ops::Deref;
-#[cfg(not(feature = "std"))]
-use core::panic::{RefUnwindSafe, UnwindSafe};
-use core::pin::Pin;
-use core::ptr::NonNull;
-use core::sync::atomic;
-use core::sync::atomic::Ordering;
-use core::{cmp, fmt, iter, mem, ptr};
-#[cfg(feature = "std")]
+use std::any::Any;
+use std::borrow::Borrow;
+use std::cell::Cell;
+use std::convert::{Infallible, TryFrom};
+use std::hash::{Hash, Hasher};
+use std::marker::PhantomData;
+use std::ops::Deref;
 use std::panic::{RefUnwindSafe, UnwindSafe};
+use std::pin::Pin;
+use std::ptr::NonNull;
+use std::sync::atomic;
+use std::sync::atomic::Ordering;
+use std::{cmp, fmt, iter, mem, ptr};
 
 mod atomic_thread_id;
 use atomic_thread_id::{AtomicOptionThreadId, ThreadId};
@@ -230,7 +213,6 @@ impl fmt::Display for UpgradeError {
     }
 }
 
-#[cfg(feature = "std")]
 impl std::error::Error for UpgradeError {}
 
 impl From<Infallible> for UpgradeError {
@@ -251,7 +233,6 @@ impl fmt::Display for AllocError {
     }
 }
 
-#[cfg(feature = "std")]
 impl std::error::Error for AllocError {}
 
 impl From<Infallible> for AllocError {

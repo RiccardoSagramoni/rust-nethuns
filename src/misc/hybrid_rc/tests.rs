@@ -8,7 +8,7 @@ use alloc::{format, vec};
 use core::convert::TryInto;
 use core::fmt::Debug;
 use std::collections::hash_map;
-use std::{thread, thread_local};
+use std::{thread, thread_local, cmp};
 
 thread_local! {
     static DROP_COUNTER: Cell<usize> = Cell::new(0);
@@ -141,10 +141,6 @@ fn test_shared_to_local() {
 }
 
 #[test]
-#[cfg_attr(
-    not(feature = "std"),
-    ignore = "not available in no_std environment"
-)]
 fn test_shared_to_local_2() {
     DROP_COUNTER.with(|x| x.set(0));
     let a = Arc::new(Test::default());
@@ -239,10 +235,6 @@ fn test_weak() {
 }
 
 #[test]
-#[cfg_attr(
-    not(feature = "std"),
-    ignore = "not available in no_std environment"
-)]
 fn test_weak_upgrade_local() {
     DROP_COUNTER.with(|x| x.set(0));
     let a = Rc::new(Test::default());
