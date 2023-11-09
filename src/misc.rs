@@ -27,7 +27,9 @@ pub fn nethuns_dev_queue_name(
 
 /// Get the name of the device bounded to the socket.
 #[inline(always)]
-pub fn nethuns_device_name<State: RcState>(socket: &NethunsSocket<State>) -> String {
+pub fn nethuns_device_name<State: RcState>(
+    socket: &NethunsSocket<State>,
+) -> String {
     nethuns_dev_queue_name(
         socket.base().devname().to_str().ok(),
         socket.base().get_queue(),

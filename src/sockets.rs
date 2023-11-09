@@ -21,7 +21,8 @@ use crate::types::{
 
 use self::api::{
     BindableNethunsSocketInner, BindableNethunsSocketInnerTrait,
-    NethunsSocketInner, NethunsSocketTrait, LocalRxNethunsSocketTrait, SharedRxNethunsSocketTrait,
+    LocalRxNethunsSocketTrait, NethunsSocketInner, NethunsSocketTrait,
+    SharedRxNethunsSocketTrait,
 };
 use self::base::{NethunsSocketBase, RecvPacket, RecvPacketData};
 use self::errors::{
@@ -111,7 +112,7 @@ impl<State: RcState> NethunsSocket<State> {
         }
     }
 
-    
+
     /// Queue up a packet for transmission.
     ///
     /// # Returns
@@ -153,7 +154,7 @@ impl<State: RcState> NethunsSocket<State> {
         unsafe { (*UnsafeCell::raw_get(&self.inner)).send_slot(id, len) }
     }
 
-
+    
     /// Set the optional packet filtering function.
     ///
     /// # Parameters
@@ -273,14 +274,12 @@ impl NethunsSocket<Shared> {
     /// * `Err(NethunsRecvError::Error)` - If an unexpected error occurs.
     pub fn recv(
         &self,
-    ) -> Result<RecvPacket<NethunsSocket<Shared>, Shared>, NethunsRecvError> {
+    ) -> Result<RecvPacket<NethunsSocket<Shared>, Shared>, NethunsRecvError>
+    {
         unsafe { (*UnsafeCell::raw_get(&self.inner)).recv() }
             .map(|data| RecvPacket::new(data, PhantomData))
     }
 }
-
-
-
 
 
 /// Trait for the `Pkthdr` struct,

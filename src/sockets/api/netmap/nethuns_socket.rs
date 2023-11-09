@@ -13,7 +13,10 @@ use nethuns_hybrid_rc::HybridRc;
 
 use crate::misc::circular_buffer::CircularBuffer;
 use crate::nethuns::__nethuns_clear_if_promisc;
-use crate::sockets::api::{LocalRxNethunsSocketTrait, NethunsSocketTrait, SharedRxNethunsSocketTrait, Pkthdr};
+use crate::sockets::api::{
+    LocalRxNethunsSocketTrait, NethunsSocketTrait, Pkthdr,
+    SharedRxNethunsSocketTrait,
+};
 use crate::sockets::base::{NethunsSocketBase, RecvPacketData};
 use crate::sockets::errors::{
     NethunsFlushError, NethunsRecvError, NethunsSendError,
