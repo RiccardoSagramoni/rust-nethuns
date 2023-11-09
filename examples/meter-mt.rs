@@ -6,12 +6,11 @@ use std::{mem, thread};
 
 use bus::{Bus, BusReader};
 use nethuns::sockets::base::RecvPacket;
-use nethuns::sockets::{BindableNethunsSocket, NethunsSocket};
+use nethuns::sockets::{BindableNethunsSocket, NethunsSocket, Local, Shared};
 use nethuns::types::{
     NethunsCaptureDir, NethunsCaptureMode, NethunsQueue, NethunsSocketMode,
     NethunsSocketOptions,
 };
-use nethuns_hybrid_rc::state::{Shared, Local};
 use num_format::{Locale, ToFormattedString};
 use rtrb::{Consumer, RingBuffer};
 

@@ -8,7 +8,7 @@ use std::time::{Duration, SystemTime};
 use bus::{Bus, BusReader};
 use etherparse::{IpHeader, PacketHeaders};
 use nethuns::sockets::errors::NethunsRecvError;
-use nethuns::sockets::{BindableNethunsSocket, NethunsSocket};
+use nethuns::sockets::{BindableNethunsSocket, NethunsSocket, Shared};
 use nethuns::types::{
     NethunsCaptureDir, NethunsCaptureMode, NethunsQueue, NethunsSocketMode,
     NethunsSocketOptions,
@@ -88,7 +88,7 @@ fn main() {
     };
     
     // Open sockets
-    let mut sockets: Vec<Mutex<NethunsSocket>> =
+    let mut sockets: Vec<Mutex<NethunsSocket<Shared>>> =
         Vec::with_capacity(conf.num_sockets as _);
     for i in 0..sockets.capacity() {
         sockets.push(Mutex::new(setup_rx_ring(
@@ -237,7 +237,7 @@ fn setup_rx_ring(
     conf: &Configuration,
     opt: NethunsSocketOptions,
     sockid: u32,
-) -> NethunsSocket {
+) -> NethunsSocket<Shared> {
     let socket = BindableNethunsSocket::open(opt)
         .expect("Failed to open nethuns socket")
         .bind(
@@ -312,7 +312,7 @@ fn global_meter(totals: Arc<Vec<AtomicU64>>, mut sigint_rx: BusReader<()>) {
 /// Print aggregated stats and per-socket detailed stats
 fn sock_meter(
     sockid: u32,
-    socket: &Mutex<NethunsSocket>,
+    socket: &Mutex<NethunsSocket<Shared>>,
     totals: Arc<Vec<AtomicU64>>,
     mut rx: BusReader<()>,
 ) {
@@ -358,7 +358,7 @@ fn sock_meter(
 
 fn st_execution(
     conf: &Configuration,
-    sockets: Arc<Vec<Mutex<NethunsSocket>>>,
+    sockets: Arc<Vec<Mutex<NethunsSocket<Shared>>>>,
     totals: Arc<Vec<AtomicU64>>,
     mut sigint_rx: BusReader<()>,
 ) -> anyhow::Result<()> {
@@ -399,7 +399,7 @@ fn st_execution(
 fn mt_execution(
     conf: &Configuration,
     sockid: u32,
-    socket: &Mutex<NethunsSocket>,
+    socket: &Mutex<NethunsSocket<Shared>>,
     total: &AtomicU64,
     mut sigint_rx: BusReader<()>,
 ) -> anyhow::Result<()> {
@@ -440,7 +440,7 @@ fn mt_execution(
 fn recv_pkt(
     conf: &Configuration,
     sockid: usize,
-    socket: &NethunsSocket,
+    socket: &NethunsSocket<Shared>,
     total: &AtomicU64,
     count_to_dump: &mut u64,
 ) -> anyhow::Result<()> {
