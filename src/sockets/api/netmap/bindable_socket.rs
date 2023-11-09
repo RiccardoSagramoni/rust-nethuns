@@ -77,10 +77,10 @@ impl<State: RcState> BindableNethunsSocketInnerTrait<State>
     for BindableNethunsSocketNetmap<State>
 {
     fn bind(
-        mut self,
+        mut self: Box<Self>,
         dev: &str,
         queue: NethunsQueue,
-    ) -> Result<NethunsSocket<State>, (NethunsBindError, Self)> {
+    ) -> Result<NethunsSocket<State>, (NethunsBindError, Box<Self>)> {
         // Prepare flag and prefix for device name
         let flags = if !self.tx() {
             "/R".to_owned()

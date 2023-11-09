@@ -15,7 +15,7 @@ use crate::types::{NethunsFilter, NethunsQueue, NethunsSocketOptions};
 
 use super::api::Pkthdr;
 use super::ring::{AtomicRingSlotStatus, NethunsRing, RingSlotStatus};
-use super::{NethunsSocket, PkthdrTrait};
+use super::PkthdrTrait;
 
 
 /// Base structure for a `NethunsSocket`.
@@ -51,9 +51,9 @@ pub struct NethunsSocketBase<State: RcState> {
     #[derivative(Debug = "ignore")]
     #[getset(set = "pub")]
     pub(super) filter: Option<Box<NethunsFilter>>,
+    // errbuf removed => use Result as return type
+    // filter_ctx removed => use closures with move semantics
 }
-// errbuf removed => use Result as return type
-// filter_ctx removed => use closures with move semantics
 
 impl<State: RcState> Default for NethunsSocketBase<State> {
     fn default() -> NethunsSocketBase<State> {
@@ -69,6 +69,10 @@ impl<State: RcState> Default for NethunsSocketBase<State> {
     }
 }
 
+
+//
+
+
 /// Packet received when calling [`NethunsSocket::recv()`](crate::sockets::NethunsSocket::recv)
 /// or [`NethunsSocketPcap::read()`](crate::sockets::pcap::NethunsSocketPcap::read).
 ///
@@ -81,6 +85,7 @@ pub struct RecvPacket<'a, T, State: RcState> {
     phantom_data: PhantomData<&'a T>,
 }
 
+
 /// # Safety
 ///
 /// The `packet` raw pointer is valid as long as the `RecvPacket`
@@ -88,6 +93,7 @@ pub struct RecvPacket<'a, T, State: RcState> {
 /// holders of such pointer for the lifetime of the `RecvPacket` item.
 /// Thus, it can be safely send between threads.
 unsafe impl<T> Send for RecvPacket<'_, T, Shared> {}
+
 
 impl<'a, T, State: RcState> RecvPacket<'a, T, State> {
     pub(super) fn new(
@@ -119,7 +125,10 @@ impl<'a, T, State: RcState> RecvPacket<'a, T, State> {
     }
 }
 
+
 impl<'a, T> RecvPacket<'a, T, Local> {
+    /// Convert the local received packet to a shared one,
+    /// so that it can be sent between threads.
     pub fn to_shared(mut self) -> RecvPacket<'a, T, Shared> {
         let shared_packet = RecvPacket {
             data: RecvPacketData {
@@ -154,6 +163,9 @@ impl<T, State: RcState> Display for RecvPacket<'_, T, State> {
 }
 
 
+//
+
+
 /// Packet received when calling [`NethunsSocket::recv()`](crate::sockets::NethunsSocket::recv)
 /// or [`NethunsSocketPcap::read()`](crate::sockets::pcap::NethunsSocketPcap::read)
 /// with static lifetime.
@@ -167,6 +179,13 @@ pub(super) struct RecvPacketData<State: RcState> {
     buffer_ptr: *const u8,
     buffer_len: usize,
     
+    /// Reference used to set the status flag of the corresponding ring slot
+    /// to `Free` when the `RecPacketData` is dropped.
+    ///
+    /// The [`ManuallyDrop`] wrapper is required to convert a
+    /// [`GenericRecvPacket<'_, T, Local>`] object
+    /// to a [`GenericRecvPacket<'_, T, Shared>`] object without
+    /// calling the [`drop()`] method (which would reset the status flag).
     slot_status_flag: ManuallyDrop<HybridRc<AtomicRingSlotStatus, State>>,
 }
 
@@ -188,14 +207,12 @@ impl<State: RcState> RecvPacketData<State> {
 }
 
 impl<State: RcState> Drop for RecvPacketData<State> {
-    /// Release the buffer obtained by calling `recv()`.
+    /// Release the buffer by resetting the status flag of
+    /// the corresponding ring slot.
     fn drop(&mut self) {
-        // Unset the `inuse` flag of the related ring slot
         self.slot_status_flag
             .store(RingSlotStatus::Free, atomic::Ordering::Release);
         
         mem::drop(unsafe { ManuallyDrop::take(&mut self.slot_status_flag) });
     }
 }
-
-pub type NSRecvPacket<'a, State> = RecvPacket<'a, NethunsSocket<State>, State>;

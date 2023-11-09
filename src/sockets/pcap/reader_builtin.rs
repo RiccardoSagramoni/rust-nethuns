@@ -128,7 +128,7 @@ impl NethunsSocketPcapTrait for NethunsSocketPcapInner {
         let caplen = self.base.opt.packetsize;
         let head_idx = rx_ring.head();
         let slot = rx_ring.get_slot_mut(head_idx);
-        if slot.inuse.load(Ordering::Acquire) != RingSlotStatus::Free {
+        if slot.status.load(Ordering::Acquire) != RingSlotStatus::Free {
             return Err(NethunsPcapReadError::InUse);
         }
         
@@ -164,7 +164,7 @@ impl NethunsSocketPcapTrait for NethunsSocketPcapInner {
             self.reader.seek(SeekFrom::Current(skip))?;
         }
         
-        slot.inuse.store(RingSlotStatus::InUse, Ordering::Release);
+        slot.status.store(RingSlotStatus::InUse, Ordering::Release);
         
         rx_ring.rings_mut().advance_head();
         
@@ -174,7 +174,7 @@ impl NethunsSocketPcapTrait for NethunsSocketPcapInner {
             rx_ring.head(),
             &slot.pkthdr,
             &slot.packet[..bytes as _],
-            slot.inuse.clone(),
+            slot.status.clone(),
         ))
     }
     

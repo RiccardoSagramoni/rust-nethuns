@@ -108,7 +108,7 @@ impl<State: RcState> NethunsRing<State> {
             .skip(pos)
             .take(cmp::min(self.size() - 1, 32))
         {
-            if slot.inuse.load(Ordering::Acquire) == RingSlotStatus::Free {
+            if slot.status.load(Ordering::Acquire) == RingSlotStatus::Free {
                 total += 1;
             } else {
                 break;
@@ -127,7 +127,7 @@ impl<State: RcState> NethunsRing<State> {
     
     
     /// Mark the packet contained in a specific slot of a TX ring
-    /// as *ready for transmission*, by setting to 1 the `inuse` field.
+    /// as *ready for transmission*, by setting to 1 the `status` field.
     ///
     /// # Arguments
     /// * `id` - The id of the slot which contains the packet to send.
@@ -139,11 +139,11 @@ impl<State: RcState> NethunsRing<State> {
     #[inline(always)]
     pub fn nethuns_send_slot(&mut self, id: usize, len: usize) -> bool {
         let slot = self.get_slot_mut(id as _);
-        if slot.inuse.load(Ordering::Acquire) != RingSlotStatus::Free {
+        if slot.status.load(Ordering::Acquire) != RingSlotStatus::Free {
             return false;
         }
         slot.len = len;
-        slot.inuse.store(RingSlotStatus::InUse, Ordering::Release);
+        slot.status.store(RingSlotStatus::InUse, Ordering::Release);
         true
     }
 }
@@ -152,7 +152,7 @@ impl<State: RcState> NethunsRing<State> {
 /// Ring slot of a Nethuns socket.
 #[derive(Debug, Default)]
 pub struct NethunsRingSlot<State: RcState> {
-    pub(crate) inuse: HybridRc<AtomicRingSlotStatus, State>,
+    pub(crate) status: HybridRc<AtomicRingSlotStatus, State>,
     
     pub(crate) pkthdr: Pkthdr,
     pub(crate) id: usize,
@@ -167,7 +167,7 @@ impl<State: RcState> NethunsRingSlot<State> {
     /// with a given packet size.
     pub fn default_with_packet_size(pktsize: usize) -> Self {
         NethunsRingSlot {
-            inuse: HybridRc::new(AtomicRingSlotStatus::new(
+            status: HybridRc::new(AtomicRingSlotStatus::new(
                 RingSlotStatus::Free,
             )),
             pkthdr: Pkthdr::default(),
@@ -283,7 +283,7 @@ macro_rules! nethuns_ring_free_slots {
             let slot = $ring.get_slot($ring.rings().tail());
             
             if $ring.rings().is_empty()
-                || slot.inuse.load(Ordering::Acquire)
+                || slot.status.load(Ordering::Acquire)
                     != crate::sockets::ring::RingSlotStatus::Free
             {
                 break;
