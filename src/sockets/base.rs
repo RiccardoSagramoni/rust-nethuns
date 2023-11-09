@@ -6,6 +6,8 @@ use std::sync::{atomic, Arc};
 
 use derivative::Derivative;
 use getset::{CopyGetters, Getters, Setters};
+use nethuns_hybrid_rc::state::Local;
+use nethuns_hybrid_rc::state_trait::RcState;
 
 use crate::types::{NethunsFilter, NethunsQueue, NethunsSocketOptions};
 
@@ -19,18 +21,18 @@ use super::PkthdrTrait;
 /// This data structure is common to all the implementation of a "nethuns socket",
 /// for the supported underlying I/O frameworks. Thus, it's independent from
 /// low-level implementation of the sockets.
-#[derive(Default, Derivative, Getters, Setters, CopyGetters)]
+#[derive(Derivative, Getters, Setters, CopyGetters)]
 #[derivative(Debug)]
 #[getset(get = "pub")]
-pub struct NethunsSocketBase {
+pub struct NethunsSocketBase<State: RcState> {
     /// Configuration options
     pub(super) opt: NethunsSocketOptions,
     
     /// Rings used for transmission
-    pub(super) tx_ring: Option<NethunsRing>,
+    pub(super) tx_ring: Option<NethunsRing<State>>,
     
     /// Rings used for reception
-    pub(super) rx_ring: Option<NethunsRing>,
+    pub(super) rx_ring: Option<NethunsRing<State>>,
     
     /// Name of the binded device
     pub(super) devname: CString,
@@ -51,6 +53,19 @@ pub struct NethunsSocketBase {
 // errbuf removed => use Result as return type
 // filter_ctx removed => use closures with move semantics
 
+impl<State: RcState> Default for NethunsSocketBase<State> {
+    fn default() -> NethunsSocketBase<State> {
+        NethunsSocketBase {
+            opt: Default::default(),
+            tx_ring: None,
+            rx_ring: None,
+            devname: Default::default(),
+            queue: Default::default(),
+            ifindex: Default::default(),
+            filter: None,
+        }
+    }
+}
 
 /// Packet received when calling [`NethunsSocket::recv()`](crate::sockets::NethunsSocket::recv)
 /// or [`NethunsSocketPcap::read()`](crate::sockets::pcap::NethunsSocketPcap::read).

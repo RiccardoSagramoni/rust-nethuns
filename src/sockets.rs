@@ -1,8 +1,10 @@
 mod api;
 pub mod base;
 pub mod errors;
-pub mod pcap;
+// TODO
+// pub mod pcap;
 mod ring;
+pub mod state;
 
 
 use core::fmt::Debug;
@@ -10,10 +12,13 @@ use std::cell::UnsafeCell;
 use std::ffi::CStr;
 use std::marker::PhantomData;
 
+use nethuns_hybrid_rc::state_trait::RcState;
+
 use crate::types::{
     NethunsFilter, NethunsQueue, NethunsSocketOptions, NethunsStat,
 };
 
+use self::api::{BindableNethunsSocketInner, BindableNethunsSocketInnerTrait};
 use self::base::{NethunsSocketBase, RecvPacket, RecvPacketData};
 use self::errors::{
     NethunsBindError, NethunsFlushError, NethunsOpenError, NethunsRecvError,
@@ -28,12 +33,12 @@ use self::errors::{
 /// to a specific device and queue by calling [`BindableNethunsSocket::bind`]
 #[derive(Debug)]
 #[repr(transparent)]
-pub struct BindableNethunsSocket {
+pub struct BindableNethunsSocket<State: RcState> {
     /// Framework-specific socket
-    inner: Box<dyn BindableNethunsSocketTrait>,
+    inner: BindableNethunsSocketInner<State>,
 }
 
-impl BindableNethunsSocket {
+impl<State: RcState> BindableNethunsSocket<State> {
     /// Open a new Nethuns socket, by calling the `open` function
     /// of the struct belonging to the I/O framework selected at compile time.
     ///
@@ -59,7 +64,7 @@ impl BindableNethunsSocket {
         self,
         dev: &str,
         queue: NethunsQueue,
-    ) -> Result<NethunsSocket, (NethunsBindError, Self)> {
+    ) -> Result<NethunsSocket<State>, (NethunsBindError, Self)> {
         self.inner
             .bind(dev, queue)
             .map_err(|(error, socket)| (error, Self { inner: socket }))
@@ -79,54 +84,19 @@ impl BindableNethunsSocket {
 }
 
 
-/// Trait which defines the interface for the framework-specific
-/// implementation of a [`BindableNethunsSocket`].
-trait BindableNethunsSocketTrait: Debug + Send {
-    /// Bind an opened socket to a specific queue / any queue of interface/device `dev`.
-    ///
-    /// # Returns
-    /// * `Ok(())` - If the binding was successful.
-    /// * `Err(NethunsBindError::IllegalArgument)` - If the device name contains an interior null character.
-    /// * `Err(NethunsBindError::FrameworkError)` - If an error from the unsafe interaction with underlying I/O framework occurs.
-    /// * `Err(NethunsBindError::Error)` - If an unexpected error occurs.
-    fn bind(
-        self: Box<Self>,
-        dev: &str,
-        queue: NethunsQueue,
-    ) -> Result<
-        NethunsSocket,
-        (NethunsBindError, Box<dyn BindableNethunsSocketTrait>),
-    >;
-    
-    /// Get an immutable reference to the base descriptor of the socket.
-    fn base(&self) -> &NethunsSocketBase;
-    
-    /// Check if the socket is in RX mode
-    #[inline(always)]
-    fn rx(&self) -> bool {
-        self.base().rx_ring().is_some()
-    }
-    
-    /// Check if the socket is in TX mode
-    #[inline(always)]
-    fn tx(&self) -> bool {
-        self.base().tx_ring().is_some()
-    }
-}
-
 
 /// Descriptor of a Nethuns socket after binding.
 ///
 /// This socket is usable for RX and/or TX, depending from its configuration.
 #[derive(Debug)]
 #[repr(transparent)]
-pub struct NethunsSocket {
-    inner: UnsafeCell<Box<dyn NethunsSocketTrait>>,
+pub struct NethunsSocket<State: RcState> {
+    inner: UnsafeCell<Box<dyn NethunsSocketTrait<State>>>,
 }
 
-impl NethunsSocket {
+impl<State: RcState> NethunsSocket<State> {
     /// Create a new `NethunsSocket`.
-    fn new(inner: Box<dyn NethunsSocketTrait>) -> Self {
+    fn new(inner: Box<dyn NethunsSocketTrait<State>>) -> Self {
         Self {
             inner: UnsafeCell::new(inner),
         }
@@ -143,7 +113,9 @@ impl NethunsSocket {
     /// * `Err(NethunsRecvError::PacketFiltered)` - If the packet is filtered out by the `filter` function specified during socket configuration.
     /// * `Err(NethunsRecvError::FrameworkError)` - If an error from the unsafe interaction with underlying I/O framework occurs.
     /// * `Err(NethunsRecvError::Error)` - If an unexpected error occurs.
-    pub fn recv(&self) -> Result<RecvPacket<NethunsSocket>, NethunsRecvError> {
+    pub fn recv(
+        &self,
+    ) -> Result<RecvPacket<NethunsSocket<State>>, NethunsRecvError> {
         unsafe { (*UnsafeCell::raw_get(&self.inner)).recv() }
             .map(|data| RecvPacket::new(data, PhantomData))
     }
@@ -249,7 +221,7 @@ impl NethunsSocket {
     
     
     #[inline(always)]
-    pub(crate) fn base(&self) -> &NethunsSocketBase {
+    pub(crate) fn base(&self) -> &NethunsSocketBase<State> {
         unsafe { (*UnsafeCell::raw_get(&self.inner)).base() }
     }
     
@@ -279,7 +251,7 @@ impl NethunsSocket {
 }
 
 /// Trait which defines the interface for a Nethuns socket after binding.
-trait NethunsSocketTrait: Debug + Send {
+trait NethunsSocketTrait<State: RcState>: Debug {
     /// Get the next unprocessed received packet.
     ///
     /// # Returns
@@ -365,9 +337,9 @@ trait NethunsSocketTrait: Debug + Send {
     
     
     /// Get an immutable reference to the base socket descriptor.
-    fn base(&self) -> &NethunsSocketBase;
+    fn base(&self) -> &NethunsSocketBase<State>;
     /// Get a mutable reference to the base socket descriptor.
-    fn base_mut(&mut self) -> &mut NethunsSocketBase;
+    fn base_mut(&mut self) -> &mut NethunsSocketBase<State>;
 }
 
 
