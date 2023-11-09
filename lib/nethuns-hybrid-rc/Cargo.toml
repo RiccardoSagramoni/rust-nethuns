@@ -1,0 +1,29 @@
+[package]
+name = "nethuns-hybrid-rc"
+version = "0.6.0"
+authors = ["Christoph Grenz <christophg+gitorious@grenz-bonn.de>"]
+edition = "2018"
+description = "Thread-safe hybrid reference counting pointers"
+readme = "README.md"
+license = "MPL-2.0"
+keywords = ["reference-counting", "arc", "rc", "hybrid-rc", "biased-rc"]
+categories = ["memory-management", "data-structures", "concurrency"]
+
+[profile.release]
+lto = true
+codegen-units = 1
+
+[profile.bench]
+lto = true
+codegen-units = 1
+
+[features]
+default = ["std"]
+std = []
+
+[dev-dependencies]
+criterion = "0.5.1"
+
+[[bench]]
+name = "benchmark"
+harness = false
