@@ -4,7 +4,6 @@ pub mod errors;
 // TODO
 // pub mod pcap;
 mod ring;
-pub mod state;
 
 pub use api::PkthdrTrait;
 
@@ -14,7 +13,6 @@ use std::cell::UnsafeCell;
 use std::ffi::CStr;
 use std::marker::PhantomData;
 
-use nethuns_hybrid_rc::state::{Local, Shared};
 use nethuns_hybrid_rc::state_trait::RcState;
 
 use crate::types::{
@@ -26,11 +24,26 @@ use self::api::{
     LocalRxNethunsSocketTrait, NethunsSocketInner, NethunsSocketInnerTrait,
     SharedRxNethunsSocketTrait,
 };
-use self::base::{RecvPacket, NethunsSocketBase};
+use self::base::{NethunsSocketBase, RecvPacket};
 use self::errors::{
     NethunsBindError, NethunsFlushError, NethunsOpenError, NethunsRecvError,
     NethunsSendError,
 };
+
+/// Mark [`BindableNethunsSocket`], [`NethunsSocket`] or [`RecvPacket`] as local,
+/// i.e. as referenceable from a single thread.
+/// 
+/// Derived from the [`HybridRc`](https://docs.rs/hybrid-rc/) crate.
+/// 
+/// # Original documentation
+pub use nethuns_hybrid_rc::state::Local;
+/// Mark [`BindableNethunsSocket`], [`NethunsSocket`] or [`RecvPacket`] as shared,
+/// i.e. as referenceable from multiple threads.
+///
+/// Derived from the [`HybridRc`](https://docs.rs/hybrid-rc/) crate.
+/// 
+/// # Original documentation
+pub use nethuns_hybrid_rc::state::Shared;
 
 
 /// Type for a Nethuns socket not binded to a specific device and queue.
@@ -46,7 +59,7 @@ pub struct BindableNethunsSocket<State: RcState> {
 }
 
 // Make sure BindableNethunsSocket is Send
-static_assertions::assert_impl_all!(BindableNethunsSocket<state::Shared>: Send);
+static_assertions::assert_impl_all!(BindableNethunsSocket<Shared>: Send);
 
 impl<State: RcState> BindableNethunsSocket<State> {
     /// Open a new Nethuns socket, by calling the `open` function
@@ -106,7 +119,7 @@ pub struct NethunsSocket<State: RcState> {
 }
 
 // Make sure BindableNethunsSocket is Send
-static_assertions::assert_impl_all!(NethunsSocket<state::Shared>: Send);
+static_assertions::assert_impl_all!(NethunsSocket<Shared>: Send);
 
 impl<State: RcState> NethunsSocket<State> {
     /// Create a new `NethunsSocket`.
@@ -259,8 +272,7 @@ impl NethunsSocket<Local> {
     /// * `Err(NethunsRecvError::Error)` - If an unexpected error occurs.
     pub fn recv(
         &self,
-    ) -> Result<RecvPacket<NethunsSocket<Local>, Local>, NethunsRecvError>
-    {
+    ) -> Result<RecvPacket<NethunsSocket<Local>, Local>, NethunsRecvError> {
         unsafe { (*UnsafeCell::raw_get(&self.inner)).recv() }
             .map(|data| RecvPacket::new(data, PhantomData))
     }
@@ -279,10 +291,8 @@ impl NethunsSocket<Shared> {
     /// * `Err(NethunsRecvError::Error)` - If an unexpected error occurs.
     pub fn recv(
         &self,
-    ) -> Result<
-        RecvPacket<NethunsSocket<Shared>, Shared>,
-        NethunsRecvError,
-    > {
+    ) -> Result<RecvPacket<NethunsSocket<Shared>, Shared>, NethunsRecvError>
+    {
         unsafe { (*UnsafeCell::raw_get(&self.inner)).recv() }
             .map(|data| RecvPacket::new(data, PhantomData))
     }

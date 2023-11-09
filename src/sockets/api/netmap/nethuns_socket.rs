@@ -7,7 +7,6 @@ use c_netmap_wrapper::bindings::{nm_pkt_copy, NS_BUF_CHANGED};
 use c_netmap_wrapper::constants::{NIOCRXSYNC, NIOCTXSYNC};
 use c_netmap_wrapper::macros::{netmap_buf, netmap_txring};
 use c_netmap_wrapper::{netmap_buf_pkt, NetmapRing, NmPortDescriptor};
-use nethuns_hybrid_rc::state::{Local, Shared};
 use nethuns_hybrid_rc::state_trait::RcState;
 use nethuns_hybrid_rc::HybridRc;
 
@@ -25,6 +24,7 @@ use crate::sockets::ring::{
     nethuns_ring_free_slots, AtomicRingSlotStatus, NethunsRingSlot,
     RingSlotStatus,
 };
+use crate::sockets::{Local, Shared};
 use crate::types::NethunsStat;
 
 use super::utility::{
@@ -89,9 +89,7 @@ struct InnerRecvData<'a, State: RcState> {
 }
 
 impl<State: RcState> NethunsSocketNetmap<State> {
-    fn inner_recv(
-        &mut self,
-    ) -> Result<InnerRecvData<State>, NethunsRecvError> {
+    fn inner_recv(&mut self) -> Result<InnerRecvData<State>, NethunsRecvError> {
         // Check if the ring has been binded to a queue and if it's in RX mode
         let rx_ring = match &mut self.base.rx_ring {
             Some(r) => r,
@@ -223,7 +221,9 @@ impl SharedRxNethunsSocketTrait for NethunsSocketNetmap<Shared> {
 }
 
 
-impl<State: RcState> NethunsSocketInnerTrait<State> for NethunsSocketNetmap<State> {
+impl<State: RcState> NethunsSocketInnerTrait<State>
+    for NethunsSocketNetmap<State>
+{
     fn send(&mut self, packet: &[u8]) -> Result<(), NethunsSendError> {
         let tx_ring = match &mut self.base.tx_ring {
             Some(r) => r,

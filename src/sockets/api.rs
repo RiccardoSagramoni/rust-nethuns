@@ -2,14 +2,12 @@
 //! to interact with the specified I/O framework.
 //!
 //! Every framework-specific implementation must provide:
-//! - A struct which implements the [`BindableNethunsSocketTrait`] trait.
-//! - A struct which implements the [`NethunsSocketTrait`] trait.
-//! - A struct named [`Pkthdr`] which must implement the [`PkthdrTrait`] trait.
-//!
-//!
-//! [`BindableNethunsSocketTrait`]: super::BindableNethunsSocketTrait
-//! [`NethunsSocketTrait`]: super::NethunsSocketTrait
-//! [`PkthdrTrait`]: super::PkthdrTrait
+//! - A struct named [`BindableNethunsSocketInner`] which implements
+//! the [`BindableNethunsSocketInnerTrait`] trait.
+//! - A struct named [`NethunsSocketInner`] which implements
+//! the [`NethunsSocketInnerTrait`] trait.
+//! - A struct named [`Pkthdr`] which implements the [`PkthdrTrait`] trait.
+
 use std::ffi::CStr;
 use std::fmt::Debug;
 
@@ -22,17 +20,19 @@ use super::errors::{
     NethunsBindError, NethunsFlushError, NethunsOpenError, NethunsRecvError,
     NethunsSendError,
 };
-use super::state::{Local, Shared};
-use super::NethunsSocket;
+use super::{Local, NethunsSocket, Shared};
 
 
 cfg_if::cfg_if! {
     if #[cfg(feature="netmap")] {
         mod netmap;
         
-        pub type BindableNethunsSocketInner<State> = netmap::BindableNethunsSocketNetmap<State>;
-        pub type NethunsSocketInner<State> = netmap::NethunsSocketNetmap<State>;
-        pub type Pkthdr = netmap::PkthdrNetmap;
+        /// Nethuns socket **before** binding to a specific device and queue.
+        pub(super) type BindableNethunsSocketInner<State> = netmap::BindableNethunsSocketNetmap<State>;
+        /// Nethuns socket **after** binding to a specific device and queue.
+        pub(super) type NethunsSocketInner<State> = netmap::NethunsSocketNetmap<State>;
+        /// Packet header metadata
+        pub(super) type Pkthdr = netmap::PkthdrNetmap;
     }
     else {
         std::compile_error!("The support for the specified I/O framework is not available yet. Check the documentation for more information.");
@@ -50,7 +50,7 @@ cfg_if::cfg_if! {
 /// * `opt`: The options for the socket.
 ///
 /// # Returns
-/// * `Ok(Box<dyn BindableNethunsSocketTrait>)` - A new nethuns socket, in no error occurs.
+/// * `Ok(BindableNethunsSocketInner<State>)` - A new nethuns socket, in no error occurs.
 /// * `Err(NethunsOpenError::InvalidOptions)` - If at least one of the options holds a invalid value.
 /// * `Err(NethunsOpenError::Error)` - If an unexpected error occurs.
 pub(super) fn nethuns_socket_open<State: RcState>(
@@ -71,7 +71,7 @@ pub(super) fn nethuns_socket_open<State: RcState>(
 
 
 /// Trait which defines the interface for the framework-specific
-/// implementation of a [`BindableNethunsSocket`].
+/// implementation of a [`BindableNethunsSocketInner`].
 pub(super) trait BindableNethunsSocketInnerTrait<State: RcState>:
     Debug
 {
@@ -107,7 +107,8 @@ pub(super) trait BindableNethunsSocketInnerTrait<State: RcState>:
 }
 
 
-/// Trait which defines the interface for a Nethuns socket after binding.
+/// Trait which defines the interface for the framework-specific
+/// implementation of a [`NethunsSocketInner`].
 pub(super) trait NethunsSocketInnerTrait<State: RcState>: Debug {
     /// Get an immutable reference to the base socket descriptor.
     fn base(&self) -> &NethunsSocketBase<State>;
@@ -119,7 +120,7 @@ pub(super) trait NethunsSocketInnerTrait<State: RcState>: Debug {
     ///
     /// # Returns
     /// * `Ok(())` - On success.
-    /// * `Err(NethunsSendError::NotTx)` -  If the socket is not configured in TX mode. Check the configuration parameters passed to [`BindableNethunsSocket::open`].
+    /// * `Err(NethunsSendError::NotTx)` -  If the socket is not configured in TX mode. Check the configuration parameters passed to [`BindableNethunsSocket::open`](super::BindableNethunsSocket::open).
     /// * `Err(NethunsSendError::InUse)` - If the slot at the tail of the TX ring is not released yet and it's currently in use by the application.
     fn send(&mut self, packet: &[u8]) -> Result<(), NethunsSendError>;
     
@@ -128,7 +129,7 @@ pub(super) trait NethunsSocketInnerTrait<State: RcState>: Debug {
     ///
     /// # Returns
     /// * `Ok(())` - On success.
-    /// * `Err(NethunsFlushError::NotTx)` -  If the socket is not configured in TX mode. Check the configuration parameters passed to [`BindableNethunsSocket::open`].
+    /// * `Err(NethunsFlushError::NotTx)` -  If the socket is not configured in TX mode. Check the configuration parameters passed to [`BindableNethunsSocket::open`](super::BindableNethunsSocket::open).
     /// * `Err(NethunsFlushError::FrameworkError)` - If an error from the unsafe interaction with underlying I/O framework occurs.
     /// * `Err(NethunsFlushError::Error)` - If an unexpected error occurs.
     fn flush(&mut self) -> Result<(), NethunsFlushError>;
@@ -203,7 +204,7 @@ pub(super) trait SharedRxNethunsSocketTrait:
 //
 
 
-/// Trait for the `Pkthdr` struct,
+/// Trait for the [`Pkthdr`] struct,
 /// which contains the packet header metadata.
 #[allow(clippy::len_without_is_empty)]
 pub trait PkthdrTrait: Debug + Send + Sync {
@@ -213,12 +214,12 @@ pub trait PkthdrTrait: Debug + Send + Sync {
     fn tstamp_set_sec(&mut self, sec: u32);
     fn tstamp_set_usec(&mut self, usec: u32);
     fn tstamp_set_nsec(&mut self, nsec: u32);
-
+    
     fn snaplen(&self) -> u32;
     fn len(&self) -> u32;
     fn set_snaplen(&mut self, len: u32);
     fn set_len(&mut self, len: u32);
-
+    
     fn rxhash(&self) -> u32;
     
     fn offvlan_tpid(&self) -> u16;
@@ -229,7 +230,7 @@ pub trait PkthdrTrait: Debug + Send + Sync {
 //
 
 
-// Check trait implementation
+// Check implementation of API traits
 static_assertions::assert_impl_all!(
     BindableNethunsSocketInner<Local>: BindableNethunsSocketInnerTrait<Local>
 );

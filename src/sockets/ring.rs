@@ -16,7 +16,7 @@ pub struct NethunsRing<State: RcState> {
     #[getset(get = "pub")]
     pktsize: usize,
     
-    #[getset(get = "pub(crate)", get_mut = "pub(crate)")]
+    #[getset(get = "pub", get_mut = "pub")]
     rings: CircularBuffer<NethunsRingSlot<State>>,
 }
 
@@ -152,13 +152,13 @@ impl<State: RcState> NethunsRing<State> {
 /// Ring slot of a Nethuns socket.
 #[derive(Debug, Default)]
 pub struct NethunsRingSlot<State: RcState> {
-    pub(crate) status: HybridRc<AtomicRingSlotStatus, State>,
+    pub status: HybridRc<AtomicRingSlotStatus, State>,
     
-    pub(crate) pkthdr: Pkthdr,
-    pub(crate) id: usize,
-    pub(crate) len: usize,
+    pub pkthdr: Pkthdr,
+    pub id: usize,
+    pub len: usize,
     
-    pub(crate) packet: Vec<u8>,
+    pub packet: Vec<u8>,
 }
 
 
