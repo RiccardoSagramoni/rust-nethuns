@@ -40,7 +40,7 @@ fn main() {
     };
     
     // Open socket
-    let socket: NethunsSocket<Shared> = BindableNethunsSocket::open(opt)
+    let socket: NethunsSocket<Local> = BindableNethunsSocket::open(opt)
         .expect("Failed to open nethuns socket")
         .bind(&conf.dev, NethunsQueue::Any)
         .expect("Failed to bind nethuns socket");
@@ -48,7 +48,7 @@ fn main() {
     thread::scope(|s| {
         // Create SPSC ring buffer
         let (mut pkt_producer, pkt_consumer) =
-            RingBuffer::<RecvPacket<NethunsSocket<Shared>, Shared>>::new(65536);
+            RingBuffer::<RecvPacket<NethunsSocket<Local>, Shared>>::new(65536);
         
         // Create channel for thread communication
         let mut bus: Bus<()> = Bus::new(5);
@@ -82,7 +82,7 @@ fn main() {
                 // Push packet in queue
                 while !pkt_producer.is_abandoned() {
                     if !pkt_producer.is_full() {
-                        pkt_producer.push(pkt).unwrap();
+                        pkt_producer.push(pkt.to_shared()).unwrap();
                         break;
                     }
                 }
@@ -144,7 +144,7 @@ fn set_sigint_handler(mut bus: Bus<()>) {
 
 
 fn consumer_body(
-    mut consumer: Consumer<RecvPacket<NethunsSocket<Shared>, Shared>>,
+    mut consumer: Consumer<RecvPacket<NethunsSocket<Local>, Shared>>,
     mut rx: BusReader<()>,
     total: Arc<AtomicU64>,
 ) {

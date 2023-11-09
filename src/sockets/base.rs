@@ -2,18 +2,20 @@ use core::slice;
 use std::ffi::CString;
 use std::fmt::{self, Debug, Display};
 use std::marker::PhantomData;
+use std::mem::{self, ManuallyDrop};
 use std::sync::atomic;
 
 use derivative::Derivative;
 use getset::{CopyGetters, Getters, Setters};
-use nethuns_hybrid_rc::HybridRc;
+use nethuns_hybrid_rc::state::{Local, Shared};
 use nethuns_hybrid_rc::state_trait::RcState;
+use nethuns_hybrid_rc::HybridRc;
 
 use crate::types::{NethunsFilter, NethunsQueue, NethunsSocketOptions};
 
 use super::api::Pkthdr;
 use super::ring::{AtomicRingSlotStatus, NethunsRing, RingSlotStatus};
-use super::PkthdrTrait;
+use super::{NethunsSocket, PkthdrTrait};
 
 
 /// Base structure for a `NethunsSocket`.
@@ -85,7 +87,7 @@ pub struct RecvPacket<'a, T, State: RcState> {
 /// item is valid and the library guarantees that we are the only
 /// holders of such pointer for the lifetime of the `RecvPacket` item.
 /// Thus, it can be safely send between threads.
-unsafe impl<T: Send, State: RcState> Send for RecvPacket<'_, T, State> {}
+unsafe impl<T> Send for RecvPacket<'_, T, Shared> {}
 
 impl<'a, T, State: RcState> RecvPacket<'a, T, State> {
     pub(super) fn new(
@@ -117,6 +119,28 @@ impl<'a, T, State: RcState> RecvPacket<'a, T, State> {
     }
 }
 
+impl<'a, T> RecvPacket<'a, T, Local> {
+    pub fn to_shared(mut self) -> RecvPacket<'a, T, Shared> {
+        let shared_packet = RecvPacket {
+            data: RecvPacketData {
+                id: self.data.id,
+                pkthdr: self.data.pkthdr,
+                buffer_ptr: self.data.buffer_ptr,
+                buffer_len: self.data.buffer_len,
+                slot_status_flag: ManuallyDrop::new(HybridRc::to_shared(
+                    &self.data.slot_status_flag,
+                )),
+            },
+            phantom_data: self.phantom_data,
+        };
+        mem::drop(unsafe {
+            ManuallyDrop::take(&mut self.data.slot_status_flag)
+        });
+        mem::forget(self);
+        shared_packet
+    }
+}
+
 impl<T, State: RcState> Display for RecvPacket<'_, T, State> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(
@@ -143,7 +167,7 @@ pub(super) struct RecvPacketData<State: RcState> {
     buffer_ptr: *const u8,
     buffer_len: usize,
     
-    slot_status_flag: HybridRc<AtomicRingSlotStatus, State>,
+    slot_status_flag: ManuallyDrop<HybridRc<AtomicRingSlotStatus, State>>,
 }
 
 impl<State: RcState> RecvPacketData<State> {
@@ -158,7 +182,7 @@ impl<State: RcState> RecvPacketData<State> {
             pkthdr: pkthdr as *const Pkthdr,
             buffer_ptr: buffer.as_ptr(),
             buffer_len: buffer.len(),
-            slot_status_flag,
+            slot_status_flag: ManuallyDrop::new(slot_status_flag),
         }
     }
 }
@@ -169,5 +193,9 @@ impl<State: RcState> Drop for RecvPacketData<State> {
         // Unset the `inuse` flag of the related ring slot
         self.slot_status_flag
             .store(RingSlotStatus::Free, atomic::Ordering::Release);
+        
+        mem::drop(unsafe { ManuallyDrop::take(&mut self.slot_status_flag) });
     }
 }
+
+pub type NSRecvPacket<'a, State> = RecvPacket<'a, NethunsSocket<State>, State>;
