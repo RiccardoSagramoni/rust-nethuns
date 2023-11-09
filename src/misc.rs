@@ -39,7 +39,7 @@ pub fn nethuns_device_name<State: RcState>(
 
 
 #[cfg(test)]
-mod test {
+mod tests {
     use super::*;
     
     #[test]
