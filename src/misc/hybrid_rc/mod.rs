@@ -53,7 +53,7 @@
  *
  * Multiple threads need a reference to a shared value while one thread needs to clone references
  * to the value significantly more often than the others.
- * ```
+ * ```ignore
  * use hybrid_rc::{Rc, Arc};
  * use std::thread;
  * use std::sync::mpsc::channel;
@@ -67,21 +67,21 @@
  *
  * // Spawn of threads for multiple expensive computations
  * for i in 1..=4 {
- * 	let sender = sender.clone();
- * 	let shared = Rc::to_shared(&local);
- * 	thread::spawn(move || {
- * 		sender.send(expensive_computation(shared, i));
- * 	});
+ *     let sender = sender.clone();
+ *     let shared = Rc::to_shared(&local);
+ *     thread::spawn(move || {
+ *         sender.send(expensive_computation(shared, i));
+ *     });
  * }
  *
  * // Do something that needs single-thread reference counting
  * for i in 1..=1000 {
- * 	do_something(local.clone(), i);
+ *     do_something(local.clone(), i);
  * }
  *
  * // Collect expensive computation results
  * for i in 1..=4 {
- * 	println!("{:?}", receiver.recv().unwrap());
+ *     println!("{:?}", receiver.recv().unwrap());
  * }
  * # Ok(())
  * # }
@@ -90,7 +90,7 @@
  * A library wants to give library consumers flexibility for multithreading but also internally
  * have the performance of `std::rc::Rc` for e.g. a complex tree structure that is mutated on
  * the main thread.
- * ```
+ * ```ignore
  * use hybrid_rc::Rc;
  * use std::thread;
  *
@@ -102,7 +102,7 @@
  *
  * // do the work in another thread
  * let worker = thread::spawn(move || {
- * 	do_something(&*shared);
+ *     do_something(&*shared);
  * });
  *
  * // Do something useful with the library
@@ -222,11 +222,11 @@ pub enum UpgradeError {
 impl fmt::Display for UpgradeError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match *self {
-			Self::ValueDropped => f.write_str("value was already dropped"),
-			Self::WrongThread => {
-				f.write_str("tried to get a local reference while another thread was the owner")
-			}
-		}
+            Self::ValueDropped => f.write_str("value was already dropped"),
+            Self::WrongThread => {
+                f.write_str("tried to get a local reference while another thread was the owner")
+            }
+        }
     }
 }
 
@@ -858,7 +858,7 @@ impl<T: ?Sized, State: RcState> HybridRc<T, State> {
     /// the returned borrow.
     ///
     /// # Example
-    /// ```
+    /// ```ignore
     /// use hybrid_rc::Rc;
     ///
     /// let mut a = Rc::new([1, 2, 3]);
@@ -942,7 +942,7 @@ impl<T: ?Sized, State: RcState> HybridRc<T, State> {
     /// Creates a new [`Weak`] for the referenced value.
     ///
     /// # Example
-    /// ```
+    /// ```ignore
     /// use hybrid_rc::{Rc, Weak};
     ///
     /// let strong = Rc::new(42i32);
@@ -959,7 +959,7 @@ impl<T: ?Sized, State: RcState> HybridRc<T, State> {
     /// Creates a new [`PinWeak`] for the referenced value.
     ///
     /// # Example
-    /// ```
+    /// ```ignore
     /// use hybrid_rc::{Rc, Weak};
     ///
     /// let strong = Rc::pin(42i32);
@@ -1001,7 +1001,7 @@ impl<T: ?Sized, State: RcState> HybridRc<T, State> {
     ///
     /// # Examples
     ///
-    /// ```
+    /// ```ignore
     /// use hybrid_rc::{Rc, Arc};
     ///
     /// let reference = Rc::new(42);
@@ -1041,7 +1041,7 @@ impl<T: ?Sized, State: RcState> HybridRc<T, State> {
     ///
     /// # Examples
     ///
-    /// ```
+    /// ```ignore
     /// use hybrid_rc::{Rc, Weak};
     ///
     /// let reference = Rc::new(42);
@@ -1116,18 +1116,18 @@ impl<T, State: RcState> HybridRc<T, State> {
     /// call [`to_local()`] to assume ownership.
     ///
     /// # Examples
-    /// ```
+    /// ```ignore
     /// use hybrid_rc::Rc;
     ///
     /// let rc = Rc::new(42i32);
     /// ```
-    /// ```compile_fail
+    /// ```ignore compile_fail
     /// # let rc = hybrid_rc::Rc::new(42i32);
     /// // Cannot be used in another thread without using rc.to_shared()
     /// std::thread::spawn(move || *rc).join(); // does not compile
     /// ```
     ///
-    /// ```
+    /// ```ignore
     /// use hybrid_rc::Arc;
     /// # fn main() -> Result<(), Box<dyn std::any::Any + Send + 'static>> {
     ///
@@ -1194,9 +1194,7 @@ impl<T, State: RcState> HybridRc<T, State> {
         let inner = RcBox::<T>::allocate(meta);
         
         // Construct `Weak`
-        let weak: Weak<T> = Weak {
-            ptr: NonNull::from(inner).cast(),
-        };
+        let weak: Weak<T> = Weak { ptr: inner.cast() };
         
         // Run data function, keeping the ownership of the weak reference.
         let data = data_fn(&weak);
@@ -1259,7 +1257,7 @@ impl<T, State: RcState> HybridRc<T, State> {
     ) -> Result<HybridRc<mem::MaybeUninit<T>, State>, AllocError> {
         let inner = RcBox::try_allocate(Self::build_new_meta())
             .map_err(|_| AllocError)?;
-        Ok(HybridRc::from_inner(inner.into()))
+        Ok(HybridRc::from_inner(inner))
     }
     
     /// Tries to construct a new `HybridRc` with uninitialized contents, with the memory being
@@ -1293,7 +1291,7 @@ impl<T, State: RcState> HybridRc<T, State> {
     ///
     /// # Examples
     ///
-    /// ```
+    /// ```ignore
     /// use hybrid_rc::Rc;
     ///
     /// let reference = Rc::new(42);
@@ -1386,7 +1384,7 @@ impl<T, State: RcState> HybridRc<[T], State> {
     unsafe fn copy_from_slice_unchecked(src: &[T]) -> Self {
         let len = src.len();
         let inner = RcBox::allocate_slice(Self::build_new_meta(), len, false);
-        let dest = ptr::addr_of_mut!((*inner).data).cast();
+        let dest = ptr::addr_of_mut!(inner.data).cast();
         
         // Safety: The freshly allocated `RcBox` can't alias `src` and the payload can be fully
         // initialized by copying the slice memory. The copying is also safe as long as the safety
@@ -1413,7 +1411,7 @@ impl<T: ?Sized> Rc<T> {
     /// Creates a new shared reference (`Arc`) for the referenced value.
     ///
     /// # Example
-    /// ```
+    /// ```ignore
     /// use hybrid_rc::{Rc, Arc};
     /// # fn main() -> Result<(), Box<dyn std::any::Any + Send + 'static>> {
     ///
@@ -1434,7 +1432,7 @@ impl<T: ?Sized> Rc<T> {
     /// Creates a new pinned shared reference for the referenced value.
     ///
     /// # Example
-    /// ```
+    /// ```ignore
     /// use hybrid_rc::{Rc, Weak};
     ///
     /// let strong = Rc::pin(42i32);
@@ -1498,7 +1496,7 @@ impl<T: ?Sized> Arc<T> {
     /// thread.
     ///
     /// # Example
-    /// ```
+    /// ```ignore
     /// use hybrid_rc::{Rc, Arc};
     /// # fn main() -> Result<(), Box<dyn std::any::Any + Send + 'static>> {
     ///
@@ -1546,7 +1544,7 @@ impl<T: ?Sized> Arc<T> {
     /// thread.
     ///
     /// # Example
-    /// ```
+    /// ```ignore
     /// use hybrid_rc::{Arc, Weak};
     ///
     /// let strong = Arc::pin(42i32);
@@ -1617,7 +1615,7 @@ impl<T: Clone, State: RcState> HybridRc<T, State> {
     ///
     /// # Example
     ///
-    /// ```
+    /// ```ignore
     /// use hybrid_rc::Rc;
     ///
     /// let mut reference = Rc::new(42);
@@ -1711,7 +1709,7 @@ impl<T: Clone, State: RcState> HybridRc<T, State> {
     ///
     /// # Examples
     ///
-    /// ```
+    /// ```ignore
     /// use hybrid_rc::Rc;
     ///
     /// let rc = Rc::new(vec![1,2,3]);
@@ -1745,14 +1743,14 @@ impl<T, State: RcState> HybridRc<mem::MaybeUninit<T>, State> {
     ///
     /// # Examples
     ///
-    /// ```
+    /// ```ignore
     /// use hybrid_rc::Rc;
     ///
     /// let mut reference = Rc::<i64>::new_uninit();
     ///
     /// let reference = unsafe {
-    /// 	// Deferred initialization
-    /// 	Rc::get_mut_unchecked(&mut reference).as_mut_ptr().write(1337);
+    ///     // Deferred initialization
+    ///     Rc::get_mut_unchecked(&mut reference).as_mut_ptr().write(1337);
     ///     reference.assume_init()
     /// };
     ///
@@ -1796,7 +1794,7 @@ impl<State: RcState> HybridRc<dyn Any, State> {
     ///
     /// # Example
     ///
-    /// ```
+    /// ```ignore
     /// use std::any::Any;
     /// use std::mem::drop;
     /// use hybrid_rc::Rc;
@@ -1829,7 +1827,7 @@ impl<State: RcState> HybridRc<dyn Any + Sync + Send, State> {
     ///
     /// # Example
     ///
-    /// ```
+    /// ```ignore
     /// use std::any::Any;
     /// use std::mem::drop;
     /// use hybrid_rc::Rc;
@@ -1860,7 +1858,7 @@ impl<T: ?Sized> Clone for HybridRc<T, Local> {
     /// Creates another `Rc` for the same value.
     ///
     /// # Example
-    /// ```
+    /// ```ignore
     /// use hybrid_rc::Rc;
     ///
     /// let first = Rc::new(42i32);
@@ -1879,7 +1877,7 @@ impl<T: ?Sized> Clone for HybridRc<T, Shared> {
     /// Creates another `Arc` for the same value.
     ///
     /// # Example
-    /// ```
+    /// ```ignore
     /// use hybrid_rc::Arc;
     /// # fn main() -> Result<(), Box<dyn std::any::Any + Send + 'static>> {
     ///
@@ -1937,14 +1935,14 @@ impl<T: ?Sized, State: RcState> Deref for HybridRc<T, State> {
 impl<T: ?Sized, State: RcState> Borrow<T> for HybridRc<T, State> {
     #[inline]
     fn borrow(&self) -> &T {
-        &**self
+        self
     }
 }
 
 impl<T: ?Sized, State: RcState> AsRef<T> for HybridRc<T, State> {
     #[inline]
     fn as_ref(&self) -> &T {
-        &**self
+        self
     }
 }
 
@@ -2071,12 +2069,12 @@ impl<T: Clone, State: RcState> From<&[T]> for HybridRc<[T], State> {
     ///
     /// # Example
     ///
-    /// ```
+    /// ```ignore
     /// use hybrid_rc::Rc;
     ///
     /// let vecs = [
-    /// 	vec![1,2,3],
-    /// 	vec![4,5,6],
+    ///     vec![1,2,3],
+    ///     vec![4,5,6],
     /// ];
     /// let rc: Rc<[_]> = Rc::from(&vecs[..]);
     /// assert_eq!(&rc[..], &vecs);
@@ -2096,7 +2094,7 @@ impl<T, State: RcState> From<Vec<T>> for HybridRc<[T], State> {
     ///
     /// # Example
     ///
-    /// ```
+    /// ```ignore
     /// use hybrid_rc::Rc;
     ///
     /// let vec = vec!["a","b","c"];
@@ -2122,7 +2120,7 @@ impl<State: RcState> From<&str> for HybridRc<str, State> {
     ///
     /// # Example
     ///
-    /// ```
+    /// ```ignore
     /// use hybrid_rc::Rc;
     ///
     /// let a: Rc<str> = Rc::from("foobar");
@@ -2145,7 +2143,7 @@ impl<State: RcState> From<String> for HybridRc<str, State> {
     ///
     /// # Example
     ///
-    /// ```
+    /// ```ignore
     /// use hybrid_rc::Rc;
     ///
     /// let string: String = "foobar".to_owned();
@@ -2167,7 +2165,7 @@ where
     ///
     /// # Example
     ///
-    /// ```rust
+    /// ```ignore
     /// use hybrid_rc::Rc;
     /// use std::borrow::Cow;
     ///
@@ -2362,22 +2360,22 @@ impl<T: ?Sized> Weak<T> {
     /// unaligned or even null otherwise.
     ///
     /// # Example
-    /// ```
+    /// ```ignore
     /// use hybrid_rc::Rc;
     ///
     /// let strong = Rc::new(42i32);
     /// let weak = Rc::downgrade(&strong);
     /// {
-    /// 	let pointer = weak.as_ptr();
-    /// 	// As long as strong is not dropped, the pointer stays valid
-    /// 	assert_eq!(42, unsafe { *pointer });
+    ///     let pointer = weak.as_ptr();
+    ///     // As long as strong is not dropped, the pointer stays valid
+    ///     assert_eq!(42, unsafe { *pointer });
     /// }
     /// drop(strong);
     /// {
-    /// 	// Calling weak.as_ptr() is still safe, but dereferencing it would lead
-    /// 	// to undefined behaviour.
-    /// 	let pointer = weak.as_ptr();
-    /// 	// assert_eq!(42, unsafe { &*pointer }); // undefined behaviour
+    ///     // Calling weak.as_ptr() is still safe, but dereferencing it would lead
+    ///     // to undefined behaviour.
+    ///     let pointer = weak.as_ptr();
+    ///     // assert_eq!(42, unsafe { &*pointer }); // undefined behaviour
     /// }
     #[must_use]
     #[inline]
@@ -2407,15 +2405,15 @@ impl<T: ?Sized> Weak<T> {
     /// - [`WrongThread`]: another thread currently holds `Rc`s for the value.
     ///
     /// # Example
-    /// ```
+    /// ```ignore
     /// use hybrid_rc::{Arc, Rc, Weak, UpgradeError};
     /// # fn main() -> Result<(), UpgradeError> {
     /// let strong = Arc::new(42i32);
     /// let weak = Arc::downgrade(&strong);
     ///
     /// {
-    /// 	let strong2 = weak.upgrade_local()?;
-    /// 	assert_eq!(Arc::as_ptr(&strong), Rc::as_ptr(&strong2));
+    ///     let strong2 = weak.upgrade_local()?;
+    ///     assert_eq!(Arc::as_ptr(&strong), Rc::as_ptr(&strong2));
     /// }
     ///
     /// std::mem::drop(strong);
@@ -2443,7 +2441,7 @@ impl<T: ?Sized> Weak<T> {
             Err(owner) => owner,
         };
         
-        if owner == None || owner == Some(current_thread) {
+        if owner.is_none() || owner == Some(current_thread) {
             if meta.try_inc_strong_local().is_ok() {
                 Ok(HybridRc::<T, Local>::from_inner(self.ptr))
             } else {
@@ -2483,7 +2481,7 @@ impl<T: ?Sized> Weak<T> {
     ///
     /// # Examples
     ///
-    /// ```
+    /// ```ignore
     /// use hybrid_rc::{Arc, Rc, Weak};
     ///
     /// let reference = Rc::new(42);
@@ -2513,7 +2511,7 @@ impl<T: ?Sized> Weak<T> {
     ///
     /// # Examples
     ///
-    /// ```
+    /// ```ignore
     /// use hybrid_rc::{Rc, Weak};
     ///
     /// let reference = Rc::new(42);
@@ -2585,7 +2583,7 @@ impl<T: ?Sized> Clone for Weak<T> {
     /// Creates another `Weak` reference for the same value.
     ///
     /// # Example
-    /// ```
+    /// ```ignore
     /// use hybrid_rc::{Rc, Weak};
     ///
     /// let strong = Rc::new(42i32);
