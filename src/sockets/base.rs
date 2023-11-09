@@ -2,11 +2,11 @@ use core::slice;
 use std::ffi::CString;
 use std::fmt::{self, Debug, Display};
 use std::marker::PhantomData;
-use std::sync::{atomic, Arc};
+use std::sync::atomic;
 
 use derivative::Derivative;
 use getset::{CopyGetters, Getters, Setters};
-use nethuns_hybrid_rc::state::Local;
+use nethuns_hybrid_rc::HybridRc;
 use nethuns_hybrid_rc::state_trait::RcState;
 
 use crate::types::{NethunsFilter, NethunsQueue, NethunsSocketOptions};
@@ -73,8 +73,8 @@ impl<State: RcState> Default for NethunsSocketBase<State> {
 /// The struct contains a [`PhantomData`] marker associated with the socket itself,
 /// so that the `RecvPacket` item is valid as long as the socket is alive.
 #[derive(Debug)]
-pub struct RecvPacket<'a, T> {
-    data: RecvPacketData,
+pub struct RecvPacket<'a, T, State: RcState> {
+    data: RecvPacketData<State>,
     
     phantom_data: PhantomData<&'a T>,
 }
@@ -85,11 +85,11 @@ pub struct RecvPacket<'a, T> {
 /// item is valid and the library guarantees that we are the only
 /// holders of such pointer for the lifetime of the `RecvPacket` item.
 /// Thus, it can be safely send between threads.
-unsafe impl<T: Send> Send for RecvPacket<'_, T> {}
+unsafe impl<T: Send, State: RcState> Send for RecvPacket<'_, T, State> {}
 
-impl<'a, T> RecvPacket<'a, T> {
+impl<'a, T, State: RcState> RecvPacket<'a, T, State> {
     pub(super) fn new(
-        data: RecvPacketData,
+        data: RecvPacketData<State>,
         phantom_data: PhantomData<&'a T>,
     ) -> Self {
         RecvPacket { data, phantom_data }
@@ -117,7 +117,7 @@ impl<'a, T> RecvPacket<'a, T> {
     }
 }
 
-impl<T> Display for RecvPacket<'_, T> {
+impl<T, State: RcState> Display for RecvPacket<'_, T, State> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(
             f,
@@ -136,22 +136,22 @@ impl<T> Display for RecvPacket<'_, T> {
 ///
 /// It **must** be wrapped inside `RecvPacket` struct before being handed to the user.
 #[derive(Debug)]
-pub(super) struct RecvPacketData {
+pub(super) struct RecvPacketData<State: RcState> {
     id: usize,
     pkthdr: *const dyn PkthdrTrait,
     
     buffer_ptr: *const u8,
     buffer_len: usize,
     
-    slot_status_flag: Arc<AtomicRingSlotStatus>,
+    slot_status_flag: HybridRc<AtomicRingSlotStatus, State>,
 }
 
-impl RecvPacketData {
+impl<State: RcState> RecvPacketData<State> {
     pub fn new(
         id: usize,
         pkthdr: &Pkthdr,
         buffer: &[u8],
-        slot_status_flag: Arc<AtomicRingSlotStatus>,
+        slot_status_flag: HybridRc<AtomicRingSlotStatus, State>,
     ) -> Self {
         Self {
             id,
@@ -163,7 +163,7 @@ impl RecvPacketData {
     }
 }
 
-impl Drop for RecvPacketData {
+impl<State: RcState> Drop for RecvPacketData<State> {
     /// Release the buffer obtained by calling `recv()`.
     fn drop(&mut self) {
         // Unset the `inuse` flag of the related ring slot

@@ -10,22 +10,28 @@
 //! [`BindableNethunsSocketTrait`]: super::BindableNethunsSocketTrait
 //! [`NethunsSocketTrait`]: super::NethunsSocketTrait
 //! [`PkthdrTrait`]: super::PkthdrTrait
+use std::ffi::CStr;
 use std::fmt::Debug;
 
+use nethuns_hybrid_rc::state::{Local, Shared};
 use nethuns_hybrid_rc::state_trait::RcState;
 
-use crate::types::{NethunsQueue, NethunsSocketOptions};
+use crate::types::{NethunsQueue, NethunsSocketOptions, NethunsStat};
 
-use super::base::NethunsSocketBase;
-use super::errors::{NethunsBindError, NethunsOpenError};
+use super::base::{NethunsSocketBase, RecvPacketData};
+use super::errors::{
+    NethunsBindError, NethunsFlushError, NethunsOpenError, NethunsRecvError,
+    NethunsSendError,
+};
 use super::NethunsSocket;
 
 
 cfg_if::cfg_if! {
     if #[cfg(feature="netmap")] {
         mod netmap;
-        
+
         pub type BindableNethunsSocketInner<State> = netmap::BindableNethunsSocketNetmap<State>;
+        pub type NethunsSocketInner<State> = netmap::NethunsSocketNetmap<State>;
         pub type Pkthdr = netmap::PkthdrNetmap;
     }
     else {
@@ -60,7 +66,9 @@ pub(super) fn nethuns_socket_open<State: RcState>(
 
 /// Trait which defines the interface for the framework-specific
 /// implementation of a [`BindableNethunsSocket`].
-pub(super) trait BindableNethunsSocketInnerTrait<State: RcState>: Debug {
+pub(super) trait BindableNethunsSocketInnerTrait<State: RcState>:
+    Debug
+{
     /// Bind an opened socket to a specific queue / any queue of interface/device `dev`.
     ///
     /// # Returns
@@ -75,16 +83,16 @@ pub(super) trait BindableNethunsSocketInnerTrait<State: RcState>: Debug {
     ) -> Result<NethunsSocket<State>, (NethunsBindError, Self)>
     where
         Self: Sized;
-    
+
     /// Get an immutable reference to the base descriptor of the socket.
     fn base(&self) -> &NethunsSocketBase<State>;
-    
+
     /// Check if the socket is in RX mode
     #[inline(always)]
     fn rx(&self) -> bool {
         self.base().rx_ring().is_some()
     }
-    
+
     /// Check if the socket is in TX mode
     #[inline(always)]
     fn tx(&self) -> bool {
@@ -93,14 +101,103 @@ pub(super) trait BindableNethunsSocketInnerTrait<State: RcState>: Debug {
 }
 
 
+/// Trait which defines the interface for a Nethuns socket after binding.
+pub(super) trait NethunsSocketTrait<State: RcState>: Debug {
+    /// Get an immutable reference to the base socket descriptor.
+    fn base(&self) -> &NethunsSocketBase<State>;
+    /// Get a mutable reference to the base socket descriptor.
+    fn base_mut(&mut self) -> &mut NethunsSocketBase<State>;
+    
+
+    /// Queue up a packet for transmission.
+    ///
+    /// # Returns
+    /// * `Ok(())` - On success.
+    /// * `Err(NethunsSendError::NotTx)` -  If the socket is not configured in TX mode. Check the configuration parameters passed to [`BindableNethunsSocket::open`].
+    /// * `Err(NethunsSendError::InUse)` - If the slot at the tail of the TX ring is not released yet and it's currently in use by the application.
+    fn send(&mut self, packet: &[u8]) -> Result<(), NethunsSendError>;
+
+
+    /// Send all queued up packets.
+    ///
+    /// # Returns
+    /// * `Ok(())` - On success.
+    /// * `Err(NethunsFlushError::NotTx)` -  If the socket is not configured in TX mode. Check the configuration parameters passed to [`BindableNethunsSocket::open`].
+    /// * `Err(NethunsFlushError::FrameworkError)` - If an error from the unsafe interaction with underlying I/O framework occurs.
+    /// * `Err(NethunsFlushError::Error)` - If an unexpected error occurs.
+    fn flush(&mut self) -> Result<(), NethunsFlushError>;
+
+
+    /// Mark the packet contained in the a specific slot
+    /// of the TX ring as *ready for transmission*.
+    ///
+    /// # Arguments
+    /// * `id` - The id of the slot which contains the packet to send.
+    /// * `len` - The length of the packet.
+    ///
+    /// # Returns
+    /// * `Ok(())` - On success.
+    /// * `Err(NethunsSendError::InUse)` - If the slot is not released yet and it's currently in use by the application.
+    fn send_slot(
+        &mut self,
+        id: usize,
+        len: usize,
+    ) -> Result<(), NethunsSendError>;
+
+
+    /// Get the file descriptor of the socket.
+    fn fd(&self) -> std::os::raw::c_int;
+
+
+    /// Get a mutable reference to the buffer inside
+    /// a specific ring slot which will contain the packet
+    /// to be sent.
+    ///
+    /// Equivalent to `nethuns_get_buf_addr` in the C API.
+    ///
+    /// # Arguments
+    /// * `pktid` - id of the slot.
+    ///
+    /// # Returns
+    /// * `Some(&mut [u8])` - buffer reference.
+    /// * `None` - if the socket is not in TX mode.
+    fn get_packet_buffer_ref(&self, pktid: usize) -> Option<&mut [u8]>;
+
+
+    /// Join a fanout group.
+    ///
+    /// # Arguments
+    /// * `group` - The group id.
+    /// * `fanout` - A string encoding the details of the fanout mode.
+    fn fanout(&mut self, group: i32, fanout: &CStr) -> bool;
+
+
+    /// Dump the rings of the socket.
+    fn dump_rings(&mut self);
+
+
+    /// Get some statistics about the socket
+    /// or `None` on error.
+    fn stats(&self) -> Option<NethunsStat>;
+}
+
+pub(super) trait LocalRxNethunsSocketTrait: Debug + NethunsSocketTrait<Local> {
+    fn recv(&mut self) -> Result<RecvPacketData<Local>, NethunsRecvError>;
+}
+
+pub(super) trait SharedRxNethunsSocketTrait: Debug + NethunsSocketTrait<Shared> {
+    fn recv(&mut self) -> Result<RecvPacketData<Shared>, NethunsRecvError>;
+}
+
+
 #[cfg(test)]
 mod test {
     use is_trait::is_trait;
-    
+
     use crate::sockets::{NethunsSocketTrait, PkthdrTrait};
-    
+
     use super::*;
-    
+
     #[test]
     /// Make sure that the NethunsSocket trait is implemented correctly.
     fn assert_nethuns_socket_trait() {
@@ -136,7 +233,7 @@ mod test {
             }
         }
     }
-    
+
     #[test]
     /// Make sure that the Pkthdr struct implements the PkthdrTrait trait.
     fn assert_pkthdr_trait() {

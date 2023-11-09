@@ -12,6 +12,7 @@ use nethuns::vlan::{
     nethuns_vlan_tci, nethuns_vlan_tci_, nethuns_vlan_tpid, nethuns_vlan_tpid_,
     nethuns_vlan_vid,
 };
+use nethuns_hybrid_rc::state::{Local, Shared};
 
 
 fn main() {
@@ -28,7 +29,7 @@ fn main() {
         tx_qdisc_bypass: false,
         ..Default::default()
     };
-    let socket = BindableNethunsSocket::open(opt)
+    let socket: NethunsSocket<Local> = BindableNethunsSocket::open(opt)
         .expect("Failed to open socket")
         .bind(
             &env::args()
@@ -46,7 +47,7 @@ fn main() {
 }
 
 
-fn dump_packet(pkt: &RecvPacket<NethunsSocket>) {
+fn dump_packet(pkt: &RecvPacket<NethunsSocket<Local>, Local>) {
     let pkthdr = pkt.pkthdr();
     let packet = pkt.buffer();
     
