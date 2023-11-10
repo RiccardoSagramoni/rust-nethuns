@@ -2,7 +2,7 @@ use std::{env, mem};
 
 use nethuns::sockets::errors::NethunsPcapReadError;
 use nethuns::sockets::pcap::NethunsSocketPcap;
-use nethuns::sockets::{BindableNethunsSocket, PkthdrTrait};
+use nethuns::sockets::{BindableNethunsSocket, Local, PkthdrTrait};
 use nethuns::types::{
     NethunsCaptureDir, NethunsCaptureMode, NethunsQueue, NethunsSocketMode,
     NethunsSocketOptions,
@@ -76,8 +76,8 @@ fn run_read_count_mode(conf: Configuration) {
         ..Default::default()
     };
     
-    let socket: NethunsSocketPcap =
-        NethunsSocketPcap::open(opt, &conf.target_name, false)
+    let socket =
+        NethunsSocketPcap::<Local>::open(opt, &conf.target_name, false)
             .expect("unable to open `output` socket");
     
     let mut total: u64 = 0;
@@ -142,14 +142,14 @@ fn run_capture_mode(conf: Configuration) {
         ..Default::default()
     };
     
-    let out_socket = NethunsSocketPcap::open(
+    let out_socket = NethunsSocketPcap::<Local>::open(
         opt.clone(),
         format!("{}.pcap", &conf.target_name).as_str(),
         true,
     )
     .expect("unable to open `output` socket");
     
-    let in_socket = BindableNethunsSocket::open(opt)
+    let in_socket = BindableNethunsSocket::<Local>::open(opt)
         .expect("unable to open `input` socket")
         .bind(&conf.target_name, NethunsQueue::Any)
         .unwrap_or_else(|_| {
