@@ -10,6 +10,8 @@ use cfg_if::cfg_if;
 use derivative::Derivative;
 use getset::CopyGetters;
 
+use crate::misc::hybrid_rc::state::Shared;
+use crate::misc::hybrid_rc::state_trait::RcState;
 use crate::sockets::errors::{
     NethunsPcapOpenError, NethunsPcapReadError, NethunsPcapRewindError,
     NethunsPcapStoreError, NethunsPcapWriteError,
@@ -17,21 +19,24 @@ use crate::sockets::errors::{
 use crate::sockets::PkthdrTrait;
 use crate::types::NethunsSocketOptions;
 
-use super::{NethunsSocketBase, RecvPacket, RecvPacketData};
+use super::base::RecvPacketData;
+use super::{Local, NethunsSocketBase, RecvPacket};
 
 
 /// Nethuns socket for packet capture (PCAP).
-/// 
+///
 /// Depending on the `NETHUNS_USE_BUILTIN_PCAP_READER` feature,
 /// the implementation of this struct will use the standard pcap reader
 /// (STANDARD_PCAP_READER) or a custom built-in pcap reader (BUILTIN_PCAP_READER).
 #[derive(Debug)]
 #[repr(transparent)]
-pub struct NethunsSocketPcap {
-    inner: UnsafeCell<NethunsSocketPcapInner>,
+pub struct NethunsSocketPcap<State: RcState> {
+    inner: UnsafeCell<NethunsSocketPcapInner<State>>,
 }
 
-impl NethunsSocketPcap {
+static_assertions::assert_impl_all!(NethunsSocketPcap<Shared>: Send);
+
+impl<State: RcState> NethunsSocketPcap<State> {
     /// Open the socket for reading captured packets from a file.
     ///
     /// # Arguments
@@ -55,20 +60,6 @@ impl NethunsSocketPcap {
                 inner: UnsafeCell::new(inner),
             }
         })
-    }
-    
-    
-    /// Read a packet from the socket.
-    ///
-    /// # Returns
-    /// * `Ok(RecvPacket<NethunsSocketPcap>)` - the packet read from the socket.
-    /// * `Err(NethunsPcapReadError::InUse)` - if the ring buffer of the nethuns base socket is full.
-    /// * `Err(NethunsPcapOpenError::PcapError)` - if an error occurs while parsing the pcap file (STANDARD_PCAP_READER only).
-    /// * `Err(NethunsPcapOpenError::FileError)` - if an error occurs while accessing the file (BUILTIN_PCAP_READER only).
-    /// * `Err(NethunsPcapOpenError::Eof)` - if the end of the file is reached.
-    pub fn read(&self) -> Result<RecvPacket<NethunsSocketPcap>, NethunsPcapReadError> {
-        unsafe { (*UnsafeCell::raw_get(&self.inner)).read() }
-            .map(|p| RecvPacket::new(p, PhantomData))
     }
     
     
@@ -122,24 +113,59 @@ impl NethunsSocketPcap {
     
     
     /// Get an immutable reference to the nethuns base socket.
-    pub fn base(&self) -> &NethunsSocketBase {
+    pub fn base(&self) -> &NethunsSocketBase<State> {
         unsafe { &(*UnsafeCell::raw_get(&self.inner)).base }
     }
 }
 
+impl NethunsSocketPcap<Local> {
+    /// Read a packet from the socket.
+    ///
+    /// # Returns
+    /// * `Ok(RecvPacket<NethunsSocketPcap>)` - the packet read from the socket.
+    /// * `Err(NethunsPcapReadError::InUse)` - if the ring buffer of the nethuns base socket is full.
+    /// * `Err(NethunsPcapOpenError::PcapError)` - if an error occurs while parsing the pcap file (STANDARD_PCAP_READER only).
+    /// * `Err(NethunsPcapOpenError::FileError)` - if an error occurs while accessing the file (BUILTIN_PCAP_READER only).
+    /// * `Err(NethunsPcapOpenError::Eof)` - if the end of the file is reached.
+    pub fn read(
+        &self,
+    ) -> Result<RecvPacket<Self, Local>, NethunsPcapReadError>
+    {
+        unsafe { (*UnsafeCell::raw_get(&self.inner)).read() }
+            .map(|p| RecvPacket::new(p, PhantomData))
+    }
+}
+
+impl NethunsSocketPcap<Shared> {
+    /// Read a packet from the socket.
+    ///
+    /// # Returns
+    /// * `Ok(RecvPacket<NethunsSocketPcap>)` - the packet read from the socket.
+    /// * `Err(NethunsPcapReadError::InUse)` - if the ring buffer of the nethuns base socket is full.
+    /// * `Err(NethunsPcapOpenError::PcapError)` - if an error occurs while parsing the pcap file (STANDARD_PCAP_READER only).
+    /// * `Err(NethunsPcapOpenError::FileError)` - if an error occurs while accessing the file (BUILTIN_PCAP_READER only).
+    /// * `Err(NethunsPcapOpenError::Eof)` - if the end of the file is reached.
+    pub fn read(
+        &self,
+    ) -> Result<RecvPacket<Self, Shared>, NethunsPcapReadError>
+    {
+        unsafe { (*UnsafeCell::raw_get(&self.inner)).read() }
+            .map(|p| RecvPacket::new(p, PhantomData))
+    }
+}
 
 
-/// Inner struct of the nethuns socket for packet capture (PCAP). 
+/// Inner struct of the nethuns socket for packet capture (PCAP).
 /// It implements the [`NethunsSocketPcapTrait`] trait.
-/// 
-/// The implementation is handled by the modules 
+///
+/// The implementation is handled by the modules
 #[allow(rustdoc::broken_intra_doc_links)]
 #[doc = "[`reader_builtin`] or [`reader_pcap`],"]
-/// depending on the value of the `NETHUNS_USE_BUILTIN_PCAP_READER` feature. 
+/// depending on the value of the `NETHUNS_USE_BUILTIN_PCAP_READER` feature.
 #[derive(Derivative)]
 #[derivative(Debug)]
-struct NethunsSocketPcapInner {
-    base: NethunsSocketBase,
+struct NethunsSocketPcapInner<State: RcState> {
+    base: NethunsSocketBase<State>,
     
     #[derivative(Debug = "ignore")]
     reader: PcapReaderType,
@@ -148,9 +174,20 @@ struct NethunsSocketPcapInner {
     magic: u32,
 }
 
+static_assertions::assert_impl_all!(
+    NethunsSocketPcapInner<Local>:
+        NethunsSocketPcapTrait<Local>,
+        LocalReadSocketPcapTrait
+);
+static_assertions::assert_impl_all!(
+    NethunsSocketPcapInner<Shared>:
+        Send,
+        NethunsSocketPcapTrait<Shared>,
+        SharedReadSocketPcapTrait
+);
 
 /// Public interface for [`NethunsSocketPcapInner`].
-trait NethunsSocketPcapTrait: Debug + Send {
+trait NethunsSocketPcapTrait<State: RcState>: Debug {
     /// Open the socket for reading captured packets from a file.
     ///
     /// # Arguments
@@ -171,17 +208,6 @@ trait NethunsSocketPcapTrait: Debug + Send {
     ) -> Result<Self, NethunsPcapOpenError>
     where
         Self: Sized;
-    
-    
-    /// Read a packet from the socket.
-    ///
-    /// # Returns
-    /// * `Ok(RecvPacket<NethunsSocketPcap>)` - the packet read from the socket.
-    /// * `Err(NethunsPcapReadError::InUse)` - if the ring buffer of the nethuns base socket is full.
-    /// * `Err(NethunsPcapOpenError::PcapError)` - if an error occurs while parsing the pcap file (STANDARD_PCAP_READER only).
-    /// * `Err(NethunsPcapOpenError::FileError)` - if an error occurs while accessing the file (BUILTIN_PCAP_READER only).
-    /// * `Err(NethunsPcapOpenError::Eof)` - if the end of the file is reached.
-    fn read(&mut self) -> Result<RecvPacketData, NethunsPcapReadError>;
     
     
     /// Write a packet already in pcap format to a pcap file.
@@ -225,6 +251,32 @@ trait NethunsSocketPcapTrait: Debug + Send {
     /// * `Err(NethunsPcapRewindError::NotSupported)` - if the `NETHUNS_USE_BUILTIN_PCAP_READER` feature is not enabled (STANDARD_PCAP_READER only).
     /// * `Err(NethunsPcapRewindError::FileError)` - if an I/O error occurs while accessing the file (BUILTIN_PCAP_READER only).
     fn rewind(&mut self) -> Result<u64, NethunsPcapRewindError>;
+}
+
+/// TODO
+trait LocalReadSocketPcapTrait: NethunsSocketPcapTrait<Local> {
+    /// Read a packet from the socket.
+    ///
+    /// # Returns
+    /// * `Ok(RecvPacket<NethunsSocketPcap>)` - the packet read from the socket.
+    /// * `Err(NethunsPcapReadError::InUse)` - if the ring buffer of the nethuns base socket is full.
+    /// * `Err(NethunsPcapOpenError::PcapError)` - if an error occurs while parsing the pcap file (STANDARD_PCAP_READER only).
+    /// * `Err(NethunsPcapOpenError::FileError)` - if an error occurs while accessing the file (BUILTIN_PCAP_READER only).
+    /// * `Err(NethunsPcapOpenError::Eof)` - if the end of the file is reached.
+    fn read(&mut self) -> Result<RecvPacketData<Local>, NethunsPcapReadError>;
+}
+
+/// TODO
+trait SharedReadSocketPcapTrait: NethunsSocketPcapTrait<Shared> {
+    /// Read a packet from the socket.
+    ///
+    /// # Returns
+    /// * `Ok(RecvPacket<NethunsSocketPcap>)` - the packet read from the socket.
+    /// * `Err(NethunsPcapReadError::InUse)` - if the ring buffer of the nethuns base socket is full.
+    /// * `Err(NethunsPcapOpenError::PcapError)` - if an error occurs while parsing the pcap file (STANDARD_PCAP_READER only).
+    /// * `Err(NethunsPcapOpenError::FileError)` - if an error occurs while accessing the file (BUILTIN_PCAP_READER only).
+    /// * `Err(NethunsPcapOpenError::Eof)` - if the end of the file is reached.
+    fn read(&mut self) -> Result<RecvPacketData<Shared>, NethunsPcapReadError>;
 }
 
 

@@ -1,8 +1,7 @@
 mod api;
 pub mod base;
 pub mod errors;
-// TODO
-// pub mod pcap;
+pub mod pcap;
 mod ring;
 
 pub use api::PkthdrTrait;
@@ -271,7 +270,7 @@ impl NethunsSocket<Local> {
     /// * `Err(NethunsRecvError::Error)` - If an unexpected error occurs.
     pub fn recv(
         &self,
-    ) -> Result<RecvPacket<NethunsSocket<Local>, Local>, NethunsRecvError> {
+    ) -> Result<RecvPacket<Self, Local>, NethunsRecvError> {
         unsafe { (*UnsafeCell::raw_get(&self.inner)).recv() }
             .map(|data| RecvPacket::new(data, PhantomData))
     }
@@ -290,7 +289,7 @@ impl NethunsSocket<Shared> {
     /// * `Err(NethunsRecvError::Error)` - If an unexpected error occurs.
     pub fn recv(
         &self,
-    ) -> Result<RecvPacket<NethunsSocket<Shared>, Shared>, NethunsRecvError>
+    ) -> Result<RecvPacket<Self, Shared>, NethunsRecvError>
     {
         unsafe { (*UnsafeCell::raw_get(&self.inner)).recv() }
             .map(|data| RecvPacket::new(data, PhantomData))

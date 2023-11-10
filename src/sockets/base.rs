@@ -216,3 +216,16 @@ impl<State: RcState> Drop for RecvPacketData<State> {
         mem::drop(unsafe { ManuallyDrop::take(&mut self.slot_status_flag) });
     }
 }
+
+/// Temporary object which represents the ouput of the private
+/// function `inner_recv()` of the socket structs
+/// ([`NethunsSocketInner`](super::api::NethunsSocketInner) and 
+/// [`NethunsSocketPcapInner`](super::pcap::NethunsSocketPcapInner)).
+/// 
+/// It will be converted to a [`RecvPacketData`] by the `recv()` function
+pub(super) struct InnerRecvData<'a, State: RcState> {
+    pub(super) id: usize,
+    pub(super) pkthdr: &'a Pkthdr,
+    pub(super) buffer: &'a [u8],
+    pub(super) slot_status_flag: &'a HybridRc<AtomicRingSlotStatus, State>,
+}
