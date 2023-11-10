@@ -219,8 +219,8 @@ impl<State: RcState> Drop for RecvPacketData<State> {
 
 /// Temporary object which represents the ouput of the private
 /// function `inner_recv()` of the socket structs
-/// ([`NethunsSocketInner`](super::api::NethunsSocketInner) and 
-/// [`NethunsSocketPcapInner`](super::pcap::NethunsSocketPcapInner)).
+/// ([`sockets::api::NethunsSocketInner`](crate::sockets::api::NethunsSocketInner) and 
+/// `sockets::pcap::NethunsSocketPcapInner`).
 /// 
 /// It will be converted to a [`RecvPacketData`] by the `recv()` function
 pub(super) struct InnerRecvData<'a, State: RcState> {

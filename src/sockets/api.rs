@@ -203,6 +203,7 @@ pub(super) trait SharedRxNethunsSocketTrait:
 //
 
 
+#[allow(rustdoc::private_intra_doc_links)]
 /// Trait for the [`Pkthdr`] struct,
 /// which contains the packet header metadata.
 #[allow(clippy::len_without_is_empty)]
