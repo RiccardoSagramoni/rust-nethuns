@@ -22,7 +22,7 @@ use self::api::{
     LocalRxNethunsSocketTrait, NethunsSocketInner, NethunsSocketInnerTrait,
     SharedRxNethunsSocketTrait,
 };
-use self::base::{NethunsSocketBase, RecvPacket};
+use self::base::{NSRecvPacket, NethunsSocketBase, RecvPacket};
 use self::errors::{
     NethunsBindError, NethunsFlushError, NethunsOpenError, NethunsRecvError,
     NethunsSendError,
@@ -265,9 +265,7 @@ impl NethunsSocket<Local> {
     /// * `Err(NethunsRecvError::PacketFiltered)` - If the packet is filtered out by the `filter` function specified during socket configuration.
     /// * `Err(NethunsRecvError::FrameworkError)` - If an error from the unsafe interaction with underlying I/O framework occurs.
     /// * `Err(NethunsRecvError::Error)` - If an unexpected error occurs.
-    pub fn recv(
-        &self,
-    ) -> Result<RecvPacket<Self, Local>, NethunsRecvError> {
+    pub fn recv(&self) -> Result<NSRecvPacket<Local, Local>, NethunsRecvError> {
         unsafe { (*UnsafeCell::raw_get(&self.inner)).recv() }
             .map(|data| RecvPacket::new(data, PhantomData))
     }
@@ -286,8 +284,7 @@ impl NethunsSocket<Shared> {
     /// * `Err(NethunsRecvError::Error)` - If an unexpected error occurs.
     pub fn recv(
         &self,
-    ) -> Result<RecvPacket<Self, Shared>, NethunsRecvError>
-    {
+    ) -> Result<NSRecvPacket<Shared, Shared>, NethunsRecvError> {
         unsafe { (*UnsafeCell::raw_get(&self.inner)).recv() }
             .map(|data| RecvPacket::new(data, PhantomData))
     }

@@ -14,8 +14,9 @@ use crate::misc::hybrid_rc::HybridRc;
 use crate::types::{NethunsFilter, NethunsQueue, NethunsSocketOptions};
 
 use super::api::Pkthdr;
+use super::pcap::NethunsSocketPcap;
 use super::ring::{AtomicRingSlotStatus, NethunsRing, RingSlotStatus};
-use super::PkthdrTrait;
+use super::{PkthdrTrait, NethunsSocket};
 
 
 /// Base structure for a `NethunsSocket`.
@@ -85,6 +86,10 @@ pub struct RecvPacket<'a, T, State: RcState> {
     phantom_data: PhantomData<&'a T>,
 }
 
+pub type NSRecvPacket<'a, SocketState, PacketState> =
+    RecvPacket<'a, NethunsSocket<SocketState>, PacketState>;
+pub type PcapRecvPacket<'a, SocketState, PacketState> =
+    RecvPacket<'a, NethunsSocketPcap<SocketState>, PacketState>;
 
 /// # Safety
 ///
@@ -219,9 +224,9 @@ impl<State: RcState> Drop for RecvPacketData<State> {
 
 /// Temporary object which represents the ouput of the private
 /// function `inner_recv()` of the socket structs
-/// ([`sockets::api::NethunsSocketInner`](crate::sockets::api::NethunsSocketInner) and 
+/// ([`sockets::api::NethunsSocketInner`](crate::sockets::api::NethunsSocketInner) and
 /// `sockets::pcap::NethunsSocketPcapInner`).
-/// 
+///
 /// It will be converted to a [`RecvPacketData`] by the `recv()` function
 pub(super) struct InnerRecvData<'a, State: RcState> {
     pub(super) id: usize,
