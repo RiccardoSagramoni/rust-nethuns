@@ -1,13 +1,13 @@
-error[E0432]: unresolved import `nethuns::sockets::pcap`
- --> tests/compile-fail/pcap_socket_dropped_before_packet.rs:1:23
-  |
-1 | use nethuns::sockets::pcap::NethunsSocketPcap;
-  |                       ^^^^ could not find `pcap` in `sockets`
-
-warning: unused import: `nethuns::types::NethunsSocketOptions`
- --> tests/compile-fail/pcap_socket_dropped_before_packet.rs:2:5
-  |
-2 | use nethuns::types::NethunsSocketOptions;
-  |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  |
-  = note: `#[warn(unused_imports)]` on by default
+error[E0505]: cannot move out of `socket` because it is borrowed
+  --> tests/compile-fail/pcap_socket_dropped_before_packet.rs:13:10
+   |
+8  |     let socket = NethunsSocketPcap::<Local>::open(opt, "filename", false).unwrap();
+   |         ------ binding `socket` declared here
+9  |
+10 |     let p1 = socket.read().unwrap();
+   |              ------ borrow of `socket` occurs here
+...
+13 |     drop(socket);
+   |          ^^^^^^ move out of `socket` occurs here
+14 |     drop(p1);
+   |          -- borrow later used here
