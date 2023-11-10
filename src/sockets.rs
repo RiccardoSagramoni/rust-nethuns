@@ -32,16 +32,13 @@ use self::errors::{
 /// i.e. as referenceable from a single thread.
 ///
 /// Derived from the [`HybridRc`](https://docs.rs/hybrid-rc/) crate.
-///
-/// # Original documentation
-pub use crate::misc::hybrid_rc::state::Local;
+pub type Local = crate::misc::hybrid_rc::state::Local;
+
 /// Mark [`BindableNethunsSocket`], [`NethunsSocket`] or [`RecvPacket`] as shared,
 /// i.e. as referenceable from multiple threads.
 ///
 /// Derived from the [`HybridRc`](https://docs.rs/hybrid-rc/) crate.
-///
-/// # Original documentation
-pub use crate::misc::hybrid_rc::state::Shared;
+pub type Shared = crate::misc::hybrid_rc::state::Shared;
 
 
 /// Type for a Nethuns socket not binded to a specific device and queue.
