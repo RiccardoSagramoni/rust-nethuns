@@ -39,7 +39,7 @@ pub struct NethunsSocketNetmap<State: RcState> {
     /// Port descriptor
     p: NmPortDescriptor,
     
-    /// Wrapper of a raw pointer to any [netmap_ring](c_netmap_wrapper::bindings::netmap_ring) object
+    /// Wrapper of a raw pointer to a [netmap_ring](c_netmap_wrapper::bindings::netmap_ring) object
     /// allocated by the kernel in the userspace.
     /// This is required to know the address of the ring buffer.
     some_ring: NetmapRing,
