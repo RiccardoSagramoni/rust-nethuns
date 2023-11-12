@@ -1,11 +1,10 @@
-use std::sync::atomic::{AtomicU64, Ordering};
-use std::sync::mpsc::TryRecvError;
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::Arc;
 use std::time::{Duration, SystemTime};
 use std::{mem, thread};
 
-use bus::{Bus, BusReader};
-use nethuns::sockets::{BindableNethunsSocket, NethunsSocket, Local};
+use nethuns::sockets::errors::NethunsSendError;
+use nethuns::sockets::{BindableNethunsSocket, Local, NethunsSocket};
 use nethuns::types::{
     NethunsCaptureDir, NethunsCaptureMode, NethunsQueue, NethunsSocketMode,
     NethunsSocketOptions,
@@ -25,68 +24,70 @@ fn main() {
     
     let opt = NethunsSocketOptions {
         numblocks: 4,
-        numpackets: 2048,
+        numpackets: 65536,
         packetsize: 2048,
         timeout_ms: 20,
         dir: NethunsCaptureDir::InOut,
         capture: NethunsCaptureMode::Default,
         mode: NethunsSocketMode::RxTx,
-        promisc: true,
+        promisc: false,
         rxhash: false,
         tx_qdisc_bypass: true,
         ..Default::default()
     };
     
     // Open sockets
-    let in_socket: NethunsSocket<Local> = BindableNethunsSocket::open(opt.clone())
-        .unwrap()
-        .bind(&conf.dev_in, NethunsQueue::Any)
-        .unwrap();
+    let in_socket: NethunsSocket<Local> =
+        BindableNethunsSocket::open(opt.clone())
+            .unwrap()
+            .bind(&conf.dev_in, NethunsQueue::Any)
+            .unwrap();
     let out_socket: NethunsSocket<Local> = BindableNethunsSocket::open(opt)
         .unwrap()
         .bind(&conf.dev_out, NethunsQueue::Any)
         .unwrap();
     
     
-    let mut bus: Bus<()> = Bus::new(5);
+    let term = Arc::new(AtomicBool::new(false));
     let total_rcv = Arc::new(AtomicU64::new(0));
     let total_fwd = Arc::new(AtomicU64::new(0));
     
     let meter_th = {
         let total_rcv = total_rcv.clone();
         let total_fwd = total_fwd.clone();
-        let rx = bus.add_rx();
+        let term = term.clone();
         thread::spawn(move || {
-            meter(total_rcv, total_fwd, rx);
+            meter(total_rcv, total_fwd, term);
         })
     };
     
     // Set handler for Ctrl-C
-    let mut bus_rx = bus.add_rx();
-    set_sigint_handler(bus);
+    set_sigint_handler(term.clone());
     
     loop {
         // Check if Ctrl-C was pressed
-        match bus_rx.try_recv() {
-            Ok(_) | Err(TryRecvError::Disconnected) => break,
-            _ => {}
+        if term.load(Ordering::Relaxed) {
+            break;
         }
         
         if let Ok(pkt) = in_socket.recv() {
-            total_rcv.fetch_add(1, Ordering::AcqRel);
+            total_rcv.fetch_add(1, Ordering::SeqCst);
             loop {
                 match out_socket.send(pkt.buffer()) {
                     Ok(_) => break,
-                    Err(_) => {
-                        out_socket.flush().unwrap();
+                    Err(NethunsSendError::InUse) => {
+                        out_socket.flush().expect("flush failed");
+                    }
+                    Err(e) => {
+                        panic!("Error sending packet: {}", e);
                     }
                 }
             }
-            total_fwd.fetch_add(1, Ordering::AcqRel);
+            total_fwd.fetch_add(1, Ordering::SeqCst);
         }
     }
     
-    meter_th.join().expect("join failed");
+    meter_th.join().expect("meter_th join failed");
 }
 
 
@@ -105,14 +106,13 @@ fn get_configuration() -> Configuration {
 fn meter(
     total_rcv: Arc<AtomicU64>,
     total_fwd: Arc<AtomicU64>,
-    mut rx: BusReader<()>,
+    term: Arc<AtomicBool>,
 ) {
     let mut now = SystemTime::now();
     
     loop {
-        match rx.try_recv() {
-            Ok(_) | Err(TryRecvError::Disconnected) => break,
-            _ => (),
+        if term.load(Ordering::Relaxed) {
+            break;
         }
         
         // Sleep for 1 second
@@ -125,12 +125,12 @@ fn meter(
         now = next_sys_time;
         
         // Print statistics
-        let total_rcv = total_rcv.swap(0, Ordering::AcqRel);
-        let total_fwd = total_fwd.swap(0, Ordering::AcqRel);
+        let total_rcv = total_rcv.swap(0, Ordering::SeqCst);
+        let total_fwd = total_fwd.swap(0, Ordering::SeqCst);
         println!(
-            "pkt/sec: {} fwd/sec: {} ",
+            "pkt/sec: {} fwd/sec: {}",
             total_rcv.to_formatted_string(&Locale::en),
-            total_fwd.to_formatted_string(&Locale::en)
+            total_fwd.to_formatted_string(&Locale::en),
         );
     }
 }
@@ -142,10 +142,10 @@ fn meter(
 /// # Arguments
 /// - `bus`: Bus for SPMC (single-producer/multiple-consumers) communication
 ///   between threads.
-fn set_sigint_handler(mut bus: Bus<()>) {
+fn set_sigint_handler(term: Arc<AtomicBool>) {
     ctrlc::set_handler(move || {
         println!("Ctrl-C detected. Shutting down...");
-        bus.broadcast(());
+        term.store(true, Ordering::Relaxed);
     })
     .expect("Error setting Ctrl-C handler");
 }

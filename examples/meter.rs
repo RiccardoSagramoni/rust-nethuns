@@ -1,11 +1,9 @@
 use std::net::{Ipv4Addr, Ipv6Addr};
-use std::sync::atomic::{AtomicU64, Ordering};
-use std::sync::mpsc::TryRecvError;
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
 use std::thread;
 use std::time::{Duration, SystemTime};
 
-use bus::{Bus, BusReader};
 use etherparse::{IpHeader, PacketHeaders};
 use nethuns::sockets::errors::NethunsRecvError;
 use nethuns::sockets::{BindableNethunsSocket, NethunsSocket, Shared};
@@ -81,7 +79,7 @@ fn main() {
         dir: NethunsCaptureDir::InOut,
         capture: NethunsCaptureMode::ZeroCopy,
         mode: NethunsSocketMode::RxTx,
-        promisc: true,
+        promisc: false,
         rxhash: false,
         tx_qdisc_bypass: true,
         ..Default::default()
@@ -108,34 +106,28 @@ fn main() {
     let totals = Arc::new(totals);
     
     // Define bus for SPMC communication between threads
-    let mut sigint_bus: Bus<()> = Bus::new(5);
+    let term = Arc::new(AtomicBool::new(false));
     
     // Create a thread for computing statistics
     let meter_thread = {
         let totals = totals.clone();
-        let sigint_rx = sigint_bus.add_rx();
+        let term = term.clone();
         match conf.sockstats {
             Some(sockid) => {
                 let sockets = sockets.clone();
                 thread::spawn(move || {
-                    sock_meter(
-                        sockid,
-                        &sockets[sockid as usize],
-                        totals,
-                        sigint_rx,
-                    )
+                    sock_meter(sockid, &sockets[sockid as usize], totals, term)
                 })
             }
-            None => thread::spawn(move || global_meter(totals, sigint_rx)),
+            None => thread::spawn(move || global_meter(totals, term)),
         }
     };
     
     
     if !conf.multithreading {
         // case single thread (main) with generic number of sockets
-        let sigint_rx = sigint_bus.add_rx();
-        set_sigint_handler(sigint_bus);
-        st_execution(&conf, sockets, totals, sigint_rx)
+        set_sigint_handler(term.clone());
+        st_execution(&conf, sockets, totals, term)
             .expect("MAIN thread execution failed");
     } else {
         // case multithreading enabled (num_threads == num_sockets)
@@ -144,22 +136,22 @@ fn main() {
         
         for th_idx in 0..conf.num_sockets {
             let conf = conf.clone();
-            let rx = sigint_bus.add_rx();
             let sockets = sockets.clone();
             let totals = totals.clone();
+            let term = term.clone();
             threads.push(thread::spawn(move || {
                 mt_execution(
                     &conf,
                     th_idx,
                     &sockets[th_idx as usize],
                     &totals[th_idx as usize],
-                    rx,
+                    term,
                 )
                 .unwrap_or_else(|_| panic!("Thread {th_idx} execution failed"));
             }));
         }
         
-        set_sigint_handler(sigint_bus);
+        set_sigint_handler(term);
         
         for t in threads {
             if let Err(e) = t.join() {
@@ -274,22 +266,21 @@ fn setup_rx_ring(
 /// # Arguments
 /// - `bus`: Bus for SPMC (single-producer/multiple-consumers) communication
 ///   between threads.
-fn set_sigint_handler(mut bus: Bus<()>) {
+fn set_sigint_handler(term: Arc<AtomicBool>) {
     ctrlc::set_handler(move || {
         println!("Ctrl-C detected. Shutting down...");
-        bus.broadcast(());
+        term.store(true, Ordering::Relaxed);
     })
     .expect("Error setting Ctrl-C handler");
 }
 
 
-fn global_meter(totals: Arc<Vec<AtomicU64>>, mut sigint_rx: BusReader<()>) {
+fn global_meter(totals: Arc<Vec<AtomicU64>>, term: Arc<AtomicBool>) {
     let mut now = SystemTime::now();
     
     loop {
-        match sigint_rx.try_recv() {
-            Ok(_) | Err(TryRecvError::Disconnected) => break,
-            _ => (),
+        if term.load(Ordering::Relaxed) {
+            break;
         }
         
         // Sleep for 1 second
@@ -314,14 +305,13 @@ fn sock_meter(
     sockid: u32,
     socket: &Mutex<NethunsSocket<Shared>>,
     totals: Arc<Vec<AtomicU64>>,
-    mut rx: BusReader<()>,
+    term: Arc<AtomicBool>,
 ) {
     let mut now = SystemTime::now();
     
     loop {
-        match rx.try_recv() {
-            Ok(_) | Err(TryRecvError::Disconnected) => break,
-            _ => (),
+        if term.load(Ordering::Relaxed) {
+            break;
         }
         
         // Sleep for 1 second
@@ -360,15 +350,14 @@ fn st_execution(
     conf: &Configuration,
     sockets: Arc<Vec<Mutex<NethunsSocket<Shared>>>>,
     totals: Arc<Vec<AtomicU64>>,
-    mut sigint_rx: BusReader<()>,
+    term: Arc<AtomicBool>,
 ) -> anyhow::Result<()> {
     let mut count_to_dump: u64 = 0;
     
     loop {
         // Check if Ctrl-C was pressed
-        match sigint_rx.try_recv() {
-            Ok(_) | Err(TryRecvError::Disconnected) => break,
-            _ => {}
+        if term.load(Ordering::Relaxed) {
+            break;
         }
         
         for (id, (sock, tot)) in sockets.iter().zip(totals.iter()).enumerate() {
@@ -401,15 +390,14 @@ fn mt_execution(
     sockid: u32,
     socket: &Mutex<NethunsSocket<Shared>>,
     total: &AtomicU64,
-    mut sigint_rx: BusReader<()>,
+    term: Arc<AtomicBool>,
 ) -> anyhow::Result<()> {
     let mut count_to_dump: u64 = 0;
     
     loop {
         // Check if Ctrl-C was pressed
-        match sigint_rx.try_recv() {
-            Ok(_) | Err(TryRecvError::Disconnected) => break,
-            _ => {}
+        if term.load(Ordering::Relaxed) {
+            break;
         }
         
         match recv_pkt(

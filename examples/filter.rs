@@ -1,10 +1,8 @@
-use std::sync::atomic::{AtomicU64, Ordering};
-use std::sync::mpsc::TryRecvError;
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::Arc;
 use std::time::{Duration, SystemTime};
 use std::{env, thread};
 
-use bus::{Bus, BusReader};
 use nethuns::sockets::errors::NethunsRecvError;
 use nethuns::sockets::{
     BindableNethunsSocket, Local, NethunsSocket, PkthdrTrait,
@@ -35,7 +33,7 @@ fn main() {
         dir: NethunsCaptureDir::InOut,
         capture: NethunsCaptureMode::Default,
         mode: NethunsSocketMode::RxTx,
-        promisc: true,
+        promisc: false,
         rxhash: false,
         tx_qdisc_bypass: true,
         ..Default::default()
@@ -52,29 +50,27 @@ fn main() {
     
     // Stats counter
     let total = Arc::new(AtomicU64::new(0));
-    // Define bus for SPMC communication between threads
-    let mut bus: Bus<()> = Bus::new(5);
+    // Define flag for program termination
+    let term = Arc::new(AtomicBool::new(false));
     
     // Create a thread for computing statistics
     let stats_th = {
         let total = total.clone();
-        let rx = bus.add_rx();
+        let term = term.clone();
         thread::spawn(move || {
-            meter(total, rx);
+            meter(total, term);
         })
     };
     
     // Set handler for Ctrl-C
-    let mut bus_rx = bus.add_rx();
-    set_sigint_handler(bus);
+    set_sigint_handler(term.clone());
     
     
     let mut total2: u64 = 0;
     loop {
         // Check if Ctrl-C was pressed
-        match bus_rx.try_recv() {
-            Ok(_) | Err(TryRecvError::Disconnected) => break,
-            _ => {}
+        if term.load(Ordering::Relaxed) {
+            break;
         }
         
         match socket.recv() {
@@ -104,13 +100,12 @@ fn main() {
 
 
 /// Print statistics about received packets
-fn meter(total: Arc<AtomicU64>, mut rx: BusReader<()>) {
+fn meter(total: Arc<AtomicU64>, term: Arc<AtomicBool>) {
     let mut now = SystemTime::now();
     
     loop {
-        match rx.try_recv() {
-            Ok(_) | Err(TryRecvError::Disconnected) => break,
-            _ => (),
+        if term.load(Ordering::Relaxed) {
+            break;
         }
         
         // Sleep for 1 second
@@ -173,10 +168,10 @@ fn dump_packet(pkthdr: &dyn PkthdrTrait, packet: &[u8]) -> String {
 /// # Arguments
 /// - `bus`: Bus for SPMC (single-producer/multiple-consumers) communication
 ///   between threads.
-fn set_sigint_handler(mut bus: Bus<()>) {
+fn set_sigint_handler(term: Arc<AtomicBool>) {
     ctrlc::set_handler(move || {
         println!("Ctrl-C detected. Shutting down...");
-        bus.broadcast(());
+        term.store(true, Ordering::Relaxed);
     })
     .expect("Error setting Ctrl-C handler");
 }

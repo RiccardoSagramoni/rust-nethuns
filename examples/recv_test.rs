@@ -22,7 +22,7 @@ fn main() {
         dir: NethunsCaptureDir::InOut,
         capture: NethunsCaptureMode::Default,
         mode: NethunsSocketMode::RxTx,
-        promisc: true,
+        promisc: false,
         rxhash: true,
         tx_qdisc_bypass: false,
         ..Default::default()

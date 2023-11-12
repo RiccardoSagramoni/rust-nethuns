@@ -39,7 +39,6 @@ cfg-if = "1.0.0"
 
 [dev-dependencies]
 anyhow = "1.0.75"
-bus = "2.4.1"
 ctrlc = "3.4.1"
 dhat = "0.3.2"
 num-format = "0.4.4"
