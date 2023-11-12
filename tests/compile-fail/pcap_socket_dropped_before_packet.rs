@@ -1,10 +1,11 @@
+use nethuns::sockets::Local;
 use nethuns::sockets::pcap::NethunsSocketPcap;
 use nethuns::types::NethunsSocketOptions;
 
 fn main() {
     let opt = NethunsSocketOptions::default();
     
-    let socket = NethunsSocketPcap::open(opt, "filename", false).unwrap();
+    let socket = NethunsSocketPcap::<Local>::open(opt, "filename", false).unwrap();
     
     let p1 = socket.read().unwrap();
     let p2 = socket.read().unwrap();

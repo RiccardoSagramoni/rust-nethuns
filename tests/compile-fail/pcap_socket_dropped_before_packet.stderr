@@ -1,13 +1,13 @@
 error[E0505]: cannot move out of `socket` because it is borrowed
-  --> tests/compile-fail/pcap_socket_dropped_before_packet.rs:12:10
+  --> tests/compile-fail/pcap_socket_dropped_before_packet.rs:13:10
    |
-7  |     let socket = NethunsSocketPcap::open(opt, "filename", false).unwrap();
+8  |     let socket = NethunsSocketPcap::<Local>::open(opt, "filename", false).unwrap();
    |         ------ binding `socket` declared here
-8  |
-9  |     let p1 = socket.read().unwrap();
+9  |
+10 |     let p1 = socket.read().unwrap();
    |              ------ borrow of `socket` occurs here
 ...
-12 |     drop(socket);
+13 |     drop(socket);
    |          ^^^^^^ move out of `socket` occurs here
-13 |     drop(p1);
+14 |     drop(p1);
    |          -- borrow later used here

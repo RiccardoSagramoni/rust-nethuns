@@ -6,8 +6,8 @@ use std::{mem, thread};
 
 use bus::{Bus, BusReader};
 
-use nethuns::sockets::base::RecvPacket;
-use nethuns::sockets::{BindableNethunsSocket, NethunsSocket};
+use nethuns::sockets::base::NSRecvPacket;
+use nethuns::sockets::{BindableNethunsSocket, Local, NethunsSocket, Shared};
 
 use nethuns::types::{
     NethunsCaptureDir, NethunsCaptureMode, NethunsQueue, NethunsSocketMode,
@@ -41,7 +41,7 @@ fn main() {
         ..Default::default()
     };
     
-    let socket = BindableNethunsSocket::open(opt.clone())
+    let socket: NethunsSocket<Local> = BindableNethunsSocket::open(opt.clone())
         .unwrap()
         .bind(&conf.dev_in, NethunsQueue::Any)
         .unwrap();
@@ -50,7 +50,7 @@ fn main() {
     thread::scope(|s| {
         // Create SPSC ring buffer
         let (mut producer, consumer) =
-            RingBuffer::<RecvPacket<NethunsSocket>>::new(65536);
+            RingBuffer::<NSRecvPacket<Local, Shared>>::new(65536);
         
         // Create channel for thread communication
         let mut bus: Bus<()> = Bus::new(5);
@@ -96,7 +96,7 @@ fn main() {
                 // Push packet in queue
                 while !producer.is_abandoned() {
                     if !producer.is_full() {
-                        producer.push(pkt).unwrap();
+                        producer.push(pkt.to_shared()).unwrap();
                         break;
                     }
                 }
@@ -170,11 +170,11 @@ fn set_sigint_handler(mut bus: Bus<()>) {
 fn consumer_body(
     opt: NethunsSocketOptions,
     dev: &str,
-    mut consumer: Consumer<RecvPacket<NethunsSocket>>,
+    mut consumer: Consumer<NSRecvPacket<Local, Shared>>,
     mut rx: BusReader<()>,
     total_fwd: Arc<AtomicU64>,
 ) {
-    let socket = BindableNethunsSocket::open(opt)
+    let socket: NethunsSocket<Local> = BindableNethunsSocket::open(opt)
         .unwrap()
         .bind(dev, NethunsQueue::Any)
         .unwrap();

@@ -6,7 +6,9 @@ use std::{env, thread};
 
 use bus::{Bus, BusReader};
 use nethuns::sockets::errors::NethunsRecvError;
-use nethuns::sockets::{BindableNethunsSocket, PkthdrTrait};
+use nethuns::sockets::{
+    BindableNethunsSocket, Local, NethunsSocket, PkthdrTrait,
+};
 use nethuns::types::{
     NethunsCaptureDir, NethunsCaptureMode, NethunsQueue, NethunsSocketMode,
     NethunsSocketOptions,
@@ -39,7 +41,7 @@ fn main() {
         ..Default::default()
     };
     
-    let socket = BindableNethunsSocket::open(opt)
+    let socket: NethunsSocket<Local> = BindableNethunsSocket::open(opt)
         .expect("BindableNethunsSocket::open failed")
         .bind(&dev, NethunsQueue::Any)
         .expect("bind failed");
