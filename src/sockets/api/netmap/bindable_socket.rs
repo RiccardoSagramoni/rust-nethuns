@@ -9,11 +9,12 @@ use crate::misc::circular_buffer::CircularBuffer;
 use crate::misc::hybrid_rc::state_trait::RcState;
 use crate::misc::nethuns_dev_queue_name;
 use crate::nethuns::__nethuns_set_if_promisc;
-use crate::sockets::api::BindableNethunsSocketInnerTrait;
+use crate::sockets::api::{
+    BindableNethunsSocketInnerTrait, NethunsSocketInner,
+};
 use crate::sockets::base::NethunsSocketBase;
 use crate::sockets::errors::{NethunsBindError, NethunsOpenError};
 use crate::sockets::ring::NethunsRing;
-use crate::sockets::NethunsSocket;
 use crate::types::{NethunsQueue, NethunsSocketMode, NethunsSocketOptions};
 
 use super::nethuns_socket::NethunsSocketNetmap;
@@ -80,7 +81,8 @@ impl<State: RcState> BindableNethunsSocketInnerTrait<State>
         mut self: Box<Self>,
         dev: &str,
         queue: NethunsQueue,
-    ) -> Result<NethunsSocket<State>, (NethunsBindError, Box<Self>)> {
+    ) -> Result<Box<NethunsSocketInner<State>>, (NethunsBindError, Box<Self>)>
+    {
         // Prepare flag and prefix for device name
         let flags = if !self.tx() {
             "/R".to_owned()
@@ -268,13 +270,13 @@ impl<State: RcState> BindableNethunsSocketInnerTrait<State>
             unsafe { libc::if_nametoindex(self.base.devname.as_ptr()) } as _;
         
         // Build the socket struct and return it
-        let socket = NethunsSocketNetmap::new(
+        let socket = Box::new(NethunsSocketNetmap::new(
             self.base, nm_port_d, some_ring, free_ring,
-        );
+        ));
         
         // Wait 2 secs for phy reset
         thread::sleep(time::Duration::from_secs(2));
-        Ok(NethunsSocket::new(socket))
+        Ok(socket)
     }
     
     

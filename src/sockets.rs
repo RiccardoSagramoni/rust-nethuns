@@ -85,9 +85,10 @@ impl<State: RcState> BindableNethunsSocket<State> {
         dev: &str,
         queue: NethunsQueue,
     ) -> Result<NethunsSocket<State>, (NethunsBindError, Self)> {
-        self.inner
-            .bind(dev, queue)
-            .map_err(|(error, socket)| (error, Self { inner: socket }))
+        match self.inner.bind(dev, queue) {
+            Ok(inner) => Ok(NethunsSocket::new(inner)),
+            Err((err, inner)) => Err((err, Self { inner })),
+        }
     }
     
     delegate::delegate! {
@@ -110,7 +111,7 @@ impl<State: RcState> BindableNethunsSocket<State> {
 #[derive(Debug)]
 #[repr(transparent)]
 pub struct NethunsSocket<State: RcState> {
-    inner: UnsafeCell<NethunsSocketInner<State>>,
+    inner: UnsafeCell<Box<NethunsSocketInner<State>>>,
 }
 
 // Make sure BindableNethunsSocket is Send
@@ -118,7 +119,7 @@ static_assertions::assert_impl_all!(NethunsSocket<Shared>: Send);
 
 impl<State: RcState> NethunsSocket<State> {
     /// Create a new `NethunsSocket`.
-    fn new(inner: NethunsSocketInner<State>) -> Self {
+    fn new(inner: Box<NethunsSocketInner<State>>) -> Self {
         Self {
             inner: UnsafeCell::new(inner),
         }

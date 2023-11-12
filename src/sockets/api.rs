@@ -19,7 +19,7 @@ use super::errors::{
     NethunsBindError, NethunsFlushError, NethunsOpenError, NethunsRecvError,
     NethunsSendError,
 };
-use super::{Local, NethunsSocket, Shared};
+use super::{Local, Shared};
 
 
 cfg_if::cfg_if! {
@@ -85,7 +85,7 @@ pub(super) trait BindableNethunsSocketInnerTrait<State: RcState>:
         self: Box<Self>,
         dev: &str,
         queue: NethunsQueue,
-    ) -> Result<NethunsSocket<State>, (NethunsBindError, Box<Self>)>
+    ) -> Result<Box<NethunsSocketInner<State>>, (NethunsBindError, Box<Self>)>
     where
         Self: Sized;
     
