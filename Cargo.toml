@@ -45,7 +45,7 @@ dhat = "0.3.2"
 num-format = "0.4.4"
 pico-args = "0.5.0"
 rand = "0.8.5"
-rtrb = "0.2.3"
+rtrb = "0.3.0"
 string-builder = "0.2.0"
 trybuild = "1.0.85"
 
