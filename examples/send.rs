@@ -1,12 +1,10 @@
 use std::io::Write;
-use std::sync::atomic::{AtomicU64, Ordering};
-use std::sync::mpsc::TryRecvError;
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::Arc;
 use std::time::{Duration, SystemTime};
 use std::{env, thread};
 
-use bus::{Bus, BusReader};
-use nethuns::sockets::{BindableNethunsSocket, NethunsSocket};
+use nethuns::sockets::{BindableNethunsSocket, Local, NethunsSocket};
 use nethuns::types::{
     NethunsCaptureDir, NethunsCaptureMode, NethunsQueue, NethunsSocketMode,
     NethunsSocketOptions,
@@ -73,22 +71,22 @@ fn main() {
     };
     
     // Define bus for SPMC communication between threads
-    let mut bus: Bus<()> = Bus::new(5);
+    let term = Arc::new(AtomicBool::new(false));
     
     // Create a thread for computing statistics
     let stats_th = {
         let totals = totals.clone();
-        let rx = bus.add_rx();
+        let term = term.clone();
         thread::spawn(move || {
-            meter(totals, rx);
+            meter(totals, term);
         })
     };
     
+    set_sigint_handler(term.clone());
+    
     if !args.multithreading {
         // case single thread (main) with generic number of sockets
-        let rx = bus.add_rx();
-        set_sigint_handler(bus);
-        st_send(&args, opt, &payload, rx, totals)
+        st_send(&args, opt, &payload, term, totals)
             .expect("MAIN thread execution failed: {e}");
     } else {
         // case multithreading enabled (num_threads == num_sockets)
@@ -98,17 +96,15 @@ fn main() {
         for th_idx in 0..args.num_sockets {
             let args = args.clone();
             let opt = opt.clone();
-            let rx = bus.add_rx();
+            let term = term.clone();
             let totals = totals.clone();
             threads.push(thread::spawn(move || {
-                mt_send(&args, opt, th_idx, &payload, rx, totals)
+                mt_send(&args, opt, th_idx, &payload, term, totals)
                     .unwrap_or_else(|_| {
                         panic!("Thread {th_idx} execution failed")
                     });
             }));
         }
-        
-        set_sigint_handler(bus);
         
         for t in threads {
             if let Err(e) = t.join() {
@@ -220,10 +216,10 @@ fn parse_args() -> Result<Args, anyhow::Error> {
 /// # Arguments
 /// - `bus`: Bus for SPMC (single-producer/multiple-consumers) communication
 ///   between threads.
-fn set_sigint_handler(mut bus: Bus<()>) {
+fn set_sigint_handler(term: Arc<AtomicBool>) {
     ctrlc::set_handler(move || {
         println!("Ctrl-C detected. Shutting down...");
-        bus.broadcast(());
+        term.store(true, Ordering::Relaxed);
     })
     .expect("Error setting Ctrl-C handler");
 }
@@ -237,13 +233,12 @@ fn set_sigint_handler(mut bus: Bus<()>) {
 ///   It's shared between threads.
 /// - `rx`: BusReader for SPMC (single-producer/multiple-consumers)
 ///   communication between threads.
-fn meter(totals: Arc<Vec<AtomicU64>>, mut rx: BusReader<()>) {
+fn meter(totals: Arc<Vec<AtomicU64>>, term: Arc<AtomicBool>) {
     let mut now = SystemTime::now();
     
     loop {
-        match rx.try_recv() {
-            Ok(_) | Err(TryRecvError::Disconnected) => break,
-            _ => (),
+        if term.load(Ordering::Relaxed) {
+            break;
         }
         
         // Sleep for 1 second
@@ -285,11 +280,11 @@ fn st_send(
     args: &Args,
     opt: NethunsSocketOptions,
     payload: &[u8],
-    mut bus_rx: BusReader<()>,
+    term: Arc<AtomicBool>,
     totals: Arc<Vec<AtomicU64>>,
 ) -> Result<(), anyhow::Error> {
     // Vector for storing socket ids
-    let mut out_sockets: Vec<NethunsSocket> =
+    let mut out_sockets: Vec<NethunsSocket<Local>> =
         Vec::with_capacity(args.num_sockets as _);
     // One packet index per socket (pos of next slot/packet to send in tx ring)
     let mut pktid: Vec<usize> = vec![0; args.num_sockets as _];
@@ -301,9 +296,8 @@ fn st_send(
     
     loop {
         // Check if Ctrl-C was pressed
-        match bus_rx.try_recv() {
-            Ok(_) | Err(TryRecvError::Disconnected) => break,
-            _ => {}
+        if term.load(Ordering::Relaxed) {
+            break;
         }
         
         // Transmit packets from each socket
@@ -348,7 +342,7 @@ fn mt_send(
     opt: NethunsSocketOptions,
     th_idx: u32,
     payload: &[u8],
-    mut rx: BusReader<()>,
+    term: Arc<AtomicBool>,
     totals: Arc<Vec<AtomicU64>>,
 ) -> Result<(), anyhow::Error> {
     // Setup and fill transmission ring
@@ -359,9 +353,8 @@ fn mt_send(
     
     loop {
         // Check if Ctrl-C was pressed
-        match rx.try_recv() {
-            Ok(_) | Err(TryRecvError::Disconnected) => break,
-            _ => (),
+        if term.load(Ordering::Relaxed) {
+            break;
         }
         
         // Transmit packets
@@ -399,7 +392,7 @@ fn fill_tx_ring(
     opt: NethunsSocketOptions,
     socket_idx: u32,
     payload: &[u8],
-) -> Result<NethunsSocket, anyhow::Error> {
+) -> Result<NethunsSocket<Local>, anyhow::Error> {
     // Open socket
     let socket = BindableNethunsSocket::open(opt)?;
     
@@ -441,7 +434,7 @@ fn fill_tx_ring(
 /// - `socket_idx`: Socket index.
 fn transmit_zc(
     args: &Args,
-    socket: &NethunsSocket,
+    socket: &NethunsSocket<Local>,
     pktid: &mut usize,
     pkt_size: usize,
     totals: &Arc<Vec<AtomicU64>>,
@@ -473,7 +466,7 @@ fn transmit_zc(
 /// - `socket_idx`: Socket index.
 fn transmit_c(
     args: &Args,
-    socket: &NethunsSocket,
+    socket: &NethunsSocket<Local>,
     payload: &[u8],
     totals: &Arc<Vec<AtomicU64>>,
     socket_idx: usize,

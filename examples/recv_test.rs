@@ -1,9 +1,8 @@
-
 use std::env;
 
 use etherparse::Ethernet2Header;
-use nethuns::sockets::base::RecvPacket;
-use nethuns::sockets::{BindableNethunsSocket, NethunsSocket};
+use nethuns::sockets::base::NSRecvPacket;
+use nethuns::sockets::{BindableNethunsSocket, Local, NethunsSocket};
 use nethuns::types::{
     NethunsCaptureDir, NethunsCaptureMode, NethunsQueue, NethunsSocketMode,
     NethunsSocketOptions,
@@ -23,12 +22,12 @@ fn main() {
         dir: NethunsCaptureDir::InOut,
         capture: NethunsCaptureMode::Default,
         mode: NethunsSocketMode::RxTx,
-        promisc: true,
+        promisc: false,
         rxhash: true,
         tx_qdisc_bypass: false,
         ..Default::default()
     };
-    let socket = BindableNethunsSocket::open(opt)
+    let socket: NethunsSocket<Local> = BindableNethunsSocket::open(opt)
         .expect("Failed to open socket")
         .bind(
             &env::args()
@@ -46,7 +45,7 @@ fn main() {
 }
 
 
-fn dump_packet(pkt: &RecvPacket<NethunsSocket>) {
+fn dump_packet(pkt: &NSRecvPacket<Local, Local>) {
     let pkthdr = pkt.pkthdr();
     let packet = pkt.buffer();
     

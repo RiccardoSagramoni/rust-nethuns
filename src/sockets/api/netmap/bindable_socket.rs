@@ -6,24 +6,27 @@ use c_netmap_wrapper::macros::{netmap_buf, netmap_rxring};
 use c_netmap_wrapper::{NetmapRing, NmPortDescriptor};
 
 use crate::misc::circular_buffer::CircularBuffer;
+use crate::misc::hybrid_rc::state_trait::RcState;
 use crate::misc::nethuns_dev_queue_name;
 use crate::nethuns::__nethuns_set_if_promisc;
+use crate::sockets::api::{
+    BindableNethunsSocketInnerTrait, NethunsSocketInner,
+};
 use crate::sockets::base::NethunsSocketBase;
 use crate::sockets::errors::{NethunsBindError, NethunsOpenError};
 use crate::sockets::ring::NethunsRing;
-use crate::sockets::{BindableNethunsSocketTrait, NethunsSocket};
 use crate::types::{NethunsQueue, NethunsSocketMode, NethunsSocketOptions};
 
 use super::nethuns_socket::NethunsSocketNetmap;
 
 
 #[derive(Debug)]
-pub struct BindableNethunsSocketNetmap {
-    base: NethunsSocketBase,
+pub struct BindableNethunsSocketNetmap<State: RcState> {
+    base: NethunsSocketBase<State>,
 }
 
 
-impl BindableNethunsSocketNetmap {
+impl<State: RcState> BindableNethunsSocketNetmap<State> {
     /// Open a new Nethuns socket for the `netmap` framework.
     ///
     /// # Arguments
@@ -35,7 +38,7 @@ impl BindableNethunsSocketNetmap {
     /// * `Err(NethunsOpenError::Error)` - If an unexpected error occurs.
     pub(in crate::sockets) fn open(
         opt: NethunsSocketOptions,
-    ) -> Result<Box<dyn BindableNethunsSocketTrait>, NethunsOpenError> {
+    ) -> Result<Self, NethunsOpenError> {
         let rx = opt.mode == NethunsSocketMode::RxTx
             || opt.mode == NethunsSocketMode::RxOnly;
         let tx = opt.mode == NethunsSocketMode::RxTx
@@ -47,7 +50,7 @@ impl BindableNethunsSocketNetmap {
             ));
         }
         
-        let mut base = NethunsSocketBase::default();
+        let mut base = NethunsSocketBase::<State>::default();
         
         if rx {
             base.rx_ring = Some(NethunsRing::new(
@@ -66,20 +69,20 @@ impl BindableNethunsSocketNetmap {
         // set a single consumer by default
         base.opt = opt;
         
-        Ok(Box::new(Self { base }))
+        Ok(Self { base })
     }
 }
 
 
-impl BindableNethunsSocketTrait for BindableNethunsSocketNetmap {
+impl<State: RcState> BindableNethunsSocketInnerTrait<State>
+    for BindableNethunsSocketNetmap<State>
+{
     fn bind(
         mut self: Box<Self>,
         dev: &str,
         queue: NethunsQueue,
-    ) -> Result<
-        NethunsSocket,
-        (NethunsBindError, Box<dyn BindableNethunsSocketTrait>),
-    > {
+    ) -> Result<Box<NethunsSocketInner<State>>, (NethunsBindError, Box<Self>)>
+    {
         // Prepare flag and prefix for device name
         let flags = if !self.tx() {
             "/R".to_owned()
@@ -267,18 +270,18 @@ impl BindableNethunsSocketTrait for BindableNethunsSocketNetmap {
             unsafe { libc::if_nametoindex(self.base.devname.as_ptr()) } as _;
         
         // Build the socket struct and return it
-        let socket = NethunsSocketNetmap::new(
+        let socket = Box::new(NethunsSocketNetmap::new(
             self.base, nm_port_d, some_ring, free_ring,
-        );
+        ));
         
         // Wait 2 secs for phy reset
         thread::sleep(time::Duration::from_secs(2));
-        Ok(NethunsSocket::new(Box::new(socket)))
+        Ok(socket)
     }
     
     
     #[inline(always)]
-    fn base(&self) -> &NethunsSocketBase {
+    fn base(&self) -> &NethunsSocketBase<State> {
         &self.base
     }
 }

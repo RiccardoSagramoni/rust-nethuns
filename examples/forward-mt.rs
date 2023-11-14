@@ -1,13 +1,10 @@
-use std::sync::atomic::{AtomicU64, Ordering};
-use std::sync::mpsc::TryRecvError;
+use std::sync::atomic::{AtomicU64, Ordering, AtomicBool};
 use std::sync::Arc;
 use std::time::{Duration, SystemTime};
 use std::{mem, thread};
 
-use bus::{Bus, BusReader};
-
-use nethuns::sockets::base::RecvPacket;
-use nethuns::sockets::{BindableNethunsSocket, NethunsSocket};
+use nethuns::sockets::base::NSRecvPacket;
+use nethuns::sockets::{BindableNethunsSocket, Local, NethunsSocket, Shared};
 
 use nethuns::types::{
     NethunsCaptureDir, NethunsCaptureMode, NethunsQueue, NethunsSocketMode,
@@ -41,7 +38,7 @@ fn main() {
         ..Default::default()
     };
     
-    let socket = BindableNethunsSocket::open(opt.clone())
+    let socket: NethunsSocket<Local> = BindableNethunsSocket::open(opt.clone())
         .unwrap()
         .bind(&conf.dev_in, NethunsQueue::Any)
         .unwrap();
@@ -50,45 +47,43 @@ fn main() {
     thread::scope(|s| {
         // Create SPSC ring buffer
         let (mut producer, consumer) =
-            RingBuffer::<RecvPacket<NethunsSocket>>::new(65536);
+            RingBuffer::<NSRecvPacket<Local, Shared>>::new(65536);
         
         // Create channel for thread communication
-        let mut bus: Bus<()> = Bus::new(5);
+        let term = Arc::new(AtomicBool::new(false));
         let total_rcv = Arc::new(AtomicU64::new(0));
         let total_fwd = Arc::new(AtomicU64::new(0));
         
         // Spawn meter thread
         let meter_total_rcv = total_rcv.clone();
         let meter_total_fwd = total_fwd.clone();
-        let meter_rx = bus.add_rx();
+        let meter_term = term.clone();
         s.spawn(move || {
-            meter(meter_total_rcv, meter_total_fwd, meter_rx);
+            meter(meter_total_rcv, meter_total_fwd, meter_term);
         });
         
         // Spawn consumer thread
         let consumer_opt = opt;
         let consumer_dev = conf.dev_out.clone();
-        let consumer_rx = bus.add_rx();
+        let consumer_term = term.clone();
         s.spawn(move || {
             consumer_body(
                 consumer_opt,
                 &consumer_dev,
                 consumer,
-                consumer_rx,
+                consumer_term,
                 total_fwd,
             );
         });
         
         // Set handler for Ctrl-C
-        let mut bus_rx = bus.add_rx();
-        set_sigint_handler(bus);
+        set_sigint_handler(term.clone());
         
         
         loop {
             // Check if Ctrl-C was pressed
-            match bus_rx.try_recv() {
-                Ok(_) | Err(TryRecvError::Disconnected) => break,
-                _ => {}
+            if term.load(Ordering::Relaxed) {
+                break;
             }
             
             if let Ok(pkt) = socket.recv() {
@@ -96,7 +91,7 @@ fn main() {
                 // Push packet in queue
                 while !producer.is_abandoned() {
                     if !producer.is_full() {
-                        producer.push(pkt).unwrap();
+                        producer.push(pkt.to_shared()).unwrap();
                         break;
                     }
                 }
@@ -121,14 +116,13 @@ fn get_configuration() -> Configuration {
 fn meter(
     total_rcv: Arc<AtomicU64>,
     total_fwd: Arc<AtomicU64>,
-    mut rx: BusReader<()>,
+    term: Arc<AtomicBool>,
 ) {
     let mut now = SystemTime::now();
     
     loop {
-        match rx.try_recv() {
-            Ok(_) | Err(TryRecvError::Disconnected) => break,
-            _ => (),
+        if term.load(Ordering::Relaxed) {
+            break;
         }
         
         // Sleep for 1 second
@@ -158,10 +152,10 @@ fn meter(
 /// # Arguments
 /// - `bus`: Bus for SPMC (single-producer/multiple-consumers) communication
 ///   between threads.
-fn set_sigint_handler(mut bus: Bus<()>) {
+fn set_sigint_handler(term: Arc<AtomicBool>) {
     ctrlc::set_handler(move || {
         println!("Ctrl-C detected. Shutting down...");
-        bus.broadcast(());
+        term.store(true, Ordering::Relaxed)
     })
     .expect("Error setting Ctrl-C handler");
 }
@@ -170,19 +164,18 @@ fn set_sigint_handler(mut bus: Bus<()>) {
 fn consumer_body(
     opt: NethunsSocketOptions,
     dev: &str,
-    mut consumer: Consumer<RecvPacket<NethunsSocket>>,
-    mut rx: BusReader<()>,
+    mut consumer: Consumer<NSRecvPacket<Local, Shared>>,
+    term: Arc<AtomicBool>,
     total_fwd: Arc<AtomicU64>,
 ) {
-    let socket = BindableNethunsSocket::open(opt)
+    let socket: NethunsSocket<Local> = BindableNethunsSocket::open(opt)
         .unwrap()
         .bind(dev, NethunsQueue::Any)
         .unwrap();
     
     loop {
-        match rx.try_recv() {
-            Ok(_) | Err(TryRecvError::Disconnected) => break,
-            _ => (),
+        if term.load(Ordering::Relaxed) {
+            break;
         }
         
         // Read packet

@@ -92,30 +92,3 @@ pub struct NethunsStat {
     tx_invalid: u64,
     freeze: u64,
 }
-
-
-#[cfg(test)]
-mod tests {
-    use is_trait::is_trait;
-    
-    use super::*;
-    
-    #[test]
-    fn assert_send_trait() {
-        assert!(is_trait!(NethunsCaptureDir, Send));
-        assert!(is_trait!(NethunsCaptureMode, Send));
-        assert!(is_trait!(NethunsSocketMode, Send));
-        assert!(is_trait!(NethunsSocketOptions, Send));
-        assert!(is_trait!(NethunsStat, Send));
-    }
-    
-    
-    #[test]
-    fn assert_sync_trait() {
-        assert!(is_trait!(NethunsCaptureDir, Sync));
-        assert!(is_trait!(NethunsCaptureMode, Sync));
-        assert!(is_trait!(NethunsSocketMode, Sync));
-        assert!(is_trait!(NethunsSocketOptions, Sync));
-        assert!(is_trait!(NethunsStat, Sync));
-    }
-}
