@@ -9,8 +9,8 @@ edition = "2021"
 [profile.perf]  # Produce binaries for performance tests and profiling
 inherits = "release"
 codegen-units = 1
-lto = "fat"
 debug = true
+lto = "thin"
 
 
 [dependencies]
