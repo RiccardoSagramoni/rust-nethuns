@@ -38,7 +38,7 @@ pub struct BindableNethunsSocket {
     inner: Box<BindableNethunsSocketInner>,
 }
 
-// Make sure BindableNethunsSocket is Send
+// Make sure BindableNethunsSocket is Send and !Sync
 static_assertions::assert_impl_all!(BindableNethunsSocket: Send);
 static_assertions::assert_not_impl_any!(BindableNethunsSocket: Sync);
 
@@ -100,10 +100,9 @@ pub struct NethunsSocket {
     inner: UnsafeCell<Box<NethunsSocketInner>>,
 }
 
-// Make sure BindableNethunsSocket is Send
-// static_assertions::assert_not_impl_any!(BindableNethunsSocket<Local>: Send, Sync);
-// static_assertions::assert_impl_all!(NethunsSocket<Shared>: Send);
-// static_assertions::assert_not_impl_any!(BindableNethunsSocket<Shared>: Sync);
+// Make sure BindableNethunsSocket is Send and !Sync
+static_assertions::assert_impl_all!(NethunsSocket: Send);
+static_assertions::assert_not_impl_any!(NethunsSocket: Sync);
 
 impl NethunsSocket {
     /// Create a new `NethunsSocket`.
@@ -113,10 +112,11 @@ impl NethunsSocket {
         }
     }
     
+    
     /// Get the next unprocessed received packet.
     ///
     /// # Returns
-    /// * `Ok(RecvPacket<NethunsSocket>)` - The unprocessed received packet, if no error occurred.
+    /// * `Ok(RecvPacket)` - The unprocessed received packet, if no error occurred.
     /// * `Err(NethunsRecvError::NotRx)` -  If the socket is not configured in RX mode. Check the configuration parameters passed to [`BindableNethunsSocket::open`].
     /// * `Err(NethunsRecvError::InUse)` - If the slot at the head of the RX ring is currently in use, i.e. the corresponding received packet is not released yet.
     /// * `Err(NethunsRecvError::NoPacketsAvailable)` - If there are no new packets available in the RX ring.

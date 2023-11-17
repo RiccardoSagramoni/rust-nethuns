@@ -113,7 +113,16 @@ pub(super) trait NethunsSocketInnerTrait: Debug {
     fn base_mut(&mut self) -> &mut NethunsSocketBase;
     
     
-    /// TODO
+    /// Get the next unprocessed received packet.
+    ///
+    /// # Returns
+    /// * `Ok(RecvPacket)` - The unprocessed received packet, if no error occurred.
+    /// * `Err(NethunsRecvError::NotRx)` -  If the socket is not configured in RX mode. Check the configuration parameters passed to [`BindableNethunsSocket::open`].
+    /// * `Err(NethunsRecvError::InUse)` - If the slot at the head of the RX ring is currently in use, i.e. the corresponding received packet is not released yet.
+    /// * `Err(NethunsRecvError::NoPacketsAvailable)` - If there are no new packets available in the RX ring.
+    /// * `Err(NethunsRecvError::PacketFiltered)` - If the packet is filtered out by the `filter` function specified during socket configuration.
+    /// * `Err(NethunsRecvError::FrameworkError)` - If an error from the unsafe interaction with underlying I/O framework occurs.
+    /// * `Err(NethunsRecvError::Error)` - If an unexpected error occurs.
     fn recv(&mut self) -> Result<RecvPacketData, NethunsRecvError>;
     
     
@@ -122,6 +131,7 @@ pub(super) trait NethunsSocketInnerTrait: Debug {
     /// # Returns
     /// * `Ok(())` - On success.
     /// * `Err(NethunsSendError::NotTx)` -  If the socket is not configured in TX mode. Check the configuration parameters passed to [`BindableNethunsSocket::open`](super::BindableNethunsSocket::open).
+    /// * `Err(NethunsSendError::InvalidPacketSize)` - If the packet is too large.
     /// * `Err(NethunsSendError::InUse)` - If the slot at the tail of the TX ring is not released yet and it's currently in use by the application.
     fn send(&mut self, packet: &[u8]) -> Result<(), NethunsSendError>;
     

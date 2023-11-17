@@ -10,7 +10,6 @@ use crate::types::{NethunsFilter, NethunsQueue, NethunsSocketOptions};
 
 // TODO
 // use super::pcap::NethunsSocketPcap;
-use super::api::Pkthdr;
 use super::ring::{AtomicRingSlotStatus, NethunsRing, RingSlotStatus};
 use super::PkthdrTrait;
 
@@ -136,7 +135,7 @@ pub(super) struct RecvPacketData<'a> {
 impl<'a> RecvPacketData<'a> {
     pub fn new(
         id: usize,
-        pkthdr: &'a Pkthdr,
+        pkthdr: &'a dyn PkthdrTrait,
         buffer: &'a [u8],
         slot_status_flag: &'a AtomicRingSlotStatus,
     ) -> Self {
