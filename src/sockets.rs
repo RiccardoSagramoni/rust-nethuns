@@ -1,7 +1,7 @@
 mod api;
 pub mod base;
 pub mod errors;
-// pub mod pcap;
+pub mod pcap;
 mod ring;
 
 pub use api::PkthdrTrait;

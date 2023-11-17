@@ -8,9 +8,7 @@ use std::io::SeekFrom;
 use std::sync::atomic::Ordering;
 use std::{cmp, mem};
 
-use crate::misc::hybrid_rc::state::{Local, Shared};
-use crate::misc::hybrid_rc::state_trait::RcState;
-use crate::sockets::base::{InnerRecvData, NethunsSocketBase, RecvPacketData};
+use crate::sockets::base::{NethunsSocketBase, RecvPacketData};
 use crate::sockets::errors::{
     NethunsPcapOpenError, NethunsPcapReadError, NethunsPcapRewindError,
     NethunsPcapStoreError, NethunsPcapWriteError,
@@ -24,8 +22,7 @@ use super::constants::{
 };
 use super::{
     nethuns_pcap_patched_pkthdr, nethuns_pcap_pkthdr, nethuns_pcap_timeval,
-    LocalReadSocketPcapTrait, NethunsSocketPcapInner, NethunsSocketPcapTrait,
-    SharedReadSocketPcapTrait,
+    NethunsSocketPcapInner, NethunsSocketPcapTrait,
 };
 
 
@@ -33,9 +30,7 @@ use super::{
 pub type PcapReaderType = File;
 
 
-impl<State: RcState> NethunsSocketPcapTrait<State>
-    for NethunsSocketPcapInner<State>
-{
+impl NethunsSocketPcapTrait for NethunsSocketPcapInner {
     fn open(
         opt: NethunsSocketOptions,
         filename: &str,
@@ -124,6 +119,66 @@ impl<State: RcState> NethunsSocketPcapTrait<State>
     }
     
     
+    fn read(&mut self) -> Result<RecvPacketData, NethunsPcapReadError> {
+        let rx_ring =
+            self.base.rx_ring.as_mut().expect(
+                "[pcap_read] rx_ring should have been set during `open`",
+            );
+        
+        let caplen = self.base.opt.packetsize;
+        let head_idx = rx_ring.head();
+        let slot = rx_ring.get_slot_mut(head_idx);
+        if slot.status.load(Ordering::Acquire) != RingSlotStatus::Free {
+            return Err(NethunsPcapReadError::InUse);
+        }
+        
+        // Read a new packet (header + payload) from the file
+        let mut header = nethuns_pcap_patched_pkthdr::default();
+        let header_slice = if self.magic == KUZNETZOV_TCPDUMP_MAGIC {
+            unsafe { any_as_u8_slice_mut(&mut header) }
+        } else {
+            unsafe { any_as_u8_slice_mut(&mut header.hdr) }
+        };
+        
+        self.reader.read_exact(header_slice)?;
+        
+        let bytes = cmp::min(caplen, header.hdr.caplen);
+        
+        self.reader.read_exact(&mut slot.packet[..bytes as _])?;
+        
+        // Store the information related to the new packet
+        // in a free ring slot of the base nethuns socket
+        slot.pkthdr.tstamp_set_sec(header.hdr.ts.tv_sec as _);
+        
+        if self.magic == NSEC_TCPDUMP_MAGIC {
+            slot.pkthdr.tstamp_set_nsec(header.hdr.ts.tv_usec as _);
+        } else {
+            slot.pkthdr.tstamp_set_usec(header.hdr.ts.tv_usec as _);
+        }
+        
+        slot.pkthdr.set_len(header.hdr.len);
+        slot.pkthdr.set_snaplen(bytes);
+        
+        if header.hdr.caplen > caplen {
+            let skip = header.hdr.caplen as i64 - caplen as i64;
+            self.reader.seek(SeekFrom::Current(skip))?;
+        }
+        
+        slot.status.store(RingSlotStatus::InUse, Ordering::Release);
+        
+        rx_ring.rings_mut().advance_head();
+        
+        let slot = rx_ring.get_slot(head_idx);
+        
+        Ok(RecvPacketData::new(
+            rx_ring.head(),
+            &slot.pkthdr,
+            &slot.packet[..bytes as _],
+            &slot.status,
+        ))
+    }
+    
+    
     fn write(
         &mut self,
         header: &nethuns_pcap_pkthdr,
@@ -184,94 +239,6 @@ impl<State: RcState> NethunsSocketPcapTrait<State>
         self.reader
             .seek(SeekFrom::Start(mem::size_of::<pcap_file_header>() as _))
             .map_err(NethunsPcapRewindError::from)
-    }
-}
-
-
-impl<State: RcState> NethunsSocketPcapInner<State> {
-    fn inner_read(
-        &mut self,
-    ) -> Result<InnerRecvData<State>, NethunsPcapReadError> {
-        let rx_ring =
-            self.base.rx_ring.as_mut().expect(
-                "[pcap_read] rx_ring should have been set during `open`",
-            );
-        
-        let caplen = self.base.opt.packetsize;
-        let head_idx = rx_ring.head();
-        let slot = rx_ring.get_slot_mut(head_idx);
-        if slot.status.load(Ordering::Acquire) != RingSlotStatus::Free {
-            return Err(NethunsPcapReadError::InUse);
-        }
-        
-        // Read a new packet (header + payload) from the file
-        let mut header = nethuns_pcap_patched_pkthdr::default();
-        let header_slice = if self.magic == KUZNETZOV_TCPDUMP_MAGIC {
-            unsafe { any_as_u8_slice_mut(&mut header) }
-        } else {
-            unsafe { any_as_u8_slice_mut(&mut header.hdr) }
-        };
-        
-        self.reader.read_exact(header_slice)?;
-        
-        let bytes = cmp::min(caplen, header.hdr.caplen);
-        
-        self.reader.read_exact(&mut slot.packet[..bytes as _])?;
-        
-        // Store the information related to the new packet
-        // in a free ring slot of the base nethuns socket
-        slot.pkthdr.tstamp_set_sec(header.hdr.ts.tv_sec as _);
-        
-        if self.magic == NSEC_TCPDUMP_MAGIC {
-            slot.pkthdr.tstamp_set_nsec(header.hdr.ts.tv_usec as _);
-        } else {
-            slot.pkthdr.tstamp_set_usec(header.hdr.ts.tv_usec as _);
-        }
-        
-        slot.pkthdr.set_len(header.hdr.len);
-        slot.pkthdr.set_snaplen(bytes);
-        
-        if header.hdr.caplen > caplen {
-            let skip = header.hdr.caplen as i64 - caplen as i64;
-            self.reader.seek(SeekFrom::Current(skip))?;
-        }
-        
-        slot.status.store(RingSlotStatus::InUse, Ordering::Release);
-        
-        rx_ring.rings_mut().advance_head();
-        
-        let slot = rx_ring.get_slot(head_idx);
-        
-        Ok(InnerRecvData {
-            id: rx_ring.head(),
-            pkthdr: &slot.pkthdr,
-            buffer: &slot.packet[..bytes as _],
-            slot_status_flag: &slot.status,
-        })
-    }
-}
-
-impl LocalReadSocketPcapTrait for NethunsSocketPcapInner<Local> {
-    fn read(&mut self) -> Result<RecvPacketData<Local>, NethunsPcapReadError> {
-        let packet = self.inner_read()?;
-        Ok(RecvPacketData::new(
-            packet.id,
-            packet.pkthdr,
-            packet.buffer,
-            packet.slot_status_flag.clone(),
-        ))
-    }
-}
-
-impl SharedReadSocketPcapTrait for NethunsSocketPcapInner<Shared> {
-    fn read(&mut self) -> Result<RecvPacketData<Shared>, NethunsPcapReadError> {
-        let packet = self.inner_read()?;
-        Ok(RecvPacketData::new(
-            packet.id,
-            packet.pkthdr,
-            packet.buffer,
-            packet.slot_status_flag.clone(),
-        ))
     }
 }
 
