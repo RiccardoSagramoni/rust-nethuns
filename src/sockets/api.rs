@@ -113,6 +113,10 @@ pub(super) trait NethunsSocketInnerTrait: Debug {
     fn base_mut(&mut self) -> &mut NethunsSocketBase;
     
     
+    /// TODO
+    fn recv(&mut self) -> Result<RecvPacketData, NethunsRecvError>;
+    
+    
     /// Queue up a packet for transmission.
     ///
     /// # Returns
@@ -184,13 +188,6 @@ pub(super) trait NethunsSocketInnerTrait: Debug {
     /// or `None` on error.
     fn stats(&self) -> Option<NethunsStat>;
 }
-
-pub(super) trait LocalRxNethunsSocketTrait:
-    Debug + NethunsSocketInnerTrait
-{
-    fn recv(&mut self) -> Result<RecvPacketData, NethunsRecvError>;
-}
-
 
 
 //

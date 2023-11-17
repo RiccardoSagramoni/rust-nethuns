@@ -18,7 +18,7 @@ use crate::types::{
 
 use self::api::{
     BindableNethunsSocketInner, BindableNethunsSocketInnerTrait,
-    LocalRxNethunsSocketTrait, NethunsSocketInner, NethunsSocketInnerTrait,
+    NethunsSocketInner, NethunsSocketInnerTrait,
 };
 use self::base::{NethunsSocketBase, RecvPacket};
 use self::errors::{

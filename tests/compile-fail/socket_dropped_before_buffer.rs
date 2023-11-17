@@ -11,6 +11,7 @@ fn main() {
     
     let packet = socket.recv().unwrap();
     let buffer = packet.buffer();
+    drop(packet);
     drop(socket);
     drop(buffer);
 }
