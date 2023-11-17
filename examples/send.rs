@@ -4,7 +4,7 @@ use std::sync::Arc;
 use std::time::{Duration, SystemTime};
 use std::{env, thread};
 
-use nethuns::sockets::{BindableNethunsSocket, Local, NethunsSocket};
+use nethuns::sockets::{BindableNethunsSocket, NethunsSocket};
 use nethuns::types::{
     NethunsCaptureDir, NethunsCaptureMode, NethunsQueue, NethunsSocketMode,
     NethunsSocketOptions,
@@ -284,7 +284,7 @@ fn st_send(
     totals: Arc<Vec<AtomicU64>>,
 ) -> Result<(), anyhow::Error> {
     // Vector for storing socket ids
-    let mut out_sockets: Vec<NethunsSocket<Local>> =
+    let mut out_sockets: Vec<NethunsSocket> =
         Vec::with_capacity(args.num_sockets as _);
     // One packet index per socket (pos of next slot/packet to send in tx ring)
     let mut pktid: Vec<usize> = vec![0; args.num_sockets as _];
@@ -392,7 +392,7 @@ fn fill_tx_ring(
     opt: NethunsSocketOptions,
     socket_idx: u32,
     payload: &[u8],
-) -> Result<NethunsSocket<Local>, anyhow::Error> {
+) -> Result<NethunsSocket, anyhow::Error> {
     // Open socket
     let socket = BindableNethunsSocket::open(opt)?;
     
@@ -434,7 +434,7 @@ fn fill_tx_ring(
 /// - `socket_idx`: Socket index.
 fn transmit_zc(
     args: &Args,
-    socket: &NethunsSocket<Local>,
+    socket: &NethunsSocket,
     pktid: &mut usize,
     pkt_size: usize,
     totals: &Arc<Vec<AtomicU64>>,
@@ -466,7 +466,7 @@ fn transmit_zc(
 /// - `socket_idx`: Socket index.
 fn transmit_c(
     args: &Args,
-    socket: &NethunsSocket<Local>,
+    socket: &NethunsSocket,
     payload: &[u8],
     totals: &Arc<Vec<AtomicU64>>,
     socket_idx: usize,

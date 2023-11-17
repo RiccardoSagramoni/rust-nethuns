@@ -50,7 +50,7 @@ trybuild = "1.0.85"
 
 [features]
 default = [
-    # "netmap",            # FIXME remove from default features
+    "netmap",            # FIXME remove from default features
     "libc/extra_traits",
     "rustix/net",
 ]

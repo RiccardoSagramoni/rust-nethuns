@@ -4,7 +4,7 @@ use std::time::{Duration, SystemTime};
 use std::{mem, thread};
 
 use nethuns::sockets::errors::NethunsSendError;
-use nethuns::sockets::{BindableNethunsSocket, Local, NethunsSocket};
+use nethuns::sockets::BindableNethunsSocket;
 use nethuns::types::{
     NethunsCaptureDir, NethunsCaptureMode, NethunsQueue, NethunsSocketMode,
     NethunsSocketOptions,
@@ -37,12 +37,11 @@ fn main() {
     };
     
     // Open sockets
-    let in_socket: NethunsSocket<Local> =
-        BindableNethunsSocket::open(opt.clone())
-            .unwrap()
-            .bind(&conf.dev_in, NethunsQueue::Any)
-            .unwrap();
-    let out_socket: NethunsSocket<Local> = BindableNethunsSocket::open(opt)
+    let in_socket = BindableNethunsSocket::open(opt.clone())
+        .unwrap()
+        .bind(&conf.dev_in, NethunsQueue::Any)
+        .unwrap();
+    let out_socket = BindableNethunsSocket::open(opt)
         .unwrap()
         .bind(&conf.dev_out, NethunsQueue::Any)
         .unwrap();

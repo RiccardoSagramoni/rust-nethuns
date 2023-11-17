@@ -10,7 +10,6 @@ pub use api::PkthdrTrait;
 use core::fmt::Debug;
 use std::cell::UnsafeCell;
 use std::ffi::CStr;
-use std::marker::PhantomData;
 
 use crate::types::{
     NethunsFilter, NethunsQueue, NethunsSocketOptions, NethunsStat,
@@ -124,9 +123,9 @@ impl NethunsSocket {
     /// * `Err(NethunsRecvError::PacketFiltered)` - If the packet is filtered out by the `filter` function specified during socket configuration.
     /// * `Err(NethunsRecvError::FrameworkError)` - If an error from the unsafe interaction with underlying I/O framework occurs.
     /// * `Err(NethunsRecvError::Error)` - If an unexpected error occurs.
-    pub fn recv(&self) -> Result<RecvPacket<Self>, NethunsRecvError> {
+    pub fn recv(&self) -> Result<RecvPacket, NethunsRecvError> {
         unsafe { (*UnsafeCell::raw_get(&self.inner)).recv() }
-            .map(|data| RecvPacket::new(data, PhantomData))
+            .map(|data| RecvPacket::new(data))
     }
     
     

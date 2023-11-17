@@ -1,6 +1,5 @@
 use std::ffi::CString;
 use std::fmt::{self, Debug, Display};
-use std::marker::PhantomData;
 use std::mem;
 use std::sync::atomic;
 
@@ -63,17 +62,15 @@ pub struct NethunsSocketBase {
 /// The struct contains a [`PhantomData`] marker associated with the socket itself,
 /// so that the `RecvPacket` item is valid as long as the socket is alive.
 #[derive(Debug)]
-pub struct RecvPacket<'a, T> {
+#[repr(transparent)]
+pub struct RecvPacket<'a> {
     data: RecvPacketData<'a>,
-    
-    phantom_data: PhantomData<&'a T>,
 }
 
 
-impl<'a, T> RecvPacket<'a, T> {
+impl<'a> RecvPacket<'a> {
     pub(super) fn new<'b>(
         data: RecvPacketData<'b>,
-        phantom_data: PhantomData<&'a T>,
     ) -> Self {
         let data: RecvPacketData<'a> = unsafe {
             // [SAFETY] As long as the socket is alive, the references
@@ -85,7 +82,7 @@ impl<'a, T> RecvPacket<'a, T> {
                 slot_status_flag: mem::transmute(data.slot_status_flag),
             }
         };
-        RecvPacket { data, phantom_data }
+        RecvPacket { data }
     }
     
     #[inline(always)]
@@ -105,7 +102,7 @@ impl<'a, T> RecvPacket<'a, T> {
 }
 
 
-impl<T> Display for RecvPacket<'_, T> {
+impl Display for RecvPacket<'_> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(
             f,
@@ -130,9 +127,7 @@ impl<T> Display for RecvPacket<'_, T> {
 pub(super) struct RecvPacketData<'a> {
     id: usize,
     pkthdr: &'a dyn PkthdrTrait,
-    
     buffer: &'a [u8],
-    
     /// Reference used to set the status flag of the corresponding ring slot
     /// to `Free` when the `RecPacketData` is dropped.
     slot_status_flag: &'a AtomicRingSlotStatus,

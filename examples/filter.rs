@@ -4,9 +4,7 @@ use std::time::{Duration, SystemTime};
 use std::{env, thread};
 
 use nethuns::sockets::errors::NethunsRecvError;
-use nethuns::sockets::{
-    BindableNethunsSocket, Local, NethunsSocket, PkthdrTrait,
-};
+use nethuns::sockets::{BindableNethunsSocket, PkthdrTrait};
 use nethuns::types::{
     NethunsCaptureDir, NethunsCaptureMode, NethunsQueue, NethunsSocketMode,
     NethunsSocketOptions,
@@ -17,6 +15,7 @@ use nethuns::vlan::{
 };
 use num_format::{Locale, ToFormattedString};
 use rand::Rng;
+
 
 fn main() {
     // Parse args
@@ -39,7 +38,7 @@ fn main() {
         ..Default::default()
     };
     
-    let socket: NethunsSocket<Local> = BindableNethunsSocket::open(opt)
+    let socket = BindableNethunsSocket::open(opt)
         .expect("BindableNethunsSocket::open failed")
         .bind(&dev, NethunsQueue::Any)
         .expect("bind failed");
