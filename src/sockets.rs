@@ -55,6 +55,7 @@ pub struct BindableNethunsSocket<State: RcState> {
 
 // Make sure BindableNethunsSocket is Send
 static_assertions::assert_impl_all!(BindableNethunsSocket<Shared>: Send);
+static_assertions::assert_not_impl_any!(BindableNethunsSocket<Shared>: Sync);
 
 impl<State: RcState> BindableNethunsSocket<State> {
     /// Open a new Nethuns socket, by calling the `open` function
@@ -115,7 +116,9 @@ pub struct NethunsSocket<State: RcState> {
 }
 
 // Make sure BindableNethunsSocket is Send
+static_assertions::assert_not_impl_any!(BindableNethunsSocket<Local>: Send, Sync);
 static_assertions::assert_impl_all!(NethunsSocket<Shared>: Send);
+static_assertions::assert_not_impl_any!(BindableNethunsSocket<Shared>: Sync);
 
 impl<State: RcState> NethunsSocket<State> {
     /// Create a new `NethunsSocket`.

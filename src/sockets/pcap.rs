@@ -19,7 +19,7 @@ use crate::sockets::errors::{
 use crate::sockets::PkthdrTrait;
 use crate::types::NethunsSocketOptions;
 
-use super::base::{RecvPacketData, PcapRecvPacket};
+use super::base::{PcapRecvPacket, RecvPacketData};
 use super::{Local, NethunsSocketBase, RecvPacket};
 
 
@@ -129,8 +129,7 @@ impl NethunsSocketPcap<Local> {
     /// * `Err(NethunsPcapOpenError::Eof)` - if the end of the file is reached.
     pub fn read(
         &self,
-    ) -> Result<PcapRecvPacket<Local, Local>, NethunsPcapReadError>
-    {
+    ) -> Result<PcapRecvPacket<Local, Local>, NethunsPcapReadError> {
         unsafe { (*UnsafeCell::raw_get(&self.inner)).read() }
             .map(|p| RecvPacket::new(p, PhantomData))
     }
@@ -147,8 +146,7 @@ impl NethunsSocketPcap<Shared> {
     /// * `Err(NethunsPcapOpenError::Eof)` - if the end of the file is reached.
     pub fn read(
         &self,
-    ) -> Result<PcapRecvPacket<Shared, Shared>, NethunsPcapReadError>
-    {
+    ) -> Result<PcapRecvPacket<Shared, Shared>, NethunsPcapReadError> {
         unsafe { (*UnsafeCell::raw_get(&self.inner)).read() }
             .map(|p| RecvPacket::new(p, PhantomData))
     }
@@ -179,11 +177,19 @@ static_assertions::assert_impl_all!(
         NethunsSocketPcapTrait<Local>,
         LocalReadSocketPcapTrait
 );
+static_assertions::assert_not_impl_any!(
+    NethunsSocketPcapInner<Local>:
+        Send, Sync
+);
 static_assertions::assert_impl_all!(
     NethunsSocketPcapInner<Shared>:
         Send,
         NethunsSocketPcapTrait<Shared>,
         SharedReadSocketPcapTrait
+);
+static_assertions::assert_not_impl_all!(
+    NethunsSocketPcapInner<Shared>:
+        Sync
 );
 
 /// Public interface for [`NethunsSocketPcapInner`].
