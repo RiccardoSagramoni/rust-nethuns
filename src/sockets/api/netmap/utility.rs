@@ -100,8 +100,10 @@ pub(super) use nethuns_blocks_free;
 /// A `*mut u8` raw pointer pointing to the requested buffer
 macro_rules! nethuns_get_buf_addr_netmap {
     ($some_ring: expr, $tx_ring: expr, $pktid: expr) => {
-        netmap_buf($some_ring, $tx_ring.get_slot($pktid).pkthdr.buf_idx as _)
-            as *mut u8
+        slice::from_raw_parts_mut(
+            netmap_buf($some_ring, $tx_ring.get_slot($pktid).pkthdr.buf_idx as _) as *mut u8,
+            $some_ring.nr_buf_size as _,
+        )
     };
 }
 pub(super) use nethuns_get_buf_addr_netmap;

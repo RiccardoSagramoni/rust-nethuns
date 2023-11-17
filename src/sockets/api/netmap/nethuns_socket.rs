@@ -242,8 +242,21 @@ impl<State: RcState> NethunsSocketInnerTrait<State>
                 tx_ring.rings().tail()
             )
         };
+        
+        if packet.len() > dst.len() as _ {
+            return Err(NethunsSendError::InvalidPacketSize(
+                dst.len(),
+                packet.len(),
+            ));
+        }
+        
         unsafe {
-            nm_pkt_copy(packet.as_ptr() as _, dst as _, packet.len() as _)
+            // [SAFETY] we checked that `packet.len()` <= `dst.len()`
+            nm_pkt_copy(
+                packet.as_ptr() as _,
+                dst.as_mut_ptr() as _,
+                packet.len() as _,
+            )
         };
         tx_ring.nethuns_send_slot(tx_ring.rings().tail(), packet.len());
         tx_ring.rings_mut().advance_tail();
@@ -396,10 +409,7 @@ impl<State: RcState> NethunsSocketInnerTrait<State>
             None => return None,
         };
         Some(unsafe {
-            slice::from_raw_parts_mut(
-                nethuns_get_buf_addr_netmap!(&self.some_ring, tx_ring, pktid),
-                self.base.opt.packetsize as _,
-            )
+            nethuns_get_buf_addr_netmap!(&self.some_ring, tx_ring, pktid)
         })
     }
     

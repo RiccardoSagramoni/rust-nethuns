@@ -47,6 +47,8 @@ pub enum NethunsRecvError {
 pub enum NethunsSendError {
     #[error("[send] socket not in TX mode")]
     NotTx,
+    #[error("[send] invalid packet size: expected at most {0} bytes, got {1} bytes")]
+    InvalidPacketSize(usize, usize),
     #[error("[send] ring in use")]
     InUse,
     #[error("[send] an unexpected error occurred: {0}")]

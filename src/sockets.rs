@@ -131,6 +131,7 @@ impl<State: RcState> NethunsSocket<State> {
     /// # Returns
     /// * `Ok(())` - On success.
     /// * `Err(NethunsSendError::NotTx)` -  If the socket is not configured in TX mode. Check the configuration parameters passed to [`BindableNethunsSocket::open`].
+    /// * `Err(NethunsSendError::InvalidPacketSize)` - If the packet is too large.
     /// * `Err(NethunsSendError::InUse)` - If the slot at the tail of the TX ring is not released yet and it's currently in use by the application.
     pub fn send(&self, packet: &[u8]) -> Result<(), NethunsSendError> {
         unsafe { (*UnsafeCell::raw_get(&self.inner)).send(packet) }
