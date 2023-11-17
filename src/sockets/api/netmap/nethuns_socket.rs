@@ -9,14 +9,12 @@ use c_netmap_wrapper::macros::{netmap_buf, netmap_txring};
 use c_netmap_wrapper::{netmap_buf_pkt, NetmapRing, NmPortDescriptor};
 
 use crate::misc::circular_buffer::CircularBuffer;
-use crate::misc::hybrid_rc::state_trait::RcState;
-use crate::misc::hybrid_rc::HybridRc;
 use crate::nethuns::__nethuns_clear_if_promisc;
 use crate::sockets::api::{
     LocalRxNethunsSocketTrait, NethunsSocketInnerTrait, Pkthdr,
-    SharedRxNethunsSocketTrait,
+    
 };
-use crate::sockets::base::{NethunsSocketBase, RecvPacketData};
+use crate::sockets::base::{NethunsSocketBase, RecvPacketData, InnerRecvData};
 use crate::sockets::errors::{
     NethunsFlushError, NethunsRecvError, NethunsSendError,
 };
@@ -24,7 +22,6 @@ use crate::sockets::ring::{
     nethuns_ring_free_slots, AtomicRingSlotStatus, NethunsRingSlot,
     RingSlotStatus,
 };
-use crate::sockets::{Local, Shared};
 use crate::types::NethunsStat;
 
 use super::utility::{
@@ -33,8 +30,8 @@ use super::utility::{
 
 
 #[derive(Debug)]
-pub struct NethunsSocketNetmap<State: RcState> {
-    base: NethunsSocketBase<State>,
+pub struct NethunsSocketNetmap {
+    base: NethunsSocketBase,
     
     /// Port descriptor
     p: NmPortDescriptor,
@@ -63,10 +60,10 @@ pub struct NethunsSocketNetmap<State: RcState> {
 // base.rx_ring.is_some() and base.tx_ring.is_some()
 
 
-impl<State: RcState> NethunsSocketNetmap<State> {
+impl NethunsSocketNetmap {
     /// Create a new `NethunsSocketNetmap` object.
     pub(super) fn new(
-        base: NethunsSocketBase<State>,
+        base: NethunsSocketBase,
         p: NmPortDescriptor,
         some_ring: NetmapRing,
         free_ring: CircularBuffer<u32>,
@@ -81,15 +78,8 @@ impl<State: RcState> NethunsSocketNetmap<State> {
 }
 
 
-struct InnerRecvData<'a, State: RcState> {
-    id: usize,
-    pkthdr: &'a Pkthdr,
-    buffer: &'a [u8],
-    slot_status_flag: &'a HybridRc<AtomicRingSlotStatus, State>,
-}
-
-impl<State: RcState> NethunsSocketNetmap<State> {
-    fn inner_recv(&mut self) -> Result<InnerRecvData<State>, NethunsRecvError> {
+impl NethunsSocketNetmap {
+    fn inner_recv(&mut self) -> Result<InnerRecvData, NethunsRecvError> {
         // Check if the ring has been binded to a queue and if it's in RX mode
         let rx_ring = match &mut self.base.rx_ring {
             Some(r) => r,
@@ -196,33 +186,21 @@ impl<State: RcState> NethunsSocketNetmap<State> {
     }
 }
 
-impl LocalRxNethunsSocketTrait for NethunsSocketNetmap<Local> {
-    fn recv(&mut self) -> Result<RecvPacketData<Local>, NethunsRecvError> {
+impl LocalRxNethunsSocketTrait for NethunsSocketNetmap {
+    fn recv(&mut self) -> Result<RecvPacketData, NethunsRecvError> {
         let packet = self.inner_recv()?;
         Ok(RecvPacketData::new(
             packet.id,
             packet.pkthdr,
             packet.buffer,
-            packet.slot_status_flag.clone(),
-        ))
-    }
-}
-
-impl SharedRxNethunsSocketTrait for NethunsSocketNetmap<Shared> {
-    fn recv(&mut self) -> Result<RecvPacketData<Shared>, NethunsRecvError> {
-        let packet = self.inner_recv()?;
-        Ok(RecvPacketData::new(
-            packet.id,
-            packet.pkthdr,
-            packet.buffer,
-            packet.slot_status_flag.clone(),
+            packet.slot_status_flag,
         ))
     }
 }
 
 
-impl<State: RcState> NethunsSocketInnerTrait<State>
-    for NethunsSocketNetmap<State>
+impl NethunsSocketInnerTrait
+    for NethunsSocketNetmap
 {
     fn send(&mut self, packet: &[u8]) -> Result<(), NethunsSendError> {
         let tx_ring = match &mut self.base.tx_ring {
@@ -311,7 +289,7 @@ impl<State: RcState> NethunsSocketInnerTrait<State>
                 netmap_slot.len = slot.len as _;
                 netmap_slot.flags = NS_BUF_CHANGED as _;
                 // remember the nethuns slot in the netmap slot ptr field
-                netmap_slot.ptr = &*slot as *const NethunsRingSlot<State> as _;
+                netmap_slot.ptr = &*slot as *const NethunsRingSlot as _;
                 
                 ring.cur = unsafe { ring.nm_ring_next(ring.head) };
                 ring.head = ring.cur;
@@ -354,7 +332,7 @@ impl<State: RcState> NethunsSocketInnerTrait<State>
                     .get_slot(scan as _)
                     .map_err(NethunsFlushError::FrameworkError)?;
                 let slot = unsafe {
-                    &mut *(netmap_slot.ptr as *mut NethunsRingSlot<State>)
+                    &mut *(netmap_slot.ptr as *mut NethunsRingSlot)
                 };
                 mem::swap(&mut netmap_slot.buf_idx, &mut slot.pkthdr.buf_idx);
                 slot.status.store(RingSlotStatus::Free, Ordering::Release);
@@ -386,12 +364,12 @@ impl<State: RcState> NethunsSocketInnerTrait<State>
     
     
     #[inline(always)]
-    fn base(&self) -> &NethunsSocketBase<State> {
+    fn base(&self) -> &NethunsSocketBase {
         &self.base
     }
     
     #[inline(always)]
-    fn base_mut(&mut self) -> &mut NethunsSocketBase<State> {
+    fn base_mut(&mut self) -> &mut NethunsSocketBase {
         &mut self.base
     }
     
@@ -427,7 +405,7 @@ impl<State: RcState> NethunsSocketInnerTrait<State>
 }
 
 
-impl<State: RcState> Drop for NethunsSocketNetmap<State> {
+impl Drop for NethunsSocketNetmap {
     fn drop(&mut self) {
         // Clear promisc mode of interface if previously set
         if self.base.opt.promisc {

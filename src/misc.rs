@@ -1,7 +1,4 @@
 pub(crate) mod circular_buffer;
-pub(crate) mod hybrid_rc;
-
-use hybrid_rc::state_trait::RcState;
 
 use crate::sockets::NethunsSocket;
 use crate::types::NethunsQueue;
@@ -28,8 +25,8 @@ pub fn nethuns_dev_queue_name(
 
 /// Get the name of the device bounded to the socket.
 #[inline(always)]
-pub fn nethuns_device_name<State: RcState>(
-    socket: &NethunsSocket<State>,
+pub fn nethuns_device_name(
+    socket: &NethunsSocket,
 ) -> String {
     nethuns_dev_queue_name(
         socket.base().devname().to_str().ok(),

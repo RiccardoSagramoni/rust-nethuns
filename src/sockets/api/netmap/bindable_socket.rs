@@ -6,7 +6,6 @@ use c_netmap_wrapper::macros::{netmap_buf, netmap_rxring};
 use c_netmap_wrapper::{NetmapRing, NmPortDescriptor};
 
 use crate::misc::circular_buffer::CircularBuffer;
-use crate::misc::hybrid_rc::state_trait::RcState;
 use crate::misc::nethuns_dev_queue_name;
 use crate::nethuns::__nethuns_set_if_promisc;
 use crate::sockets::api::{
@@ -21,12 +20,12 @@ use super::nethuns_socket::NethunsSocketNetmap;
 
 
 #[derive(Debug)]
-pub struct BindableNethunsSocketNetmap<State: RcState> {
-    base: NethunsSocketBase<State>,
+pub struct BindableNethunsSocketNetmap {
+    base: NethunsSocketBase,
 }
 
 
-impl<State: RcState> BindableNethunsSocketNetmap<State> {
+impl BindableNethunsSocketNetmap {
     /// Open a new Nethuns socket for the `netmap` framework.
     ///
     /// # Arguments
@@ -50,7 +49,7 @@ impl<State: RcState> BindableNethunsSocketNetmap<State> {
             ));
         }
         
-        let mut base = NethunsSocketBase::<State>::default();
+        let mut base = NethunsSocketBase::default();
         
         if rx {
             base.rx_ring = Some(NethunsRing::new(
@@ -74,14 +73,14 @@ impl<State: RcState> BindableNethunsSocketNetmap<State> {
 }
 
 
-impl<State: RcState> BindableNethunsSocketInnerTrait<State>
-    for BindableNethunsSocketNetmap<State>
+impl BindableNethunsSocketInnerTrait
+    for BindableNethunsSocketNetmap
 {
     fn bind(
         mut self: Box<Self>,
         dev: &str,
         queue: NethunsQueue,
-    ) -> Result<Box<NethunsSocketInner<State>>, (NethunsBindError, Box<Self>)>
+    ) -> Result<Box<NethunsSocketInner>, (NethunsBindError, Box<Self>)>
     {
         // Prepare flag and prefix for device name
         let flags = if !self.tx() {
@@ -281,7 +280,7 @@ impl<State: RcState> BindableNethunsSocketInnerTrait<State>
     
     
     #[inline(always)]
-    fn base(&self) -> &NethunsSocketBase<State> {
+    fn base(&self) -> &NethunsSocketBase {
         &self.base
     }
 }

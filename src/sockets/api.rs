@@ -11,7 +11,6 @@
 use std::ffi::CStr;
 use std::fmt::Debug;
 
-use crate::misc::hybrid_rc::state_trait::RcState;
 use crate::types::{NethunsQueue, NethunsSocketOptions, NethunsStat};
 
 use super::base::{NethunsSocketBase, RecvPacketData};
@@ -19,7 +18,6 @@ use super::errors::{
     NethunsBindError, NethunsFlushError, NethunsOpenError, NethunsRecvError,
     NethunsSendError,
 };
-use super::{Local, Shared};
 
 
 cfg_if::cfg_if! {
@@ -27,9 +25,9 @@ cfg_if::cfg_if! {
         mod netmap;
         
         /// Nethuns socket **before** binding to a specific device and queue.
-        pub(super) type BindableNethunsSocketInner<State> = netmap::BindableNethunsSocketNetmap<State>;
+        pub(super) type BindableNethunsSocketInner = netmap::BindableNethunsSocketNetmap;
         /// Nethuns socket **after** binding to a specific device and queue.
-        pub(super) type NethunsSocketInner<State> = netmap::NethunsSocketNetmap<State>;
+        pub(super) type NethunsSocketInner = netmap::NethunsSocketNetmap;
         /// Packet header metadata
         pub(super) type Pkthdr = netmap::PkthdrNetmap;
     }
@@ -49,12 +47,12 @@ cfg_if::cfg_if! {
 /// * `opt`: The options for the socket.
 ///
 /// # Returns
-/// * `Ok(BindableNethunsSocketInner<State>)` - A new nethuns socket, in no error occurs.
+/// * `Ok(BindableNethunsSocketInner)` - A new nethuns socket, in no error occurs.
 /// * `Err(NethunsOpenError::InvalidOptions)` - If at least one of the options holds a invalid value.
 /// * `Err(NethunsOpenError::Error)` - If an unexpected error occurs.
-pub(super) fn nethuns_socket_open<State: RcState>(
+pub(super) fn nethuns_socket_open(
     opt: NethunsSocketOptions,
-) -> Result<BindableNethunsSocketInner<State>, NethunsOpenError> {
+) -> Result<BindableNethunsSocketInner, NethunsOpenError> {
     cfg_if::cfg_if! {
         if #[cfg(feature="netmap")] {
             netmap::BindableNethunsSocketNetmap::open(opt)
@@ -71,7 +69,7 @@ pub(super) fn nethuns_socket_open<State: RcState>(
 
 /// Trait which defines the interface for the framework-specific
 /// implementation of a [`BindableNethunsSocketInner`].
-pub(super) trait BindableNethunsSocketInnerTrait<State: RcState>:
+pub(super) trait BindableNethunsSocketInnerTrait:
     Debug
 {
     /// Bind an opened socket to a specific queue / any queue of interface/device `dev`.
@@ -85,12 +83,12 @@ pub(super) trait BindableNethunsSocketInnerTrait<State: RcState>:
         self: Box<Self>,
         dev: &str,
         queue: NethunsQueue,
-    ) -> Result<Box<NethunsSocketInner<State>>, (NethunsBindError, Box<Self>)>
+    ) -> Result<Box<NethunsSocketInner>, (NethunsBindError, Box<Self>)>
     where
         Self: Sized;
     
     /// Get an immutable reference to the base descriptor of the socket.
-    fn base(&self) -> &NethunsSocketBase<State>;
+    fn base(&self) -> &NethunsSocketBase;
     
     /// Check if the socket is in RX mode
     #[inline(always)]
@@ -108,11 +106,11 @@ pub(super) trait BindableNethunsSocketInnerTrait<State: RcState>:
 
 /// Trait which defines the interface for the framework-specific
 /// implementation of a [`NethunsSocketInner`].
-pub(super) trait NethunsSocketInnerTrait<State: RcState>: Debug {
+pub(super) trait NethunsSocketInnerTrait: Debug {
     /// Get an immutable reference to the base socket descriptor.
-    fn base(&self) -> &NethunsSocketBase<State>;
+    fn base(&self) -> &NethunsSocketBase;
     /// Get a mutable reference to the base socket descriptor.
-    fn base_mut(&mut self) -> &mut NethunsSocketBase<State>;
+    fn base_mut(&mut self) -> &mut NethunsSocketBase;
     
     
     /// Queue up a packet for transmission.
@@ -188,16 +186,11 @@ pub(super) trait NethunsSocketInnerTrait<State: RcState>: Debug {
 }
 
 pub(super) trait LocalRxNethunsSocketTrait:
-    Debug + NethunsSocketInnerTrait<Local>
+    Debug + NethunsSocketInnerTrait
 {
-    fn recv(&mut self) -> Result<RecvPacketData<Local>, NethunsRecvError>;
+    fn recv(&mut self) -> Result<RecvPacketData, NethunsRecvError>;
 }
 
-pub(super) trait SharedRxNethunsSocketTrait:
-    Debug + NethunsSocketInnerTrait<Shared>
-{
-    fn recv(&mut self) -> Result<RecvPacketData<Shared>, NethunsRecvError>;
-}
 
 
 //
@@ -231,18 +224,4 @@ pub trait PkthdrTrait: Debug + Send + Sync {
 
 
 // Check implementation of API traits
-static_assertions::assert_impl_all!(
-    BindableNethunsSocketInner<Local>: BindableNethunsSocketInnerTrait<Local>
-);
-static_assertions::assert_impl_all!(
-    BindableNethunsSocketInner<Shared>: BindableNethunsSocketInnerTrait<Shared>, Send
-);
-static_assertions::assert_impl_all!(
-    NethunsSocketInner<Local>: NethunsSocketInnerTrait<Local>
-);
-static_assertions::assert_impl_all!(
-    NethunsSocketInner<Shared>: NethunsSocketInnerTrait<Shared>, Send
-);
-static_assertions::assert_impl_all!(
-    Pkthdr: PkthdrTrait
-);
+// TODO

@@ -1,7 +1,7 @@
 error[E0505]: cannot move out of `socket` because it is borrowed
   --> tests/compile-fail/socket_dropped_before_buffer.rs:14:10
    |
-7  |     let socket: NethunsSocket<Local> = BindableNethunsSocket::open(opt)
+7  |     let socket: NethunsSocket = BindableNethunsSocket::open(opt)
    |         ------ binding `socket` declared here
 ...
 12 |     let packet = socket.recv().unwrap();

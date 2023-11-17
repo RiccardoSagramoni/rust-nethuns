@@ -1,7 +1,7 @@
 mod api;
 pub mod base;
 pub mod errors;
-pub mod pcap;
+// pub mod pcap;
 mod ring;
 
 pub use api::PkthdrTrait;
@@ -12,7 +12,6 @@ use std::cell::UnsafeCell;
 use std::ffi::CStr;
 use std::marker::PhantomData;
 
-use crate::misc::hybrid_rc::state_trait::RcState;
 use crate::types::{
     NethunsFilter, NethunsQueue, NethunsSocketOptions, NethunsStat,
 };
@@ -20,25 +19,12 @@ use crate::types::{
 use self::api::{
     BindableNethunsSocketInner, BindableNethunsSocketInnerTrait,
     LocalRxNethunsSocketTrait, NethunsSocketInner, NethunsSocketInnerTrait,
-    SharedRxNethunsSocketTrait,
 };
-use self::base::{NSRecvPacket, NethunsSocketBase, RecvPacket};
+use self::base::{NethunsSocketBase, RecvPacket};
 use self::errors::{
     NethunsBindError, NethunsFlushError, NethunsOpenError, NethunsRecvError,
     NethunsSendError,
 };
-
-/// Mark [`BindableNethunsSocket`], [`NethunsSocket`] or [`RecvPacket`] as local,
-/// i.e. as referenceable from a single thread.
-///
-/// Derived from the [`HybridRc`](https://docs.rs/hybrid-rc/) crate.
-pub type Local = crate::misc::hybrid_rc::state::Local;
-
-/// Mark [`BindableNethunsSocket`], [`NethunsSocket`] or [`RecvPacket`] as shared,
-/// i.e. as referenceable from multiple threads.
-///
-/// Derived from the [`HybridRc`](https://docs.rs/hybrid-rc/) crate.
-pub type Shared = crate::misc::hybrid_rc::state::Shared;
 
 
 /// Type for a Nethuns socket not binded to a specific device and queue.
@@ -48,16 +34,16 @@ pub type Shared = crate::misc::hybrid_rc::state::Shared;
 /// to a specific device and queue by calling [`BindableNethunsSocket::bind`]
 #[derive(Debug)]
 #[repr(transparent)]
-pub struct BindableNethunsSocket<State: RcState> {
+pub struct BindableNethunsSocket {
     /// Framework-specific socket
-    inner: Box<BindableNethunsSocketInner<State>>,
+    inner: Box<BindableNethunsSocketInner>,
 }
 
 // Make sure BindableNethunsSocket is Send
-static_assertions::assert_impl_all!(BindableNethunsSocket<Shared>: Send);
-static_assertions::assert_not_impl_any!(BindableNethunsSocket<Shared>: Sync);
+static_assertions::assert_impl_all!(BindableNethunsSocket: Send);
+static_assertions::assert_not_impl_any!(BindableNethunsSocket: Sync);
 
-impl<State: RcState> BindableNethunsSocket<State> {
+impl BindableNethunsSocket {
     /// Open a new Nethuns socket, by calling the `open` function
     /// of the struct belonging to the I/O framework selected at compile time.
     ///
@@ -85,7 +71,7 @@ impl<State: RcState> BindableNethunsSocket<State> {
         self,
         dev: &str,
         queue: NethunsQueue,
-    ) -> Result<NethunsSocket<State>, (NethunsBindError, Self)> {
+    ) -> Result<NethunsSocket, (NethunsBindError, Self)> {
         match self.inner.bind(dev, queue) {
             Ok(inner) => Ok(NethunsSocket::new(inner)),
             Err((err, inner)) => Err((err, Self { inner })),
@@ -111,21 +97,36 @@ impl<State: RcState> BindableNethunsSocket<State> {
 /// This socket is usable for RX and/or TX, depending from its configuration.
 #[derive(Debug)]
 #[repr(transparent)]
-pub struct NethunsSocket<State: RcState> {
-    inner: UnsafeCell<Box<NethunsSocketInner<State>>>,
+pub struct NethunsSocket {
+    inner: UnsafeCell<Box<NethunsSocketInner>>,
 }
 
 // Make sure BindableNethunsSocket is Send
-static_assertions::assert_not_impl_any!(BindableNethunsSocket<Local>: Send, Sync);
-static_assertions::assert_impl_all!(NethunsSocket<Shared>: Send);
-static_assertions::assert_not_impl_any!(BindableNethunsSocket<Shared>: Sync);
+// static_assertions::assert_not_impl_any!(BindableNethunsSocket<Local>: Send, Sync);
+// static_assertions::assert_impl_all!(NethunsSocket<Shared>: Send);
+// static_assertions::assert_not_impl_any!(BindableNethunsSocket<Shared>: Sync);
 
-impl<State: RcState> NethunsSocket<State> {
+impl NethunsSocket {
     /// Create a new `NethunsSocket`.
-    fn new(inner: Box<NethunsSocketInner<State>>) -> Self {
+    fn new(inner: Box<NethunsSocketInner>) -> Self {
         Self {
             inner: UnsafeCell::new(inner),
         }
+    }
+    
+    /// Get the next unprocessed received packet.
+    ///
+    /// # Returns
+    /// * `Ok(RecvPacket<NethunsSocket>)` - The unprocessed received packet, if no error occurred.
+    /// * `Err(NethunsRecvError::NotRx)` -  If the socket is not configured in RX mode. Check the configuration parameters passed to [`BindableNethunsSocket::open`].
+    /// * `Err(NethunsRecvError::InUse)` - If the slot at the head of the RX ring is currently in use, i.e. the corresponding received packet is not released yet.
+    /// * `Err(NethunsRecvError::NoPacketsAvailable)` - If there are no new packets available in the RX ring.
+    /// * `Err(NethunsRecvError::PacketFiltered)` - If the packet is filtered out by the `filter` function specified during socket configuration.
+    /// * `Err(NethunsRecvError::FrameworkError)` - If an error from the unsafe interaction with underlying I/O framework occurs.
+    /// * `Err(NethunsRecvError::Error)` - If an unexpected error occurs.
+    pub fn recv(&self) -> Result<RecvPacket<Self>, NethunsRecvError> {
+        unsafe { (*UnsafeCell::raw_get(&self.inner)).recv() }
+            .map(|data| RecvPacket::new(data, PhantomData))
     }
     
     
@@ -230,7 +231,7 @@ impl<State: RcState> NethunsSocket<State> {
     
     
     #[inline(always)]
-    pub(crate) fn base(&self) -> &NethunsSocketBase<State> {
+    pub(crate) fn base(&self) -> &NethunsSocketBase {
         unsafe { (*UnsafeCell::raw_get(&self.inner)).base() }
     }
     
@@ -256,41 +257,5 @@ impl<State: RcState> NethunsSocket<State> {
     #[inline(always)]
     pub fn txring_get_size(&self) -> Option<usize> {
         self.base().tx_ring().as_ref().map(|r| r.size())
-    }
-}
-
-impl NethunsSocket<Local> {
-    /// Get the next unprocessed received packet.
-    ///
-    /// # Returns
-    /// * `Ok(RecvPacket<NethunsSocket>)` - The unprocessed received packet, if no error occurred.
-    /// * `Err(NethunsRecvError::NotRx)` -  If the socket is not configured in RX mode. Check the configuration parameters passed to [`BindableNethunsSocket::open`].
-    /// * `Err(NethunsRecvError::InUse)` - If the slot at the head of the RX ring is currently in use, i.e. the corresponding received packet is not released yet.
-    /// * `Err(NethunsRecvError::NoPacketsAvailable)` - If there are no new packets available in the RX ring.
-    /// * `Err(NethunsRecvError::PacketFiltered)` - If the packet is filtered out by the `filter` function specified during socket configuration.
-    /// * `Err(NethunsRecvError::FrameworkError)` - If an error from the unsafe interaction with underlying I/O framework occurs.
-    /// * `Err(NethunsRecvError::Error)` - If an unexpected error occurs.
-    pub fn recv(&self) -> Result<NSRecvPacket<Local, Local>, NethunsRecvError> {
-        unsafe { (*UnsafeCell::raw_get(&self.inner)).recv() }
-            .map(|data| RecvPacket::new(data, PhantomData))
-    }
-}
-
-impl NethunsSocket<Shared> {
-    /// Get the next unprocessed received packet.
-    ///
-    /// # Returns
-    /// * `Ok(RecvPacket<NethunsSocket>)` - The unprocessed received packet, if no error occurred.
-    /// * `Err(NethunsRecvError::NotRx)` -  If the socket is not configured in RX mode. Check the configuration parameters passed to [`BindableNethunsSocket::open`].
-    /// * `Err(NethunsRecvError::InUse)` - If the slot at the head of the RX ring is currently in use, i.e. the corresponding received packet is not released yet.
-    /// * `Err(NethunsRecvError::NoPacketsAvailable)` - If there are no new packets available in the RX ring.
-    /// * `Err(NethunsRecvError::PacketFiltered)` - If the packet is filtered out by the `filter` function specified during socket configuration.
-    /// * `Err(NethunsRecvError::FrameworkError)` - If an error from the unsafe interaction with underlying I/O framework occurs.
-    /// * `Err(NethunsRecvError::Error)` - If an unexpected error occurs.
-    pub fn recv(
-        &self,
-    ) -> Result<NSRecvPacket<Shared, Shared>, NethunsRecvError> {
-        unsafe { (*UnsafeCell::raw_get(&self.inner)).recv() }
-            .map(|data| RecvPacket::new(data, PhantomData))
     }
 }

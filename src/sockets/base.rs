@@ -8,15 +8,12 @@ use std::sync::atomic;
 use derivative::Derivative;
 use getset::{CopyGetters, Getters, Setters};
 
-use crate::misc::hybrid_rc::state::{Local, Shared};
-use crate::misc::hybrid_rc::state_trait::RcState;
-use crate::misc::hybrid_rc::HybridRc;
 use crate::types::{NethunsFilter, NethunsQueue, NethunsSocketOptions};
 
 use super::api::Pkthdr;
-use super::pcap::NethunsSocketPcap;
+// use super::pcap::NethunsSocketPcap;
 use super::ring::{AtomicRingSlotStatus, NethunsRing, RingSlotStatus};
-use super::{PkthdrTrait, NethunsSocket};
+use super::{NethunsSocket, PkthdrTrait};
 
 
 /// Base structure for a `NethunsSocket`.
@@ -27,15 +24,15 @@ use super::{PkthdrTrait, NethunsSocket};
 #[derive(Derivative, Getters, Setters, CopyGetters)]
 #[derivative(Debug)]
 #[getset(get = "pub")]
-pub struct NethunsSocketBase<State: RcState> {
+pub struct NethunsSocketBase {
     /// Configuration options
     pub(super) opt: NethunsSocketOptions,
     
     /// Rings used for transmission
-    pub(super) tx_ring: Option<NethunsRing<State>>,
+    pub(super) tx_ring: Option<NethunsRing>,
     
     /// Rings used for reception
-    pub(super) rx_ring: Option<NethunsRing<State>>,
+    pub(super) rx_ring: Option<NethunsRing>,
     
     /// Name of the binded device
     pub(super) devname: CString,
@@ -56,8 +53,8 @@ pub struct NethunsSocketBase<State: RcState> {
     // filter_ctx removed => use closures with move semantics
 }
 
-impl<State: RcState> Default for NethunsSocketBase<State> {
-    fn default() -> NethunsSocketBase<State> {
+impl Default for NethunsSocketBase {
+    fn default() -> NethunsSocketBase {
         NethunsSocketBase {
             opt: Default::default(),
             tx_ring: None,
@@ -80,16 +77,11 @@ impl<State: RcState> Default for NethunsSocketBase<State> {
 /// The struct contains a [`PhantomData`] marker associated with the socket itself,
 /// so that the `RecvPacket` item is valid as long as the socket is alive.
 #[derive(Debug)]
-pub struct RecvPacket<'a, T, State: RcState> {
-    data: RecvPacketData<State>,
+pub struct RecvPacket<'a, T> {
+    data: RecvPacketData,
     
     phantom_data: PhantomData<&'a T>,
 }
-
-pub type NSRecvPacket<'a, SocketState, PacketState> =
-    RecvPacket<'a, NethunsSocket<SocketState>, PacketState>;
-pub type PcapRecvPacket<'a, SocketState, PacketState> =
-    RecvPacket<'a, NethunsSocketPcap<SocketState>, PacketState>;
 
 /// # Safety
 ///
@@ -97,12 +89,12 @@ pub type PcapRecvPacket<'a, SocketState, PacketState> =
 /// item is valid and the library guarantees that we are the only
 /// holders of such pointer for the lifetime of the `RecvPacket` item.
 /// Thus, it can be safely send between threads.
-unsafe impl<T> Send for RecvPacket<'_, T, Shared> {}
+unsafe impl<T> Send for RecvPacket<'_, T> {}
 
 
-impl<'a, T, State: RcState> RecvPacket<'a, T, State> {
+impl<'a, T> RecvPacket<'a, T> {
     pub(super) fn new(
-        data: RecvPacketData<State>,
+        data: RecvPacketData,
         phantom_data: PhantomData<&'a T>,
     ) -> Self {
         RecvPacket { data, phantom_data }
@@ -131,31 +123,7 @@ impl<'a, T, State: RcState> RecvPacket<'a, T, State> {
 }
 
 
-impl<'a, T> RecvPacket<'a, T, Local> {
-    /// Convert the local received packet to a shared one,
-    /// so that it can be sent between threads.
-    pub fn to_shared(mut self) -> RecvPacket<'a, T, Shared> {
-        let shared_packet = RecvPacket {
-            data: RecvPacketData {
-                id: self.data.id,
-                pkthdr: self.data.pkthdr,
-                buffer_ptr: self.data.buffer_ptr,
-                buffer_len: self.data.buffer_len,
-                slot_status_flag: ManuallyDrop::new(HybridRc::to_shared(
-                    &self.data.slot_status_flag,
-                )),
-            },
-            phantom_data: self.phantom_data,
-        };
-        mem::drop(unsafe {
-            ManuallyDrop::take(&mut self.data.slot_status_flag)
-        });
-        mem::forget(self);
-        shared_packet
-    }
-}
-
-impl<T, State: RcState> Display for RecvPacket<'_, T, State> {
+impl<T> Display for RecvPacket<'_, T> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(
             f,
@@ -177,7 +145,7 @@ impl<T, State: RcState> Display for RecvPacket<'_, T, State> {
 ///
 /// It **must** be wrapped inside `RecvPacket` struct before being handed to the user.
 #[derive(Debug)]
-pub(super) struct RecvPacketData<State: RcState> {
+pub(super) struct RecvPacketData {
     id: usize,
     pkthdr: *const dyn PkthdrTrait,
     
@@ -186,39 +154,34 @@ pub(super) struct RecvPacketData<State: RcState> {
     
     /// Reference used to set the status flag of the corresponding ring slot
     /// to `Free` when the `RecPacketData` is dropped.
-    ///
-    /// The [`ManuallyDrop`] wrapper is required to convert a
-    /// [`GenericRecvPacket<'_, T, Local>`] object
-    /// to a [`GenericRecvPacket<'_, T, Shared>`] object without
-    /// calling the [`drop()`] method (which would reset the status flag).
-    slot_status_flag: ManuallyDrop<HybridRc<AtomicRingSlotStatus, State>>,
+    slot_status_flag: *const AtomicRingSlotStatus,
 }
 
-impl<State: RcState> RecvPacketData<State> {
+impl RecvPacketData {
     pub fn new(
         id: usize,
         pkthdr: &Pkthdr,
         buffer: &[u8],
-        slot_status_flag: HybridRc<AtomicRingSlotStatus, State>,
+        slot_status_flag: &AtomicRingSlotStatus,
     ) -> Self {
         Self {
             id,
             pkthdr: pkthdr as *const Pkthdr,
             buffer_ptr: buffer.as_ptr(),
             buffer_len: buffer.len(),
-            slot_status_flag: ManuallyDrop::new(slot_status_flag),
+            slot_status_flag: slot_status_flag as *const AtomicRingSlotStatus,
         }
     }
 }
 
-impl<State: RcState> Drop for RecvPacketData<State> {
+impl Drop for RecvPacketData {
     /// Release the buffer by resetting the status flag of
     /// the corresponding ring slot.
     fn drop(&mut self) {
-        self.slot_status_flag
-            .store(RingSlotStatus::Free, atomic::Ordering::Release);
-        
-        mem::drop(unsafe { ManuallyDrop::take(&mut self.slot_status_flag) });
+        unsafe {
+            (*self.slot_status_flag)
+                .store(RingSlotStatus::Free, atomic::Ordering::Release);
+        }
     }
 }
 
@@ -228,9 +191,9 @@ impl<State: RcState> Drop for RecvPacketData<State> {
 /// `sockets::pcap::NethunsSocketPcapInner`).
 ///
 /// It will be converted to a [`RecvPacketData`] by the `recv()` function
-pub(super) struct InnerRecvData<'a, State: RcState> {
+pub(super) struct InnerRecvData<'a> {
     pub(super) id: usize,
     pub(super) pkthdr: &'a Pkthdr,
     pub(super) buffer: &'a [u8],
-    pub(super) slot_status_flag: &'a HybridRc<AtomicRingSlotStatus, State>,
+    pub(super) slot_status_flag: &'a AtomicRingSlotStatus,
 }
