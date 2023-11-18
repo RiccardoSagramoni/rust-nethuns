@@ -1,5 +1,13 @@
-error[E0601]: `main` function not found in crate `$CRATE`
-  --> tests/compile-fail/pcap_socket_dropped_before_packet.rs:17:9
+error[E0505]: cannot move out of `socket` because it is borrowed
+  --> tests/compile-fail/pcap_socket_dropped_before_packet.rs:13:10
    |
-17 | // TODO
-   |         ^ consider adding a `main` function to `$DIR/tests/compile-fail/pcap_socket_dropped_before_packet.rs`
+7  |     let socket =
+   |         ------ binding `socket` declared here
+...
+10 |     let p1 = socket.read().unwrap();
+   |              ------ borrow of `socket` occurs here
+...
+13 |     drop(socket);
+   |          ^^^^^^ move out of `socket` occurs here
+14 |     drop(p1);
+   |          -- borrow later used here
