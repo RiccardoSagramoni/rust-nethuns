@@ -1,7 +1,7 @@
 use std::ffi::CStr;
 use std::mem;
-use std::os::fd::AsRawFd;
 
+use rustix::fd::AsRawFd;
 use rustix::net;
 
 use crate::global::{NethunsNetInfo, NETHUNS_GLOBAL};

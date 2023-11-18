@@ -6,27 +6,25 @@ use getset::{Getters, MutGetters};
 use super::api::Pkthdr;
 
 use crate::misc::circular_buffer::CircularBuffer;
-use crate::misc::hybrid_rc::state_trait::RcState;
-use crate::misc::hybrid_rc::HybridRc;
 
 
 /// Ring abstraction for Nethuns sockets.
 #[derive(Debug, Getters, MutGetters)]
-pub struct NethunsRing<State: RcState> {
+pub struct NethunsRing {
     #[getset(get = "pub")]
     pktsize: usize,
     
     #[getset(get = "pub", get_mut = "pub")]
-    rings: CircularBuffer<NethunsRingSlot<State>>,
+    rings: CircularBuffer<NethunsRingSlot>,
 }
 
 
-impl<State: RcState> NethunsRing<State> {
+impl NethunsRing {
     /// Create a new `NethunsRing` object.
     ///
     /// Equivalent to `nethuns_make_ring` from the original C library.
     #[inline(always)]
-    pub fn new(nslots: usize, pktsize: usize) -> NethunsRing<State> {
+    pub fn new(nslots: usize, pktsize: usize) -> NethunsRing {
         let builder = || NethunsRingSlot::default_with_packet_size(pktsize);
         
         NethunsRing {
@@ -38,7 +36,7 @@ impl<State: RcState> NethunsRing<State> {
     
     /// Get a reference to a slot in the ring, given its index.
     #[inline(always)]
-    pub fn get_slot(&self, index: usize) -> &NethunsRingSlot<State> {
+    pub fn get_slot(&self, index: usize) -> &NethunsRingSlot {
         self.rings.get(index)
     }
     
@@ -47,14 +45,14 @@ impl<State: RcState> NethunsRing<State> {
     pub fn get_slot_mut(
         &mut self,
         index: usize,
-    ) -> &mut NethunsRingSlot<State> {
+    ) -> &mut NethunsRingSlot {
         self.rings.get_mut(index)
     }
     
     
     /// Get the index of a slot in the ring, given its reference.
     #[inline(always)]
-    pub fn get_idx_slot(&self, slot: &NethunsRingSlot<State>) -> Option<usize> {
+    pub fn get_idx_slot(&self, slot: &NethunsRingSlot) -> Option<usize> {
         // FIXME: this is inefficient. Can we improve it?
         self.rings
             .iter()
@@ -121,7 +119,7 @@ impl<State: RcState> NethunsRing<State> {
     
     /// Get a reference to the head slot in the ring
     /// and shift the head to the following slot.
-    pub fn next_slot(&mut self) -> &NethunsRingSlot<State> {
+    pub fn next_slot(&mut self) -> &NethunsRingSlot {
         self.rings.pop_unchecked()
     }
     
@@ -151,8 +149,8 @@ impl<State: RcState> NethunsRing<State> {
 
 /// Ring slot of a Nethuns socket.
 #[derive(Debug, Default)]
-pub struct NethunsRingSlot<State: RcState> {
-    pub status: HybridRc<AtomicRingSlotStatus, State>,
+pub struct NethunsRingSlot {
+    pub status: AtomicRingSlotStatus,
     
     pub pkthdr: Pkthdr,
     pub id: usize,
@@ -162,14 +160,14 @@ pub struct NethunsRingSlot<State: RcState> {
 }
 
 
-impl<State: RcState> NethunsRingSlot<State> {
+impl NethunsRingSlot {
     /// Get a new `NethunsRingSlot` with `packet` initialized
     /// with a given packet size.
     pub fn default_with_packet_size(pktsize: usize) -> Self {
         NethunsRingSlot {
-            status: HybridRc::new(AtomicRingSlotStatus::new(
+            status: AtomicRingSlotStatus::new(
                 RingSlotStatus::Free,
-            )),
+            ),
             pkthdr: Pkthdr::default(),
             id: 0,
             len: 0,
