@@ -70,7 +70,7 @@ impl NethunsSocketPcap {
     /// * `Err(NethunsPcapOpenError::Eof)` - if the end of the file is reached.
     pub fn read(&self) -> Result<RecvPacket, NethunsPcapReadError> {
         unsafe { (*UnsafeCell::raw_get(&self.inner)).read() }
-            .map(|p| RecvPacket::new(p))
+            .map(RecvPacket::new)
     }
     
     

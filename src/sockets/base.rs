@@ -1,6 +1,5 @@
 use std::ffi::CString;
 use std::fmt::{self, Debug, Display};
-use std::mem;
 use std::sync::atomic;
 
 use derivative::Derivative;
@@ -68,19 +67,7 @@ pub struct RecvPacket<'a> {
 
 
 impl<'a> RecvPacket<'a> {
-    pub(super) fn new<'b>(
-        data: RecvPacketData<'b>,
-    ) -> Self {
-        let data: RecvPacketData<'a> = unsafe {
-            // [SAFETY] As long as the socket is alive, the references
-            // to the data are valid
-            RecvPacketData {
-                id: data.id,
-                pkthdr: mem::transmute(data.pkthdr),
-                buffer: mem::transmute(data.buffer),
-                slot_status_flag: mem::transmute(data.slot_status_flag),
-            }
-        };
+    pub(super) fn new(data: RecvPacketData<'a>) -> Self {
         RecvPacket { data }
     }
     

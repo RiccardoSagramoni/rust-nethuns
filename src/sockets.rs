@@ -124,8 +124,13 @@ impl NethunsSocket {
     /// * `Err(NethunsRecvError::FrameworkError)` - If an error from the unsafe interaction with underlying I/O framework occurs.
     /// * `Err(NethunsRecvError::Error)` - If an unexpected error occurs.
     pub fn recv(&self) -> Result<RecvPacket, NethunsRecvError> {
-        unsafe { (*UnsafeCell::raw_get(&self.inner)).recv() }
-            .map(|data| RecvPacket::new(data))
+        unsafe {
+            (*UnsafeCell::<Box<NethunsSocketInner>>::raw_get(
+                &self.inner as *const _,
+            ))
+            .recv()
+        }
+        .map(RecvPacket::new)
     }
     
     
@@ -137,7 +142,12 @@ impl NethunsSocket {
     /// * `Err(NethunsSendError::InvalidPacketSize)` - If the packet is too large.
     /// * `Err(NethunsSendError::InUse)` - If the slot at the tail of the TX ring is not released yet and it's currently in use by the application.
     pub fn send(&self, packet: &[u8]) -> Result<(), NethunsSendError> {
-        unsafe { (*UnsafeCell::raw_get(&self.inner)).send(packet) }
+        unsafe {
+            (*UnsafeCell::<Box<NethunsSocketInner>>::raw_get(
+                &self.inner as *const _,
+            ))
+            .send(packet)
+        }
     }
     
     
@@ -149,7 +159,12 @@ impl NethunsSocket {
     /// * `Err(NethunsFlushError::FrameworkError)` - If an error from the unsafe interaction with underlying I/O framework occurs.
     /// * `Err(NethunsFlushError::Error)` - If an unexpected error occurs.
     pub fn flush(&self) -> Result<(), NethunsFlushError> {
-        unsafe { (*UnsafeCell::raw_get(&self.inner)).flush() }
+        unsafe {
+            (*UnsafeCell::<Box<NethunsSocketInner>>::raw_get(
+                &self.inner as *const _,
+            ))
+            .flush()
+        }
     }
     
     
@@ -168,7 +183,12 @@ impl NethunsSocket {
         id: usize,
         len: usize,
     ) -> Result<(), NethunsSendError> {
-        unsafe { (*UnsafeCell::raw_get(&self.inner)).send_slot(id, len) }
+        unsafe {
+            (*UnsafeCell::<Box<NethunsSocketInner>>::raw_get(
+                &self.inner as *const _,
+            ))
+            .send_slot(id, len)
+        }
     }
     
     
@@ -178,14 +198,24 @@ impl NethunsSocket {
     /// * `filter` - The packet filtering function. `None` if no filtering is required, `Some(filter)` to enable packet filtering.
     #[inline(always)]
     pub fn set_filter(&self, filter: Option<Box<NethunsFilter>>) {
-        unsafe { (*UnsafeCell::raw_get(&self.inner)).base_mut() }
-            .set_filter(filter);
+        unsafe {
+            (*UnsafeCell::<Box<NethunsSocketInner>>::raw_get(
+                &self.inner as *const _,
+            ))
+            .base_mut()
+        }
+        .set_filter(filter);
     }
     
     
     /// Get the file descriptor of the socket.
     pub fn fd(&self) -> std::os::raw::c_int {
-        unsafe { (*UnsafeCell::raw_get(&self.inner)).fd() }
+        unsafe {
+            (*UnsafeCell::<Box<NethunsSocketInner>>::raw_get(
+                &self.inner as *const _,
+            ))
+            .fd()
+        }
     }
     
     
@@ -213,25 +243,45 @@ impl NethunsSocket {
     /// * `group` - The group id.
     /// * `fanout` - A string encoding the details of the fanout mode.
     pub fn fanout(&self, group: i32, fanout: &CStr) -> bool {
-        unsafe { (*UnsafeCell::raw_get(&self.inner)).fanout(group, fanout) }
+        unsafe {
+            (*UnsafeCell::<Box<NethunsSocketInner>>::raw_get(
+                &self.inner as *const _,
+            ))
+            .fanout(group, fanout)
+        }
     }
     
     
     /// Dump the rings of the socket.
     pub fn dump_rings(&self) {
-        unsafe { (*UnsafeCell::raw_get(&self.inner)).dump_rings() }
+        unsafe {
+            (*UnsafeCell::<Box<NethunsSocketInner>>::raw_get(
+                &self.inner as *const _,
+            ))
+            .dump_rings()
+        }
     }
     
     /// Get some statistics about the socket
     /// or `None` on error.
     pub fn stats(&self) -> Option<NethunsStat> {
-        unsafe { (*UnsafeCell::raw_get(&self.inner)).stats() }
+        unsafe {
+            (*UnsafeCell::<Box<NethunsSocketInner>>::raw_get(
+                &self.inner as *const _,
+            ))
+            .stats()
+        }
     }
     
     
     #[inline(always)]
     pub(crate) fn base(&self) -> &NethunsSocketBase {
-        unsafe { (*UnsafeCell::raw_get(&self.inner)).base() }
+        unsafe {
+            (*UnsafeCell::<Box<NethunsSocketInner>>::raw_get(
+                &self.inner as *const _,
+            ))
+            .base()
+        }
     }
     
     /// Check if the socket is in TX mode
