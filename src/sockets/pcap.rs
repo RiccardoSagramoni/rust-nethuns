@@ -275,6 +275,7 @@ pub struct nethuns_pcap_patched_pkthdr {
 }
 
 
+/// Pcap time value
 #[allow(non_camel_case_types)]
 #[derive(Clone, Copy, Debug, Default, CopyGetters)]
 #[getset(get_copy = "pub")]

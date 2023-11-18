@@ -37,6 +37,18 @@ cfg_if::cfg_if! {
 }
 
 
+// Check implementation of API traits
+static_assertions::assert_impl_all!(
+    BindableNethunsSocketInner: BindableNethunsSocketInnerTrait
+);
+static_assertions::assert_impl_all!(
+    NethunsSocketInner: NethunsSocketInnerTrait
+);
+static_assertions::assert_impl_all!(
+    Pkthdr: PkthdrTrait
+);
+
+
 //
 
 
@@ -69,9 +81,7 @@ pub(super) fn nethuns_socket_open(
 
 /// Trait which defines the interface for the framework-specific
 /// implementation of a [`BindableNethunsSocketInner`].
-pub(super) trait BindableNethunsSocketInnerTrait:
-    Debug
-{
+pub(super) trait BindableNethunsSocketInnerTrait: Debug + Send {
     /// Bind an opened socket to a specific queue / any queue of interface/device `dev`.
     ///
     /// # Returns
@@ -106,7 +116,7 @@ pub(super) trait BindableNethunsSocketInnerTrait:
 
 /// Trait which defines the interface for the framework-specific
 /// implementation of a [`NethunsSocketInner`].
-pub(super) trait NethunsSocketInnerTrait: Debug {
+pub(super) trait NethunsSocketInnerTrait: Debug + Send {
     /// Get an immutable reference to the base socket descriptor.
     fn base(&self) -> &NethunsSocketBase;
     /// Get a mutable reference to the base socket descriptor.
@@ -117,7 +127,7 @@ pub(super) trait NethunsSocketInnerTrait: Debug {
     ///
     /// # Returns
     /// * `Ok(RecvPacket)` - The unprocessed received packet, if no error occurred.
-    /// * `Err(NethunsRecvError::NotRx)` -  If the socket is not configured in RX mode. Check the configuration parameters passed to [`BindableNethunsSocket::open`].
+    /// * `Err(NethunsRecvError::NotRx)` -  If the socket is not configured in RX mode. Check the configuration parameters passed to [`BindableNethunsSocket::open`](super::BindableNethunsSocket::open).
     /// * `Err(NethunsRecvError::InUse)` - If the slot at the head of the RX ring is currently in use, i.e. the corresponding received packet is not released yet.
     /// * `Err(NethunsRecvError::NoPacketsAvailable)` - If there are no new packets available in the RX ring.
     /// * `Err(NethunsRecvError::PacketFiltered)` - If the packet is filtered out by the `filter` function specified during socket configuration.
@@ -225,10 +235,3 @@ pub trait PkthdrTrait: Debug + Send + Sync {
     fn offvlan_tpid(&self) -> u16;
     fn offvlan_tci(&self) -> u16;
 }
-
-
-//
-
-
-// Check implementation of API traits
-// TODO

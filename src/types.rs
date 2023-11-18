@@ -1,3 +1,5 @@
+//! Utility structs and enums for the nethuns library.
+
 use getset::CopyGetters;
 
 use crate::sockets::PkthdrTrait;

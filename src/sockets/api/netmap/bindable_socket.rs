@@ -1,3 +1,6 @@
+//! [`BindableNethunsSocket`](crate::sockets::BindableNethunsSocket) inner implementation
+//! for the netmap framework.
+
 use std::ffi::CString;
 use std::ptr::NonNull;
 use std::{thread, time};
@@ -6,8 +9,7 @@ use c_netmap_wrapper::macros::{netmap_buf, netmap_rxring};
 use c_netmap_wrapper::{NetmapRing, NmPortDescriptor};
 
 use crate::misc::circular_buffer::CircularBuffer;
-use crate::misc::nethuns_dev_queue_name;
-use crate::nethuns::__nethuns_set_if_promisc;
+use crate::misc::{nethuns_set_if_promisc, nethuns_dev_queue_name};
 use crate::sockets::api::{
     BindableNethunsSocketInnerTrait, NethunsSocketInner,
 };
@@ -19,6 +21,8 @@ use crate::types::{NethunsQueue, NethunsSocketMode, NethunsSocketOptions};
 use super::nethuns_socket::NethunsSocketNetmap;
 
 
+/// [`BindableNethunsSocket`](crate::sockets::BindableNethunsSocket) inner implementation
+/// for the netmap framework.
 #[derive(Debug)]
 pub struct BindableNethunsSocketNetmap {
     base: NethunsSocketBase,
@@ -32,7 +36,7 @@ impl BindableNethunsSocketNetmap {
     /// * `opt`: The options for the socket.
     ///
     /// # Returns
-    /// * `Ok(Box<dyn BindableNethunsSocketTrait>)` - A new nethuns socket, in no error occurs.
+    /// * `Ok(BindableNethunsSocketNetmap)` - A new nethuns socket, in no error occurs.
     /// * `Err(NethunsOpenError::InvalidOptions)` - If at least one of the options holds a invalid value.
     /// * `Err(NethunsOpenError::Error)` - If an unexpected error occurs.
     pub(in crate::sockets) fn open(
@@ -73,15 +77,12 @@ impl BindableNethunsSocketNetmap {
 }
 
 
-impl BindableNethunsSocketInnerTrait
-    for BindableNethunsSocketNetmap
-{
+impl BindableNethunsSocketInnerTrait for BindableNethunsSocketNetmap {
     fn bind(
         mut self: Box<Self>,
         dev: &str,
         queue: NethunsQueue,
-    ) -> Result<Box<NethunsSocketInner>, (NethunsBindError, Box<Self>)>
-    {
+    ) -> Result<Box<NethunsSocketInner>, (NethunsBindError, Box<Self>)> {
         // Prepare flag and prefix for device name
         let flags = if !self.tx() {
             "/R".to_owned()
@@ -251,7 +252,7 @@ impl BindableNethunsSocketInnerTrait
         
         if self.base.opt.promisc {
             // Set the interface in promisc mode
-            if let Err(e) = __nethuns_set_if_promisc(&c_dev) {
+            if let Err(e) = nethuns_set_if_promisc(&c_dev) {
                 return Err((
                     NethunsBindError::Error(format!(
                         "couldn't set promisc mode: {e}"

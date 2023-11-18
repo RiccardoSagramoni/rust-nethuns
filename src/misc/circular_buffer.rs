@@ -1,3 +1,5 @@
+//! Module which provides [`CircularBuffer`], an optimized circular buffer with head and tail indexes.
+
 use std::iter::Cycle;
 use std::num::Wrapping;
 use std::slice::Iter;
@@ -7,9 +9,9 @@ use derivative::Derivative;
 
 /// An optimized circular buffer with head and tail indexes.
 ///
-/// In order to avoid a division for each push, we allocate a buffer of actual
+/// In order to avoid an integer division for each push, we allocate a buffer of actual
 /// size equals to the closest power of 2 larger or equal than the requested `max_items` size.
-/// In this way we can increment the head and tail indexes relying on wrapping overflow
+/// In this way, we can increment the head and tail indexes relying on wrapping overflow
 /// and filter them with a bit mask when accessing any buffer item.
 ///
 /// The buffer is empty when `head == tail` and is full when `(tail - head) >= max_items`.
@@ -29,7 +31,7 @@ impl<T> CircularBuffer<T> {
     /// Generate a new circular buffer.
     ///
     /// # Parameters
-    /// * `size` - the number of items.
+    /// * `size` - the required number of items (the actual allocated size could be larger).
     /// * `generator` - a function which generates a new item.
     ///
     /// # Panics
@@ -102,10 +104,8 @@ impl<T> CircularBuffer<T> {
     pub fn iter(&self) -> Cycle<Iter<T>> {
         self.buffer.iter().cycle()
     }
-}
-
-
-impl<T> CircularBuffer<T> {
+    
+    
     /// Return an immutable reference to the item specified by the `head` index
     /// and advance the `head` index of one position.
     #[inline(always)]
@@ -128,6 +128,7 @@ impl<T> CircularBuffer<T> {
         self.advance_head();
         &self.buffer[head_idx & self.mask]
     }
+    
     
     /// Add a new item to the buffer at the position specified by the `tail` index
     /// and advance the `tail` index of one position.
@@ -154,6 +155,7 @@ impl<T> CircularBuffer<T> {
         self.buffer[self.tail.0 & self.mask] = value;
         self.advance_tail();
     }
+    
     
     /// Get an immutable reference to an element of the buffer
     #[inline(always)]

@@ -28,8 +28,8 @@ use crate::sockets::errors::NethunsRecvError;
 ///
 /// # Safety
 ///
-/// This function makes use of unsafe code due to the interaction with the Netmap C API
-/// through the `netmap_rxring` function.
+/// This function makes use of unsafe code due to the interaction with the 
+/// Netmap C API through the `netmap_rxring` function.
 /// Be sure that the Netmap port descriptor is properly initialized.
 pub(super) fn non_empty_rx_ring(
     d: &mut NmPortDescriptor,

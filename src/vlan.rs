@@ -1,3 +1,5 @@
+//! VLAN-specific functions
+
 use std::io::Cursor;
 
 use byteorder::{BigEndian, ReadBytesExt};

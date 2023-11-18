@@ -1,3 +1,6 @@
+//! Ring abstraction for Nethuns sockets.
+
+use core::fmt;
 use std::sync::atomic::{AtomicU8, Ordering};
 use std::{cmp, ptr};
 
@@ -42,10 +45,7 @@ impl NethunsRing {
     
     /// Get a reference to a slot in the ring, given its index.
     #[inline(always)]
-    pub fn get_slot_mut(
-        &mut self,
-        index: usize,
-    ) -> &mut NethunsRingSlot {
+    pub fn get_slot_mut(&mut self, index: usize) -> &mut NethunsRingSlot {
         self.rings.get_mut(index)
     }
     
@@ -165,9 +165,7 @@ impl NethunsRingSlot {
     /// with a given packet size.
     pub fn default_with_packet_size(pktsize: usize) -> Self {
         NethunsRingSlot {
-            status: AtomicRingSlotStatus::new(
-                RingSlotStatus::Free,
-            ),
+            status: AtomicRingSlotStatus::new(RingSlotStatus::Free),
             pkthdr: Pkthdr::default(),
             id: 0,
             len: 0,
@@ -190,7 +188,7 @@ pub enum RingSlotStatus {
 }
 
 
-/// A wrapper around [`RingSlotStatus`] which can be safely shared between threads.
+/// An atomic wrapper around [`RingSlotStatus`] which can be safely shared between threads.
 ///
 /// This type uses an [`AtomicU8`] to store the enum value.
 pub struct AtomicRingSlotStatus(AtomicU8);
@@ -256,8 +254,8 @@ impl From<RingSlotStatus> for AtomicRingSlotStatus {
         AtomicRingSlotStatus::new(val)
     }
 }
-impl core::fmt::Debug for AtomicRingSlotStatus {
-    fn fmt(&self, f: &mut core::fmt::Formatter) -> core::fmt::Result {
+impl fmt::Debug for AtomicRingSlotStatus {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         self.load(Ordering::SeqCst).fmt(f)
     }
 }

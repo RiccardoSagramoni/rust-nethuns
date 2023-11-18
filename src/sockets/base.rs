@@ -1,3 +1,5 @@
+//! Common structures for all the implementation of a Nethuns socket.
+
 use std::ffi::CString;
 use std::fmt::{self, Debug, Display};
 use std::sync::atomic;
@@ -7,8 +9,6 @@ use getset::{CopyGetters, Getters, Setters};
 
 use crate::types::{NethunsFilter, NethunsQueue, NethunsSocketOptions};
 
-// TODO
-// use super::pcap::NethunsSocketPcap;
 use super::ring::{AtomicRingSlotStatus, NethunsRing, RingSlotStatus};
 use super::PkthdrTrait;
 
@@ -54,11 +54,9 @@ pub struct NethunsSocketBase {
 //
 
 
-/// Packet received when calling [`NethunsSocket::recv()`](crate::sockets::NethunsSocket::recv)
-/// or [`NethunsSocketPcap::read()`](crate::sockets::pcap::NethunsSocketPcap::read).
-///
-/// The struct contains a [`PhantomData`] marker associated with the socket itself,
-/// so that the `RecvPacket` item is valid as long as the socket is alive.
+/// Public data structure for a packet received when calling [`NethunsSocket::recv()`](crate::sockets::NethunsSocket::recv) or [`NethunsSocketPcap::read()`](crate::sockets::pcap::NethunsSocketPcap::read).
+/// 
+/// The lifetime specifier is required to ensure that the references do not outlive the generating socket.
 #[derive(Debug)]
 #[repr(transparent)]
 pub struct RecvPacket<'a> {
@@ -104,11 +102,9 @@ impl Display for RecvPacket<'_> {
 //
 
 
-/// Packet received when calling [`NethunsSocket::recv()`](crate::sockets::NethunsSocket::recv)
-/// or [`NethunsSocketPcap::read()`](crate::sockets::pcap::NethunsSocketPcap::read)
-/// with static lifetime.
+/// Inner data structure for a packet received when calling [`NethunsSocket::recv()`](crate::sockets::NethunsSocket::recv) or [`NethunsSocketPcap::read()`](crate::sockets::pcap::NethunsSocketPcap::read).
 ///
-/// It **must** be wrapped inside `RecvPacket` struct before being handed to the user.
+/// It must be encapsulated inside `RecvPacket` struct before being handed to the user.
 #[derive(Debug)]
 pub(super) struct RecvPacketData<'a> {
     id: usize,

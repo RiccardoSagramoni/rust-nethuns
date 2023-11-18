@@ -1,3 +1,5 @@
+//! Nethuns sockets
+
 mod api;
 pub mod base;
 pub mod errors;
@@ -26,8 +28,7 @@ use self::errors::{
 };
 
 
-/// Type for a Nethuns socket not binded to a specific device and queue.
-///
+/// Descriptor of a Nethuns socket not binded to a specific device and queue.
 ///
 /// In order to properly use the socket, you need to bind it first
 /// to a specific device and queue by calling [`BindableNethunsSocket::bind`]
@@ -64,7 +65,7 @@ impl BindableNethunsSocket {
     /// # Returns
     /// * `Ok(())` - If the binding was successful.
     /// * `Err(NethunsBindError::IllegalArgument)` - If the device name contains an interior null character.
-    /// * `Err(NethunsBindError::FrameworkError)` - If an error from the unsafe interaction with underlying I/O framework occurs.
+    /// * `Err(NethunsBindError::FrameworkError)` - If an error from the interaction with underlying I/O framework occurs.
     /// * `Err(NethunsBindError::Error)` - If an unexpected error occurs.
     pub fn bind(
         self,

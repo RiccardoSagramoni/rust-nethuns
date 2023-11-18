@@ -1,3 +1,6 @@
+//! [`NethunsSocket`](crate::sockets::NethunsSocket) inner implementation
+//! for the netmap framework.
+
 use std::ffi::CStr;
 use std::ptr::NonNull;
 use std::sync::atomic::Ordering;
@@ -9,7 +12,7 @@ use c_netmap_wrapper::macros::{netmap_buf, netmap_txring};
 use c_netmap_wrapper::{netmap_buf_pkt, NetmapRing, NmPortDescriptor};
 
 use crate::misc::circular_buffer::CircularBuffer;
-use crate::nethuns::__nethuns_clear_if_promisc;
+use crate::misc::nethuns_clear_if_promisc;
 use crate::sockets::api::NethunsSocketInnerTrait;
 use crate::sockets::base::{NethunsSocketBase, RecvPacketData};
 use crate::sockets::errors::{
@@ -25,6 +28,8 @@ use super::utility::{
 };
 
 
+/// [`NethunsSocket`](crate::sockets::NethunsSocket) inner implementation
+/// for the netmap framework.
 #[derive(Debug)]
 pub struct NethunsSocketNetmap {
     base: NethunsSocketBase,
@@ -361,23 +366,23 @@ impl NethunsSocketInnerTrait for NethunsSocketNetmap {
     
     #[inline(always)]
     fn get_packet_buffer_ref(&self, pktid: usize) -> Option<&mut [u8]> {
-        let tx_ring = match &self.base.tx_ring {
-            Some(r) => r,
-            None => return None,
-        };
-        Some(unsafe {
+        self.base.tx_ring.as_ref().map(|tx_ring| unsafe {
             nethuns_get_buf_addr_netmap!(&self.some_ring, tx_ring, pktid)
         })
     }
     
+    
     /// NOT IMPLEMENTED IN NETMAP
+    #[inline(always)]
     fn fanout(&mut self, _: libc::c_int, _: &CStr) -> bool {
         false
     }
     
     /// NOT IMPLEMENTED IN NETMAP
+    #[inline(always)]
     fn dump_rings(&mut self) {}
     
+    #[inline(always)]
     fn stats(&self) -> Option<NethunsStat> {
         Some(NethunsStat::default())
     }
@@ -388,7 +393,7 @@ impl Drop for NethunsSocketNetmap {
     fn drop(&mut self) {
         // Clear promisc mode of interface if previously set
         if self.base.opt.promisc {
-            if let Err(e) = __nethuns_clear_if_promisc(&self.base.devname) {
+            if let Err(e) = nethuns_clear_if_promisc(&self.base.devname) {
                 eprintln!("[NethunsSocketNetmap::Drop] couldn't clear promisc mode: {e}");
             }
         }
