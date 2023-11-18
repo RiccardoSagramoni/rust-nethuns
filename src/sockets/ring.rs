@@ -17,7 +17,7 @@ pub struct NethunsRing {
     #[getset(get = "pub")]
     pktsize: usize,
     
-    #[getset(get = "pub", get_mut = "pub")]
+    #[getset(get = "pub", get_mut = "pub(crate)")]
     rings: CircularBuffer<NethunsRingSlot>,
 }
 

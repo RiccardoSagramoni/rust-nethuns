@@ -18,11 +18,11 @@ use super::PkthdrTrait;
 /// This data structure is common to all the implementation of a "nethuns socket",
 /// for the supported underlying I/O frameworks. Thus, it's independent from
 /// low-level implementation of the sockets.
-#[derive(Default, Derivative, Getters, Setters, CopyGetters)]
+#[derive(Default, Derivative, Getters, CopyGetters, Setters)]
 #[derivative(Debug)]
-#[getset(get = "pub")]
 pub struct NethunsSocketBase {
     /// Configuration options
+    #[getset(get = "pub")]
     pub(super) opt: NethunsSocketOptions,
     
     /// Rings used for transmission
@@ -32,22 +32,33 @@ pub struct NethunsSocketBase {
     pub(super) rx_ring: Option<NethunsRing>,
     
     /// Name of the binded device
+    #[getset(get = "pub")]
     pub(super) devname: CString,
     
     /// Queue binded to the socket
-    #[getset(get_copy = "pub with_prefix")]
+    #[getset(get_copy = "pub")]
     pub(super) queue: NethunsQueue,
     
     /// Index of the interface
-    #[getset(get_copy = "pub with_prefix")]
+    #[getset(get_copy = "pub")]
     pub(super) ifindex: libc::c_int,
     
     /// Closure used for filtering received packets.
     #[derivative(Debug = "ignore")]
-    #[getset(set = "pub")]
+    #[getset(get = "pub", set = "pub")]
     pub(super) filter: Option<Box<NethunsFilter>>,
-    // errbuf removed => use Result as return type
-    // filter_ctx removed => use closures with move semantics
+}
+// errbuf removed => use Result as return type
+// filter_ctx removed => use closures with move semantics
+
+impl NethunsSocketBase {
+    pub fn tx_ring(&self) -> Option<&NethunsRing> {
+        self.tx_ring.as_ref()
+    }
+    
+    pub fn rx_ring(&self) -> Option<&NethunsRing> {
+        self.rx_ring.as_ref()
+    }
 }
 
 
@@ -55,7 +66,7 @@ pub struct NethunsSocketBase {
 
 
 /// Public data structure for a packet received when calling [`NethunsSocket::recv()`](crate::sockets::NethunsSocket::recv) or [`NethunsSocketPcap::read()`](crate::sockets::pcap::NethunsSocketPcap::read).
-/// 
+///
 /// The lifetime specifier is required to ensure that the references do not outlive the generating socket.
 #[derive(Debug)]
 #[repr(transparent)]
