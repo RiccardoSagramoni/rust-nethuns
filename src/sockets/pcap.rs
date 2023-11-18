@@ -69,7 +69,7 @@ impl NethunsSocketPcap {
     /// * `Err(NethunsPcapOpenError::FileError)` - if an error occurs while accessing the file (BUILTIN_PCAP_READER only).
     /// * `Err(NethunsPcapOpenError::Eof)` - if the end of the file is reached.
     pub fn read(&self) -> Result<RecvPacket, NethunsPcapReadError> {
-        unsafe { (*UnsafeCell::raw_get(&self.inner)).read() }
+        unsafe { (*UnsafeCell::get(&self.inner)).read() }
             .map(RecvPacket::new)
     }
     
@@ -89,7 +89,7 @@ impl NethunsSocketPcap {
         header: &nethuns_pcap_pkthdr,
         packet: &[u8],
     ) -> Result<usize, NethunsPcapWriteError> {
-        unsafe { (*UnsafeCell::raw_get(&self.inner)).write(header, packet) }
+        unsafe { (*UnsafeCell::get(&self.inner)).write(header, packet) }
     }
     
     
@@ -108,7 +108,7 @@ impl NethunsSocketPcap {
         pkthdr: &dyn PkthdrTrait,
         packet: &[u8],
     ) -> Result<u32, NethunsPcapStoreError> {
-        unsafe { (*UnsafeCell::raw_get(&self.inner)).store(pkthdr, packet) }
+        unsafe { (*UnsafeCell::get(&self.inner)).store(pkthdr, packet) }
     }
     
     
@@ -119,13 +119,13 @@ impl NethunsSocketPcap {
     /// * `Err(NethunsPcapRewindError::NotSupported)` - if the `NETHUNS_USE_BUILTIN_PCAP_READER` feature is not enabled (STANDARD_PCAP_READER only).
     /// * `Err(NethunsPcapRewindError::FileError)` - if an I/O error occurs while accessing the file (BUILTIN_PCAP_READER only).
     pub fn rewind(&self) -> Result<u64, NethunsPcapRewindError> {
-        unsafe { (*UnsafeCell::raw_get(&self.inner)).rewind() }
+        unsafe { (*UnsafeCell::get(&self.inner)).rewind() }
     }
     
     
     /// Get an immutable reference to the nethuns base socket.
     pub fn base(&self) -> &NethunsSocketBase {
-        unsafe { &(*UnsafeCell::raw_get(&self.inner)).base }
+        unsafe { &(*UnsafeCell::get(&self.inner)).base }
     }
 }
 
