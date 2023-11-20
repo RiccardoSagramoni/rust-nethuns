@@ -2,6 +2,7 @@
 
 mod constants;
 
+
 use core::fmt::Debug;
 use std::cell::UnsafeCell;
 
@@ -69,8 +70,7 @@ impl NethunsSocketPcap {
     /// * `Err(NethunsPcapOpenError::FileError)` - if an error occurs while accessing the file (BUILTIN_PCAP_READER only).
     /// * `Err(NethunsPcapOpenError::Eof)` - if the end of the file is reached.
     pub fn read(&self) -> Result<RecvPacket, NethunsPcapReadError> {
-        unsafe { (*UnsafeCell::get(&self.inner)).read() }
-            .map(RecvPacket::new)
+        unsafe { (*UnsafeCell::get(&self.inner)).read() }.map(RecvPacket::new)
     }
     
     

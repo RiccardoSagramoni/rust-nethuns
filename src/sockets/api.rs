@@ -36,7 +36,6 @@ cfg_if::cfg_if! {
     }
 }
 
-
 // Check implementation of API traits
 static_assertions::assert_impl_all!(
     BindableNethunsSocketInner: BindableNethunsSocketInnerTrait
