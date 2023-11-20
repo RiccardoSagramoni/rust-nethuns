@@ -1,8 +1,8 @@
 //! Ring abstraction for Nethuns sockets.
 
 use core::fmt;
+use std::cmp;
 use std::sync::atomic::{AtomicU8, Ordering};
-use std::{cmp, ptr};
 
 use getset::{Getters, MutGetters};
 
@@ -13,12 +13,12 @@ use crate::misc::circular_buffer::CircularBuffer;
 
 /// Ring abstraction for Nethuns sockets.
 #[derive(Debug, Getters, MutGetters)]
-pub struct NethunsRing {
+pub(crate) struct NethunsRing {
     #[getset(get = "pub")]
     #[allow(dead_code)]
     pktsize: usize,
     
-    #[getset(get = "pub", get_mut = "pub(crate)")]
+    #[getset(get = "pub", get_mut = "pub")]
     rings: CircularBuffer<NethunsRingSlot>,
 }
 
@@ -48,18 +48,6 @@ impl NethunsRing {
     #[inline(always)]
     pub fn get_slot_mut(&mut self, index: usize) -> &mut NethunsRingSlot {
         self.rings.get_mut(index)
-    }
-    
-    
-    /// Get the index of a slot in the ring, given its reference.
-    #[inline(always)]
-    #[allow(dead_code)]
-    pub fn get_idx_slot(&self, slot: &NethunsRingSlot) -> Option<usize> {
-        // FIXME: this is inefficient. Can we improve it?
-        self.rings
-            .iter()
-            .take(self.rings.size())
-            .position(|s| ptr::eq(s, slot))
     }
     
     
@@ -101,6 +89,7 @@ impl NethunsRing {
     ///
     /// The returned value is capped to 32.
     #[inline(always)]
+    #[allow(dead_code)]
     pub fn num_free_slots(&self, pos: usize) -> usize {
         let mut total = 0_usize;
         
@@ -123,6 +112,8 @@ impl NethunsRing {
     
     /// Get a reference to the head slot in the ring
     /// and shift the head to the following slot.
+    #[inline(always)]
+    #[allow(dead_code)]
     pub fn next_slot(&mut self) -> &NethunsRingSlot {
         self.rings.pop_unchecked()
     }
@@ -280,7 +271,7 @@ impl Default for AtomicRingSlotStatus {
 macro_rules! nethuns_ring_free_slots {
     ($socket: expr, $ring: expr, $free_macro: ident) => {
         loop {
-            let slot = $ring.get_slot($ring.rings().tail());
+            let slot = $ring.get_slot($ring.tail());
             
             if $ring.rings().is_empty()
                 || slot.status.load(Ordering::Acquire)

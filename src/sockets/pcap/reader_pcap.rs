@@ -128,7 +128,7 @@ impl NethunsSocketPcapTrait for NethunsSocketPcapInner {
         let slot = rx_ring.get_slot(head_idx);
         
         Ok(RecvPacketData::new(
-            rx_ring.rings().head() as _,
+            rx_ring.head() as _,
             &slot.pkthdr,
             &slot.packet[..bytes as _],
             &slot.status,

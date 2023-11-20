@@ -88,7 +88,7 @@ impl NethunsSocketInnerTrait for NethunsSocketNetmap {
         };
         
         // Get the first slot available to userspace (head of RX ring) and check if it's in use
-        let head_idx = rx_ring.rings().head();
+        let head_idx = rx_ring.head();
         if rx_ring.get_slot(head_idx).status.load(Ordering::Acquire)
             != RingSlotStatus::Free
         {
@@ -179,7 +179,7 @@ impl NethunsSocketInnerTrait for NethunsSocketNetmap {
         let slot = rx_ring.get_slot(head_idx);
         
         Ok(RecvPacketData::new(
-            rx_ring.rings().head() as _,
+            rx_ring.head() as _,
             &slot.pkthdr,
             pkt,
             &slot.status,
@@ -193,7 +193,7 @@ impl NethunsSocketInnerTrait for NethunsSocketNetmap {
             None => return Err(NethunsSendError::NotTx),
         };
         
-        let slot = tx_ring.get_slot(tx_ring.rings().tail());
+        let slot = tx_ring.get_slot(tx_ring.tail());
         if slot.status.load(Ordering::Relaxed) != RingSlotStatus::Free {
             return Err(NethunsSendError::InUse);
         }
@@ -202,7 +202,7 @@ impl NethunsSocketInnerTrait for NethunsSocketNetmap {
             nethuns_get_buf_addr_netmap!(
                 &self.some_ring,
                 tx_ring,
-                tx_ring.rings().tail()
+                tx_ring.tail()
             )
         };
         
@@ -221,7 +221,7 @@ impl NethunsSocketInnerTrait for NethunsSocketNetmap {
                 packet.len() as _,
             )
         };
-        tx_ring.nethuns_send_slot(tx_ring.rings().tail(), packet.len());
+        tx_ring.nethuns_send_slot(tx_ring.tail(), packet.len());
         tx_ring.rings_mut().advance_tail();
         
         Ok(())
@@ -237,7 +237,7 @@ impl NethunsSocketInnerTrait for NethunsSocketNetmap {
         let mut prev_tails: Vec<u32> =
             vec![0; (self.p.last_tx_ring - self.p.last_rx_ring + 1) as _];
         
-        let mut head = tx_ring.rings().head();
+        let mut head = tx_ring.head();
         
         // Try to push packets marked for transmission
         for i in self.p.first_tx_ring as _..=self.p.last_tx_ring as _ {
