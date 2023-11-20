@@ -51,8 +51,6 @@ trybuild = "1.0.85"
 default = [
     "libc/extra_traits",
     "rustix/net",
-    "netmap",            # FIXME remove from default features
-    # "NETHUNS_USE_BUILTIN_PCAP_READER", # FIXME remove from default features
 ]
 netmap = ["dep:c_netmap_wrapper"]
 libpcap = []
