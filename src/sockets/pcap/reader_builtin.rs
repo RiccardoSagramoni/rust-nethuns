@@ -168,14 +168,20 @@ impl NethunsSocketPcapTrait for NethunsSocketPcapInner {
         
         rx_ring.rings_mut().advance_head();
         
-        let slot = rx_ring.get_slot(head_idx);
+        let recv_packet = {
+            // IMPORTANT!! slot MUST be an **immutable** reference,
+            // otherwise the Rust memory model rules will be broken.
+            let slot = rx_ring.get_slot(head_idx);
+            
+            RecvPacketData::new(
+                rx_ring.head() as _,
+                &slot.pkthdr,
+                &slot.packet[..bytes as _],
+                &slot.status,
+            )
+        };
         
-        Ok(RecvPacketData::new(
-            rx_ring.head(),
-            &slot.pkthdr,
-            &slot.packet[..bytes as _],
-            &slot.status,
-        ))
+        Ok(recv_packet)
     }
     
     
