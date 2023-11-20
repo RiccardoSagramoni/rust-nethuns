@@ -3,8 +3,7 @@ use std::sync::Arc;
 use std::time::{Duration, SystemTime};
 use std::{mem, thread};
 
-use nethuns::sockets::base::RecvPacket;
-use nethuns::sockets::BindableNethunsSocket;
+use nethuns::sockets::{BindableNethunsSocket, RecvPacket};
 
 use nethuns::types::{
     NethunsCaptureDir, NethunsCaptureMode, NethunsQueue, NethunsSocketMode,

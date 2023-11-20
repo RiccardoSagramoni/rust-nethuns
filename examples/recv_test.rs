@@ -1,8 +1,7 @@
 use std::env;
 
 use etherparse::Ethernet2Header;
-use nethuns::sockets::base::RecvPacket;
-use nethuns::sockets::{BindableNethunsSocket, NethunsSocket};
+use nethuns::sockets::{BindableNethunsSocket, NethunsSocket, RecvPacket};
 use nethuns::types::{
     NethunsCaptureDir, NethunsCaptureMode, NethunsQueue, NethunsSocketMode,
     NethunsSocketOptions,

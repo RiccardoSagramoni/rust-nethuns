@@ -1,12 +1,13 @@
 //! Nethuns sockets
 
 mod api;
-pub mod base;
+mod base;
 pub mod errors;
 pub mod pcap;
 mod ring;
 
 pub use api::PkthdrTrait;
+pub use base::RecvPacket;
 
 
 use core::fmt::Debug;
@@ -21,7 +22,7 @@ use self::api::{
     BindableNethunsSocketInner, BindableNethunsSocketInnerTrait,
     NethunsSocketInner, NethunsSocketInnerTrait,
 };
-use self::base::{NethunsSocketBase, RecvPacket};
+use self::base::NethunsSocketBase;
 use self::errors::{
     NethunsBindError, NethunsFlushError, NethunsOpenError, NethunsRecvError,
     NethunsSendError,
