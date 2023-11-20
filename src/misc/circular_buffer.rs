@@ -1,5 +1,7 @@
 //! Module which provides [`CircularBuffer`], an optimized circular buffer with head and tail indexes.
 
+#![allow(dead_code)]
+
 use std::iter::Cycle;
 use std::num::Wrapping;
 use std::slice::Iter;

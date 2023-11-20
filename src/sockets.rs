@@ -114,6 +114,12 @@ impl NethunsSocket {
     }
     
     
+    #[inline(always)]
+    pub(crate) fn base(&self) -> &NethunsSocketBase {
+        unsafe { (*UnsafeCell::get(&self.inner)).base() }
+    }
+    
+    
     /// Get the next unprocessed received packet.
     ///
     /// # Returns
@@ -178,8 +184,7 @@ impl NethunsSocket {
     /// * `filter` - The packet filtering function. `None` if no filtering is required, `Some(filter)` to enable packet filtering.
     #[inline(always)]
     pub fn set_filter(&self, filter: Option<Box<NethunsFilter>>) {
-        unsafe { (*UnsafeCell::get(&self.inner)).base_mut() }
-            .set_filter(filter);
+        unsafe { (*UnsafeCell::get(&self.inner)).base_mut() }.filter = filter;
     }
     
     
@@ -229,32 +234,27 @@ impl NethunsSocket {
     }
     
     
-    #[inline(always)]
-    pub(crate) fn base(&self) -> &NethunsSocketBase {
-        unsafe { (*UnsafeCell::get(&self.inner)).base() }
-    }
-    
     /// Check if the socket is in TX mode
     #[inline(always)]
     pub fn tx(&self) -> bool {
-        self.base().tx_ring().is_some()
+        self.base().tx_ring.is_some()
     }
     
     /// Check if the socket is in RX mode
     #[inline(always)]
     pub fn rx(&self) -> bool {
-        self.base().rx_ring().is_some()
+        self.base().rx_ring.is_some()
     }
     
     /// Get size of the RX ring.
     #[inline(always)]
     pub fn rxring_get_size(&self) -> Option<usize> {
-        self.base().rx_ring().as_ref().map(|r| r.size())
+        self.base().rx_ring.as_ref().map(|r| r.size())
     }
     
     /// Get size of the TX ring.
     #[inline(always)]
     pub fn txring_get_size(&self) -> Option<usize> {
-        self.base().tx_ring().as_ref().map(|r| r.size())
+        self.base().tx_ring.as_ref().map(|r| r.size())
     }
 }

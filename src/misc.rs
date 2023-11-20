@@ -36,8 +36,8 @@ pub fn nethuns_dev_queue_name(
 #[inline(always)]
 pub fn nethuns_device_name(socket: &NethunsSocket) -> String {
     nethuns_dev_queue_name(
-        socket.base().devname().to_str().ok(),
-        socket.base().queue(),
+        socket.base().devname.to_str().ok(),
+        socket.base().queue,
     )
 }
 

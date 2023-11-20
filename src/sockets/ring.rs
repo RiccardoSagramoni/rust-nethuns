@@ -15,6 +15,7 @@ use crate::misc::circular_buffer::CircularBuffer;
 #[derive(Debug, Getters, MutGetters)]
 pub struct NethunsRing {
     #[getset(get = "pub")]
+    #[allow(dead_code)]
     pktsize: usize,
     
     #[getset(get = "pub", get_mut = "pub(crate)")]
@@ -52,6 +53,7 @@ impl NethunsRing {
     
     /// Get the index of a slot in the ring, given its reference.
     #[inline(always)]
+    #[allow(dead_code)]
     pub fn get_idx_slot(&self, slot: &NethunsRingSlot) -> Option<usize> {
         // FIXME: this is inefficient. Can we improve it?
         self.rings
@@ -69,12 +71,14 @@ impl NethunsRing {
     
     /// Check if the buffer is empty
     #[inline(always)]
+    #[allow(dead_code)]
     pub fn is_empty(&self) -> bool {
         self.rings.is_empty()
     }
     
     /// Check if the buffer is full
     #[inline(always)]
+    #[allow(dead_code)]
     pub fn is_full(&self) -> bool {
         self.rings.is_full()
     }

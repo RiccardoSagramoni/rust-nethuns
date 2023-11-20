@@ -121,12 +121,6 @@ impl NethunsSocketPcap {
     pub fn rewind(&self) -> Result<u64, NethunsPcapRewindError> {
         unsafe { (*UnsafeCell::get(&self.inner)).rewind() }
     }
-    
-    
-    /// Get an immutable reference to the nethuns base socket.
-    pub fn base(&self) -> &NethunsSocketBase {
-        unsafe { &(*UnsafeCell::get(&self.inner)).base }
-    }
 }
 
 /// Inner struct of the nethuns socket for packet capture (PCAP).

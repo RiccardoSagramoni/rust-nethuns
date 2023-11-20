@@ -103,13 +103,13 @@ pub(super) trait BindableNethunsSocketInnerTrait: Debug + Send {
     /// Check if the socket is in RX mode
     #[inline(always)]
     fn rx(&self) -> bool {
-        self.base().rx_ring().is_some()
+        self.base().rx_ring.is_some()
     }
     
     /// Check if the socket is in TX mode
     #[inline(always)]
     fn tx(&self) -> bool {
-        self.base().tx_ring().is_some()
+        self.base().tx_ring.is_some()
     }
 }
 

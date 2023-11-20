@@ -5,7 +5,6 @@ use std::fmt::{self, Debug, Display};
 use std::sync::atomic;
 
 use derivative::Derivative;
-use getset::{CopyGetters, Getters, Setters};
 
 use crate::types::{NethunsFilter, NethunsQueue, NethunsSocketOptions};
 
@@ -18,48 +17,33 @@ use super::PkthdrTrait;
 /// This data structure is common to all the implementation of a "nethuns socket",
 /// for the supported underlying I/O frameworks. Thus, it's independent from
 /// low-level implementation of the sockets.
-#[derive(Default, Derivative, Getters, CopyGetters, Setters)]
+#[derive(Default, Derivative)]
 #[derivative(Debug)]
-pub struct NethunsSocketBase {
+pub(crate) struct NethunsSocketBase {
     /// Configuration options
-    #[getset(get = "pub")]
-    pub(super) opt: NethunsSocketOptions,
+    pub opt: NethunsSocketOptions,
     
     /// Rings used for transmission
-    pub(super) tx_ring: Option<NethunsRing>,
+    pub tx_ring: Option<NethunsRing>,
     
     /// Rings used for reception
-    pub(super) rx_ring: Option<NethunsRing>,
+    pub rx_ring: Option<NethunsRing>,
     
     /// Name of the binded device
-    #[getset(get = "pub")]
-    pub(super) devname: CString,
+    pub devname: CString,
     
     /// Queue binded to the socket
-    #[getset(get_copy = "pub")]
-    pub(super) queue: NethunsQueue,
+    pub queue: NethunsQueue,
     
     /// Index of the interface
-    #[getset(get_copy = "pub")]
-    pub(super) ifindex: libc::c_int,
+    pub ifindex: libc::c_int,
     
     /// Closure used for filtering received packets.
     #[derivative(Debug = "ignore")]
-    #[getset(get = "pub", set = "pub")]
-    pub(super) filter: Option<Box<NethunsFilter>>,
+    pub filter: Option<Box<NethunsFilter>>,
 }
 // errbuf removed => use Result as return type
 // filter_ctx removed => use closures with move semantics
-
-impl NethunsSocketBase {
-    pub fn tx_ring(&self) -> Option<&NethunsRing> {
-        self.tx_ring.as_ref()
-    }
-    
-    pub fn rx_ring(&self) -> Option<&NethunsRing> {
-        self.rx_ring.as_ref()
-    }
-}
 
 
 //
