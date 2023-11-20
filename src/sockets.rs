@@ -1,62 +1,50 @@
+//! Nethuns sockets
+
 mod api;
-pub mod base;
+mod base;
 pub mod errors;
 pub mod pcap;
 mod ring;
 
 pub use api::PkthdrTrait;
+pub use base::RecvPacket;
 
 
 use core::fmt::Debug;
 use std::cell::UnsafeCell;
 use std::ffi::CStr;
-use std::marker::PhantomData;
 
-use crate::misc::hybrid_rc::state_trait::RcState;
 use crate::types::{
     NethunsFilter, NethunsQueue, NethunsSocketOptions, NethunsStat,
 };
 
 use self::api::{
     BindableNethunsSocketInner, BindableNethunsSocketInnerTrait,
-    LocalRxNethunsSocketTrait, NethunsSocketInner, NethunsSocketInnerTrait,
-    SharedRxNethunsSocketTrait,
+    NethunsSocketInner, NethunsSocketInnerTrait,
 };
-use self::base::{NSRecvPacket, NethunsSocketBase, RecvPacket};
+use self::base::NethunsSocketBase;
 use self::errors::{
     NethunsBindError, NethunsFlushError, NethunsOpenError, NethunsRecvError,
     NethunsSendError,
 };
 
-/// Mark [`BindableNethunsSocket`], [`NethunsSocket`] or [`RecvPacket`] as local,
-/// i.e. as referenceable from a single thread.
-///
-/// Derived from the [`HybridRc`](https://docs.rs/hybrid-rc/) crate.
-pub type Local = crate::misc::hybrid_rc::state::Local;
 
-/// Mark [`BindableNethunsSocket`], [`NethunsSocket`] or [`RecvPacket`] as shared,
-/// i.e. as referenceable from multiple threads.
-///
-/// Derived from the [`HybridRc`](https://docs.rs/hybrid-rc/) crate.
-pub type Shared = crate::misc::hybrid_rc::state::Shared;
-
-
-/// Type for a Nethuns socket not binded to a specific device and queue.
-///
+/// Descriptor of a Nethuns socket not binded to a specific device and queue.
 ///
 /// In order to properly use the socket, you need to bind it first
 /// to a specific device and queue by calling [`BindableNethunsSocket::bind`]
 #[derive(Debug)]
 #[repr(transparent)]
-pub struct BindableNethunsSocket<State: RcState> {
+pub struct BindableNethunsSocket {
     /// Framework-specific socket
-    inner: Box<BindableNethunsSocketInner<State>>,
+    inner: Box<BindableNethunsSocketInner>,
 }
 
-// Make sure BindableNethunsSocket is Send
-static_assertions::assert_impl_all!(BindableNethunsSocket<Shared>: Send);
+// Make sure BindableNethunsSocket is Send and !Sync
+static_assertions::assert_impl_all!(BindableNethunsSocket: Send);
+static_assertions::assert_not_impl_any!(BindableNethunsSocket: Sync);
 
-impl<State: RcState> BindableNethunsSocket<State> {
+impl BindableNethunsSocket {
     /// Open a new Nethuns socket, by calling the `open` function
     /// of the struct belonging to the I/O framework selected at compile time.
     ///
@@ -78,13 +66,13 @@ impl<State: RcState> BindableNethunsSocket<State> {
     /// # Returns
     /// * `Ok(())` - If the binding was successful.
     /// * `Err(NethunsBindError::IllegalArgument)` - If the device name contains an interior null character.
-    /// * `Err(NethunsBindError::FrameworkError)` - If an error from the unsafe interaction with underlying I/O framework occurs.
+    /// * `Err(NethunsBindError::FrameworkError)` - If an error from the interaction with underlying I/O framework occurs.
     /// * `Err(NethunsBindError::Error)` - If an unexpected error occurs.
     pub fn bind(
         self,
         dev: &str,
         queue: NethunsQueue,
-    ) -> Result<NethunsSocket<State>, (NethunsBindError, Self)> {
+    ) -> Result<NethunsSocket, (NethunsBindError, Self)> {
         match self.inner.bind(dev, queue) {
             Ok(inner) => Ok(NethunsSocket::new(inner)),
             Err((err, inner)) => Err((err, Self { inner })),
@@ -110,19 +98,41 @@ impl<State: RcState> BindableNethunsSocket<State> {
 /// This socket is usable for RX and/or TX, depending from its configuration.
 #[derive(Debug)]
 #[repr(transparent)]
-pub struct NethunsSocket<State: RcState> {
-    inner: UnsafeCell<Box<NethunsSocketInner<State>>>,
+pub struct NethunsSocket {
+    inner: UnsafeCell<Box<NethunsSocketInner>>,
 }
 
-// Make sure BindableNethunsSocket is Send
-static_assertions::assert_impl_all!(NethunsSocket<Shared>: Send);
+// Make sure BindableNethunsSocket is Send and !Sync
+static_assertions::assert_impl_all!(NethunsSocket: Send);
+static_assertions::assert_not_impl_any!(NethunsSocket: Sync);
 
-impl<State: RcState> NethunsSocket<State> {
+impl NethunsSocket {
     /// Create a new `NethunsSocket`.
-    fn new(inner: Box<NethunsSocketInner<State>>) -> Self {
+    fn new(inner: Box<NethunsSocketInner>) -> Self {
         Self {
             inner: UnsafeCell::new(inner),
         }
+    }
+    
+    
+    #[inline(always)]
+    pub(crate) fn base(&self) -> &NethunsSocketBase {
+        unsafe { (*UnsafeCell::get(&self.inner)).base() }
+    }
+    
+    
+    /// Get the next unprocessed received packet.
+    ///
+    /// # Returns
+    /// * `Ok(RecvPacket)` - The unprocessed received packet, if no error occurred.
+    /// * `Err(NethunsRecvError::NotRx)` -  If the socket is not configured in RX mode. Check the configuration parameters passed to [`BindableNethunsSocket::open`].
+    /// * `Err(NethunsRecvError::InUse)` - If the slot at the head of the RX ring is currently in use, i.e. the corresponding received packet is not released yet.
+    /// * `Err(NethunsRecvError::NoPacketsAvailable)` - If there are no new packets available in the RX ring.
+    /// * `Err(NethunsRecvError::PacketFiltered)` - If the packet is filtered out by the `filter` function specified during socket configuration.
+    /// * `Err(NethunsRecvError::FrameworkError)` - If an error from the unsafe interaction with underlying I/O framework occurs.
+    /// * `Err(NethunsRecvError::Error)` - If an unexpected error occurs.
+    pub fn recv(&self) -> Result<RecvPacket, NethunsRecvError> {
+        unsafe { (*UnsafeCell::get(&self.inner)).recv() }.map(RecvPacket::new)
     }
     
     
@@ -131,9 +141,10 @@ impl<State: RcState> NethunsSocket<State> {
     /// # Returns
     /// * `Ok(())` - On success.
     /// * `Err(NethunsSendError::NotTx)` -  If the socket is not configured in TX mode. Check the configuration parameters passed to [`BindableNethunsSocket::open`].
+    /// * `Err(NethunsSendError::InvalidPacketSize)` - If the packet is too large.
     /// * `Err(NethunsSendError::InUse)` - If the slot at the tail of the TX ring is not released yet and it's currently in use by the application.
     pub fn send(&self, packet: &[u8]) -> Result<(), NethunsSendError> {
-        unsafe { (*UnsafeCell::raw_get(&self.inner)).send(packet) }
+        unsafe { (*UnsafeCell::get(&self.inner)).send(packet) }
     }
     
     
@@ -145,7 +156,7 @@ impl<State: RcState> NethunsSocket<State> {
     /// * `Err(NethunsFlushError::FrameworkError)` - If an error from the unsafe interaction with underlying I/O framework occurs.
     /// * `Err(NethunsFlushError::Error)` - If an unexpected error occurs.
     pub fn flush(&self) -> Result<(), NethunsFlushError> {
-        unsafe { (*UnsafeCell::raw_get(&self.inner)).flush() }
+        unsafe { (*UnsafeCell::get(&self.inner)).flush() }
     }
     
     
@@ -164,7 +175,7 @@ impl<State: RcState> NethunsSocket<State> {
         id: usize,
         len: usize,
     ) -> Result<(), NethunsSendError> {
-        unsafe { (*UnsafeCell::raw_get(&self.inner)).send_slot(id, len) }
+        unsafe { (*UnsafeCell::get(&self.inner)).send_slot(id, len) }
     }
     
     
@@ -174,14 +185,13 @@ impl<State: RcState> NethunsSocket<State> {
     /// * `filter` - The packet filtering function. `None` if no filtering is required, `Some(filter)` to enable packet filtering.
     #[inline(always)]
     pub fn set_filter(&self, filter: Option<Box<NethunsFilter>>) {
-        unsafe { (*UnsafeCell::raw_get(&self.inner)).base_mut() }
-            .set_filter(filter);
+        unsafe { (*UnsafeCell::get(&self.inner)).base_mut() }.filter = filter;
     }
     
     
     /// Get the file descriptor of the socket.
     pub fn fd(&self) -> std::os::raw::c_int {
-        unsafe { (*UnsafeCell::raw_get(&self.inner)).fd() }
+        unsafe { (*UnsafeCell::get(&self.inner)).fd() }
     }
     
     
@@ -209,84 +219,43 @@ impl<State: RcState> NethunsSocket<State> {
     /// * `group` - The group id.
     /// * `fanout` - A string encoding the details of the fanout mode.
     pub fn fanout(&self, group: i32, fanout: &CStr) -> bool {
-        unsafe { (*UnsafeCell::raw_get(&self.inner)).fanout(group, fanout) }
+        unsafe { (*UnsafeCell::get(&self.inner)).fanout(group, fanout) }
     }
     
     
     /// Dump the rings of the socket.
     pub fn dump_rings(&self) {
-        unsafe { (*UnsafeCell::raw_get(&self.inner)).dump_rings() }
+        unsafe { (*UnsafeCell::get(&self.inner)).dump_rings() }
     }
     
     /// Get some statistics about the socket
     /// or `None` on error.
     pub fn stats(&self) -> Option<NethunsStat> {
-        unsafe { (*UnsafeCell::raw_get(&self.inner)).stats() }
+        unsafe { (*UnsafeCell::get(&self.inner)).stats() }
     }
     
-    
-    #[inline(always)]
-    pub(crate) fn base(&self) -> &NethunsSocketBase<State> {
-        unsafe { (*UnsafeCell::raw_get(&self.inner)).base() }
-    }
     
     /// Check if the socket is in TX mode
     #[inline(always)]
     pub fn tx(&self) -> bool {
-        self.base().tx_ring().is_some()
+        self.base().tx_ring.is_some()
     }
     
     /// Check if the socket is in RX mode
     #[inline(always)]
     pub fn rx(&self) -> bool {
-        self.base().rx_ring().is_some()
+        self.base().rx_ring.is_some()
     }
     
     /// Get size of the RX ring.
     #[inline(always)]
     pub fn rxring_get_size(&self) -> Option<usize> {
-        self.base().rx_ring().as_ref().map(|r| r.size())
+        self.base().rx_ring.as_ref().map(|r| r.size())
     }
     
     /// Get size of the TX ring.
     #[inline(always)]
     pub fn txring_get_size(&self) -> Option<usize> {
-        self.base().tx_ring().as_ref().map(|r| r.size())
-    }
-}
-
-impl NethunsSocket<Local> {
-    /// Get the next unprocessed received packet.
-    ///
-    /// # Returns
-    /// * `Ok(RecvPacket<NethunsSocket>)` - The unprocessed received packet, if no error occurred.
-    /// * `Err(NethunsRecvError::NotRx)` -  If the socket is not configured in RX mode. Check the configuration parameters passed to [`BindableNethunsSocket::open`].
-    /// * `Err(NethunsRecvError::InUse)` - If the slot at the head of the RX ring is currently in use, i.e. the corresponding received packet is not released yet.
-    /// * `Err(NethunsRecvError::NoPacketsAvailable)` - If there are no new packets available in the RX ring.
-    /// * `Err(NethunsRecvError::PacketFiltered)` - If the packet is filtered out by the `filter` function specified during socket configuration.
-    /// * `Err(NethunsRecvError::FrameworkError)` - If an error from the unsafe interaction with underlying I/O framework occurs.
-    /// * `Err(NethunsRecvError::Error)` - If an unexpected error occurs.
-    pub fn recv(&self) -> Result<NSRecvPacket<Local, Local>, NethunsRecvError> {
-        unsafe { (*UnsafeCell::raw_get(&self.inner)).recv() }
-            .map(|data| RecvPacket::new(data, PhantomData))
-    }
-}
-
-impl NethunsSocket<Shared> {
-    /// Get the next unprocessed received packet.
-    ///
-    /// # Returns
-    /// * `Ok(RecvPacket<NethunsSocket>)` - The unprocessed received packet, if no error occurred.
-    /// * `Err(NethunsRecvError::NotRx)` -  If the socket is not configured in RX mode. Check the configuration parameters passed to [`BindableNethunsSocket::open`].
-    /// * `Err(NethunsRecvError::InUse)` - If the slot at the head of the RX ring is currently in use, i.e. the corresponding received packet is not released yet.
-    /// * `Err(NethunsRecvError::NoPacketsAvailable)` - If there are no new packets available in the RX ring.
-    /// * `Err(NethunsRecvError::PacketFiltered)` - If the packet is filtered out by the `filter` function specified during socket configuration.
-    /// * `Err(NethunsRecvError::FrameworkError)` - If an error from the unsafe interaction with underlying I/O framework occurs.
-    /// * `Err(NethunsRecvError::Error)` - If an unexpected error occurs.
-    pub fn recv(
-        &self,
-    ) -> Result<NSRecvPacket<Shared, Shared>, NethunsRecvError> {
-        unsafe { (*UnsafeCell::raw_get(&self.inner)).recv() }
-            .map(|data| RecvPacket::new(data, PhantomData))
+        self.base().tx_ring.as_ref().map(|r| r.size())
     }
 }

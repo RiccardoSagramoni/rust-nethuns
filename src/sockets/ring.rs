@@ -1,32 +1,34 @@
+//! Ring abstraction for Nethuns sockets.
+
+use core::fmt;
+use std::cmp;
 use std::sync::atomic::{AtomicU8, Ordering};
-use std::{cmp, ptr};
 
 use getset::{Getters, MutGetters};
 
 use super::api::Pkthdr;
 
 use crate::misc::circular_buffer::CircularBuffer;
-use crate::misc::hybrid_rc::state_trait::RcState;
-use crate::misc::hybrid_rc::HybridRc;
 
 
 /// Ring abstraction for Nethuns sockets.
 #[derive(Debug, Getters, MutGetters)]
-pub struct NethunsRing<State: RcState> {
+pub(crate) struct NethunsRing {
     #[getset(get = "pub")]
+    #[allow(dead_code)]
     pktsize: usize,
     
     #[getset(get = "pub", get_mut = "pub")]
-    rings: CircularBuffer<NethunsRingSlot<State>>,
+    rings: CircularBuffer<NethunsRingSlot>,
 }
 
 
-impl<State: RcState> NethunsRing<State> {
+impl NethunsRing {
     /// Create a new `NethunsRing` object.
     ///
     /// Equivalent to `nethuns_make_ring` from the original C library.
     #[inline(always)]
-    pub fn new(nslots: usize, pktsize: usize) -> NethunsRing<State> {
+    pub fn new(nslots: usize, pktsize: usize) -> NethunsRing {
         let builder = || NethunsRingSlot::default_with_packet_size(pktsize);
         
         NethunsRing {
@@ -38,28 +40,14 @@ impl<State: RcState> NethunsRing<State> {
     
     /// Get a reference to a slot in the ring, given its index.
     #[inline(always)]
-    pub fn get_slot(&self, index: usize) -> &NethunsRingSlot<State> {
+    pub fn get_slot(&self, index: usize) -> &NethunsRingSlot {
         self.rings.get(index)
     }
     
     /// Get a reference to a slot in the ring, given its index.
     #[inline(always)]
-    pub fn get_slot_mut(
-        &mut self,
-        index: usize,
-    ) -> &mut NethunsRingSlot<State> {
+    pub fn get_slot_mut(&mut self, index: usize) -> &mut NethunsRingSlot {
         self.rings.get_mut(index)
-    }
-    
-    
-    /// Get the index of a slot in the ring, given its reference.
-    #[inline(always)]
-    pub fn get_idx_slot(&self, slot: &NethunsRingSlot<State>) -> Option<usize> {
-        // FIXME: this is inefficient. Can we improve it?
-        self.rings
-            .iter()
-            .take(self.rings.size())
-            .position(|s| ptr::eq(s, slot))
     }
     
     
@@ -71,12 +59,14 @@ impl<State: RcState> NethunsRing<State> {
     
     /// Check if the buffer is empty
     #[inline(always)]
+    #[allow(dead_code)]
     pub fn is_empty(&self) -> bool {
         self.rings.is_empty()
     }
     
     /// Check if the buffer is full
     #[inline(always)]
+    #[allow(dead_code)]
     pub fn is_full(&self) -> bool {
         self.rings.is_full()
     }
@@ -99,6 +89,7 @@ impl<State: RcState> NethunsRing<State> {
     ///
     /// The returned value is capped to 32.
     #[inline(always)]
+    #[allow(dead_code)]
     pub fn num_free_slots(&self, pos: usize) -> usize {
         let mut total = 0_usize;
         
@@ -121,7 +112,9 @@ impl<State: RcState> NethunsRing<State> {
     
     /// Get a reference to the head slot in the ring
     /// and shift the head to the following slot.
-    pub fn next_slot(&mut self) -> &NethunsRingSlot<State> {
+    #[inline(always)]
+    #[allow(dead_code)]
+    pub fn next_slot(&mut self) -> &NethunsRingSlot {
         self.rings.pop_unchecked()
     }
     
@@ -151,8 +144,8 @@ impl<State: RcState> NethunsRing<State> {
 
 /// Ring slot of a Nethuns socket.
 #[derive(Debug, Default)]
-pub struct NethunsRingSlot<State: RcState> {
-    pub status: HybridRc<AtomicRingSlotStatus, State>,
+pub struct NethunsRingSlot {
+    pub status: AtomicRingSlotStatus,
     
     pub pkthdr: Pkthdr,
     pub id: usize,
@@ -162,14 +155,12 @@ pub struct NethunsRingSlot<State: RcState> {
 }
 
 
-impl<State: RcState> NethunsRingSlot<State> {
+impl NethunsRingSlot {
     /// Get a new `NethunsRingSlot` with `packet` initialized
     /// with a given packet size.
     pub fn default_with_packet_size(pktsize: usize) -> Self {
         NethunsRingSlot {
-            status: HybridRc::new(AtomicRingSlotStatus::new(
-                RingSlotStatus::Free,
-            )),
+            status: AtomicRingSlotStatus::new(RingSlotStatus::Free),
             pkthdr: Pkthdr::default(),
             id: 0,
             len: 0,
@@ -192,7 +183,7 @@ pub enum RingSlotStatus {
 }
 
 
-/// A wrapper around [`RingSlotStatus`] which can be safely shared between threads.
+/// An atomic wrapper around [`RingSlotStatus`] which can be safely shared between threads.
 ///
 /// This type uses an [`AtomicU8`] to store the enum value.
 pub struct AtomicRingSlotStatus(AtomicU8);
@@ -258,8 +249,8 @@ impl From<RingSlotStatus> for AtomicRingSlotStatus {
         AtomicRingSlotStatus::new(val)
     }
 }
-impl core::fmt::Debug for AtomicRingSlotStatus {
-    fn fmt(&self, f: &mut core::fmt::Formatter) -> core::fmt::Result {
+impl fmt::Debug for AtomicRingSlotStatus {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         self.load(Ordering::SeqCst).fmt(f)
     }
 }
@@ -280,7 +271,7 @@ impl Default for AtomicRingSlotStatus {
 macro_rules! nethuns_ring_free_slots {
     ($socket: expr, $ring: expr, $free_macro: ident) => {
         loop {
-            let slot = $ring.get_slot($ring.rings().tail());
+            let slot = $ring.get_slot($ring.tail());
             
             if $ring.rings().is_empty()
                 || slot.status.load(Ordering::Acquire)

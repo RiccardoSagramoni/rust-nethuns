@@ -1,13 +1,26 @@
-error[E0505]: cannot move out of `socket` because it is borrowed
+error[E0505]: cannot move out of `packet` because it is borrowed
   --> tests/compile-fail/socket_dropped_before_buffer.rs:14:10
    |
-7  |     let socket: NethunsSocket<Local> = BindableNethunsSocket::open(opt)
+12 |     let packet = socket.recv().unwrap();
+   |         ------ binding `packet` declared here
+13 |     let buffer = packet.buffer();
+   |                  ------ borrow of `packet` occurs here
+14 |     drop(packet);
+   |          ^^^^^^ move out of `packet` occurs here
+15 |     drop(socket);
+16 |     drop(buffer);
+   |          ------ borrow later used here
+
+error[E0505]: cannot move out of `socket` because it is borrowed
+  --> tests/compile-fail/socket_dropped_before_buffer.rs:15:10
+   |
+7  |     let socket: NethunsSocket = BindableNethunsSocket::open(opt)
    |         ------ binding `socket` declared here
 ...
 12 |     let packet = socket.recv().unwrap();
    |                  ------ borrow of `socket` occurs here
-13 |     let buffer = packet.buffer();
-14 |     drop(socket);
+...
+15 |     drop(socket);
    |          ^^^^^^ move out of `socket` occurs here
-15 |     drop(buffer);
+16 |     drop(buffer);
    |          ------ borrow later used here

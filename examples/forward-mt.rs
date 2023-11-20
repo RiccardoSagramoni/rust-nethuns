@@ -1,10 +1,9 @@
-use std::sync::atomic::{AtomicU64, Ordering, AtomicBool};
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::Arc;
 use std::time::{Duration, SystemTime};
 use std::{mem, thread};
 
-use nethuns::sockets::base::NSRecvPacket;
-use nethuns::sockets::{BindableNethunsSocket, Local, NethunsSocket, Shared};
+use nethuns::sockets::{BindableNethunsSocket, RecvPacket};
 
 use nethuns::types::{
     NethunsCaptureDir, NethunsCaptureMode, NethunsQueue, NethunsSocketMode,
@@ -38,7 +37,7 @@ fn main() {
         ..Default::default()
     };
     
-    let socket: NethunsSocket<Local> = BindableNethunsSocket::open(opt.clone())
+    let socket = BindableNethunsSocket::open(opt.clone())
         .unwrap()
         .bind(&conf.dev_in, NethunsQueue::Any)
         .unwrap();
@@ -46,8 +45,7 @@ fn main() {
     
     thread::scope(|s| {
         // Create SPSC ring buffer
-        let (mut producer, consumer) =
-            RingBuffer::<NSRecvPacket<Local, Shared>>::new(65536);
+        let (mut producer, consumer) = RingBuffer::<RecvPacket>::new(65536);
         
         // Create channel for thread communication
         let term = Arc::new(AtomicBool::new(false));
@@ -91,7 +89,7 @@ fn main() {
                 // Push packet in queue
                 while !producer.is_abandoned() {
                     if !producer.is_full() {
-                        producer.push(pkt.to_shared()).unwrap();
+                        producer.push(pkt).unwrap();
                         break;
                     }
                 }
@@ -164,11 +162,11 @@ fn set_sigint_handler(term: Arc<AtomicBool>) {
 fn consumer_body(
     opt: NethunsSocketOptions,
     dev: &str,
-    mut consumer: Consumer<NSRecvPacket<Local, Shared>>,
+    mut consumer: Consumer<RecvPacket>,
     term: Arc<AtomicBool>,
     total_fwd: Arc<AtomicU64>,
 ) {
-    let socket: NethunsSocket<Local> = BindableNethunsSocket::open(opt)
+    let socket = BindableNethunsSocket::open(opt)
         .unwrap()
         .bind(dev, NethunsQueue::Any)
         .unwrap();

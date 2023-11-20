@@ -28,8 +28,8 @@ use crate::sockets::errors::NethunsRecvError;
 ///
 /// # Safety
 ///
-/// This function makes use of unsafe code due to the interaction with the Netmap C API
-/// through the `netmap_rxring` function.
+/// This function makes use of unsafe code due to the interaction with the 
+/// Netmap C API through the `netmap_rxring` function.
 /// Be sure that the Netmap port descriptor is properly initialized.
 pub(super) fn non_empty_rx_ring(
     d: &mut NmPortDescriptor,
@@ -100,8 +100,10 @@ pub(super) use nethuns_blocks_free;
 /// A `*mut u8` raw pointer pointing to the requested buffer
 macro_rules! nethuns_get_buf_addr_netmap {
     ($some_ring: expr, $tx_ring: expr, $pktid: expr) => {
-        netmap_buf($some_ring, $tx_ring.get_slot($pktid).pkthdr.buf_idx as _)
-            as *mut u8
+        slice::from_raw_parts_mut(
+            netmap_buf($some_ring, $tx_ring.get_slot($pktid).pkthdr.buf_idx as _) as *mut u8,
+            $some_ring.nr_buf_size as _,
+        )
     };
 }
 pub(super) use nethuns_get_buf_addr_netmap;

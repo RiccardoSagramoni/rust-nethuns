@@ -3,8 +3,7 @@ use std::sync::Arc;
 use std::time::{Duration, SystemTime};
 use std::{mem, thread};
 
-use nethuns::sockets::base::NSRecvPacket;
-use nethuns::sockets::{BindableNethunsSocket, Local, NethunsSocket, Shared};
+use nethuns::sockets::{BindableNethunsSocket, NethunsSocket, RecvPacket};
 use nethuns::types::{
     NethunsCaptureDir, NethunsCaptureMode, NethunsQueue, NethunsSocketMode,
     NethunsSocketOptions,
@@ -37,7 +36,7 @@ fn main() {
     };
     
     // Open socket
-    let socket: NethunsSocket<Local> = BindableNethunsSocket::open(opt)
+    let socket: NethunsSocket = BindableNethunsSocket::open(opt)
         .expect("Failed to open nethuns socket")
         .bind(&conf.dev, NethunsQueue::Any)
         .expect("Failed to bind nethuns socket");
@@ -45,7 +44,7 @@ fn main() {
     thread::scope(|s| {
         // Create SPSC ring buffer
         let (mut pkt_producer, pkt_consumer) =
-            RingBuffer::<NSRecvPacket<Local, Shared>>::new(65536);
+            RingBuffer::<RecvPacket>::new(65536);
         
         let term = Arc::new(AtomicBool::new(false));
         let total = Arc::new(AtomicU64::new(0));
@@ -81,7 +80,7 @@ fn main() {
                 // Push packet in queue
                 while !pkt_producer.is_abandoned() {
                     if !pkt_producer.is_full() {
-                        pkt_producer.push(pkt.to_shared()).unwrap();
+                        pkt_producer.push(pkt).unwrap();
                         break;
                     }
                 }
@@ -142,7 +141,7 @@ fn set_sigint_handler(term: Arc<AtomicBool>) {
 
 
 fn consumer_body(
-    mut consumer: Consumer<NSRecvPacket<Local, Shared>>,
+    mut consumer: Consumer<RecvPacket>,
     term: Arc<AtomicBool>,
     total: Arc<AtomicU64>,
 ) {

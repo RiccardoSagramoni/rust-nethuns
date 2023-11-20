@@ -9,9 +9,7 @@ use std::sync::atomic;
 use pcap_parser::traits::PcapReaderIterator;
 use pcap_parser::{LegacyPcapReader, PcapBlockOwned, PcapError};
 
-use crate::misc::hybrid_rc::state::{Local, Shared};
-use crate::misc::hybrid_rc::state_trait::RcState;
-use crate::sockets::base::{InnerRecvData, NethunsSocketBase, RecvPacketData};
+use crate::sockets::base::{NethunsSocketBase, RecvPacketData};
 use crate::sockets::errors::{
     NethunsPcapOpenError, NethunsPcapReadError, NethunsPcapRewindError,
     NethunsPcapStoreError, NethunsPcapWriteError,
@@ -22,8 +20,7 @@ use crate::types::NethunsSocketOptions;
 
 use super::constants::NSEC_TCPDUMP_MAGIC;
 use super::{
-    nethuns_pcap_pkthdr, LocalReadSocketPcapTrait, NethunsSocketPcapInner,
-    NethunsSocketPcapTrait, SharedReadSocketPcapTrait,
+    nethuns_pcap_pkthdr, NethunsSocketPcapInner, NethunsSocketPcapTrait,
 };
 
 
@@ -31,9 +28,7 @@ use super::{
 pub type PcapReaderType = LegacyPcapReader<File>;
 
 
-impl<State: RcState> NethunsSocketPcapTrait<State>
-    for NethunsSocketPcapInner<State>
-{
+impl NethunsSocketPcapTrait for NethunsSocketPcapInner {
     fn open(
         opt: NethunsSocketOptions,
         filename: &str,
@@ -78,34 +73,7 @@ impl<State: RcState> NethunsSocketPcapTrait<State>
     }
     
     
-    fn write(
-        &mut self,
-        _header: &nethuns_pcap_pkthdr,
-        _packet: &[u8],
-    ) -> Result<usize, NethunsPcapWriteError> {
-        Err(NethunsPcapWriteError::NotSupported)
-    }
-    
-    
-    fn store(
-        &mut self,
-        _pkthdr: &dyn PkthdrTrait,
-        _packet: &[u8],
-    ) -> Result<u32, NethunsPcapStoreError> {
-        Err(NethunsPcapStoreError::NotSupported)
-    }
-    
-    
-    fn rewind(&mut self) -> Result<u64, NethunsPcapRewindError> {
-        Err(NethunsPcapRewindError::NotSupported)
-    }
-}
-
-
-impl<State: RcState> NethunsSocketPcapInner<State> {
-    fn inner_read(
-        &mut self,
-    ) -> Result<InnerRecvData<State>, NethunsPcapReadError> {
+    fn read(&mut self) -> Result<RecvPacketData, NethunsPcapReadError> {
         let rx_ring = self
             .base
             .rx_ring
@@ -159,35 +127,34 @@ impl<State: RcState> NethunsSocketPcapInner<State> {
         
         let slot = rx_ring.get_slot(head_idx);
         
-        Ok(InnerRecvData {
-            id: rx_ring.rings().head() as _,
-            pkthdr: &slot.pkthdr,
-            buffer: &slot.packet[..bytes as _],
-            slot_status_flag: &slot.status,
-        })
-    }
-}
-
-impl LocalReadSocketPcapTrait for NethunsSocketPcapInner<Local> {
-    fn read(&mut self) -> Result<RecvPacketData<Local>, NethunsPcapReadError> {
-        let packet = self.inner_read()?;
         Ok(RecvPacketData::new(
-            packet.id,
-            packet.pkthdr,
-            packet.buffer,
-            packet.slot_status_flag.clone(),
+            rx_ring.head() as _,
+            &slot.pkthdr,
+            &slot.packet[..bytes as _],
+            &slot.status,
         ))
     }
-}
-
-impl SharedReadSocketPcapTrait for NethunsSocketPcapInner<Shared> {
-    fn read(&mut self) -> Result<RecvPacketData<Shared>, NethunsPcapReadError> {
-        let packet = self.inner_read()?;
-        Ok(RecvPacketData::new(
-            packet.id,
-            packet.pkthdr,
-            packet.buffer,
-            packet.slot_status_flag.clone(),
-        ))
+    
+    
+    fn write(
+        &mut self,
+        _header: &nethuns_pcap_pkthdr,
+        _packet: &[u8],
+    ) -> Result<usize, NethunsPcapWriteError> {
+        Err(NethunsPcapWriteError::NotSupported)
+    }
+    
+    
+    fn store(
+        &mut self,
+        _pkthdr: &dyn PkthdrTrait,
+        _packet: &[u8],
+    ) -> Result<u32, NethunsPcapStoreError> {
+        Err(NethunsPcapStoreError::NotSupported)
+    }
+    
+    
+    fn rewind(&mut self) -> Result<u64, NethunsPcapRewindError> {
+        Err(NethunsPcapRewindError::NotSupported)
     }
 }

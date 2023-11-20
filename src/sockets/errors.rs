@@ -1,7 +1,10 @@
+//! Enums representing the possible errors returned during socket operations.
+
 use std::io;
 
 use core::fmt::Debug;
 use thiserror::Error;
+
 
 /// Error type for [`BindableNethunsSocket::open`](crate::sockets::BindableNethunsSocket::open)
 #[derive(Debug, Error)]
@@ -11,6 +14,7 @@ pub enum NethunsOpenError {
     #[error("[open] an unexpected error occurred: {0}")]
     Error(String),
 }
+
 
 /// Error type for [`BindableNethunsSocket::bind`](crate::sockets::BindableNethunsSocket::bind)
 #[derive(Debug, Error)]
@@ -24,6 +28,7 @@ pub enum NethunsBindError {
     #[error("[bind] an unexpected error occurred: {0}")]
     Error(String),
 }
+
 
 /// Error type for [`NethunsSocket::recv`](crate::sockets::NethunsSocket::recv)
 #[derive(Debug, Error)]
@@ -42,11 +47,16 @@ pub enum NethunsRecvError {
     Error(String),
 }
 
+
 /// Error type for [`NethunsSocket::send`](crate::sockets::NethunsSocket::send)
 #[derive(Debug, Error)]
 pub enum NethunsSendError {
     #[error("[send] socket not in TX mode")]
     NotTx,
+    #[error(
+        "[send] invalid packet size: expected at most {0} bytes, got {1} bytes"
+    )]
+    InvalidPacketSize(usize, usize),
     #[error("[send] ring in use")]
     InUse,
     #[error("[send] an unexpected error occurred: {0}")]

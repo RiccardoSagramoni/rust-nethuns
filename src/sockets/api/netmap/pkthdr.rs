@@ -1,3 +1,5 @@
+//! Packet header for netmap framework
+
 use c_netmap_wrapper::bindings::timeval;
 
 use crate::sockets::PkthdrTrait;
@@ -7,10 +9,10 @@ use crate::sockets::PkthdrTrait;
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
 #[repr(C)]
 pub struct PkthdrNetmap {
-    pub(super) ts: timeval,
-    pub(super) len: u32,
-    pub(super) caplen: u32,
-    pub(super) buf_idx: u32,
+    pub ts: timeval,
+    pub len: u32,
+    pub caplen: u32,
+    pub buf_idx: u32,
 }
 
 

@@ -1,3 +1,5 @@
+//! Support for Netmap I/O framework.
+
 mod bindable_socket;
 mod nethuns_socket;
 mod pkthdr;
