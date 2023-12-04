@@ -287,7 +287,7 @@ unsafe fn any_as_u8_slice_mut<'a, T: Sized>(p: &'a mut T) -> &mut [u8] {
 /// across architectures.
 #[allow(non_camel_case_types)]
 #[derive(Debug, Default, Clone, Copy)]
-#[repr(C)]
+#[repr(C)] // needed for safe transmutation to &[u8] and for compatibility with C programs
 struct pcap_file_header {
     magic: u32,
     version_major: libc::c_ushort,
