@@ -29,17 +29,8 @@ pub struct BindableNethunsSocketNetmap {
 }
 
 
-impl BindableNethunsSocketNetmap {
-    /// Open a new Nethuns socket for the `netmap` framework.
-    ///
-    /// # Arguments
-    /// * `opt`: The options for the socket.
-    ///
-    /// # Returns
-    /// * `Ok(BindableNethunsSocketNetmap)` - A new nethuns socket, in no error occurs.
-    /// * `Err(NethunsOpenError::InvalidOptions)` - If at least one of the options holds a invalid value.
-    /// * `Err(NethunsOpenError::Error)` - If an unexpected error occurs.
-    pub(in crate::sockets) fn open(
+impl BindableNethunsSocketInnerTrait for BindableNethunsSocketNetmap {
+    fn open(
         opt: NethunsSocketOptions,
     ) -> Result<Self, NethunsOpenError> {
         let rx = opt.mode == NethunsSocketMode::RxTx
@@ -74,10 +65,8 @@ impl BindableNethunsSocketNetmap {
         
         Ok(Self { base })
     }
-}
-
-
-impl BindableNethunsSocketInnerTrait for BindableNethunsSocketNetmap {
+    
+    
     fn bind(
         mut self: Box<Self>,
         dev: &str,

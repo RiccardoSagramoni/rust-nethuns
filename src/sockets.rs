@@ -56,7 +56,7 @@ impl BindableNethunsSocket {
     /// * `Err(NethunsOpenError::InvalidOptions)` - If at least one of the options holds a invalid value.
     /// * `Err(NethunsOpenError::Error)` - If an unexpected error occurs.
     pub fn open(opt: NethunsSocketOptions) -> Result<Self, NethunsOpenError> {
-        api::nethuns_socket_open(opt).map(|inner| Self {
+        BindableNethunsSocketInner::open(opt).map(|inner| Self {
             inner: Box::new(inner),
         })
     }
