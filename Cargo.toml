@@ -17,7 +17,7 @@ lto = "thin"
 byteorder = "1.5.0"
 c_netmap_wrapper = { version = "*", path = "./lib/netmap", optional = true }
 cfg-if = "1.0.0"
-delegate = "0.11.0"
+delegate = "0.12.0"
 derivative = "2.2.0"
 errno = "0.3.8"
 etherparse = "0.13.0"
