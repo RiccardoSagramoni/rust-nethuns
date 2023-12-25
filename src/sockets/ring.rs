@@ -13,7 +13,7 @@ use crate::misc::circular_buffer::CircularBuffer;
 
 /// Ring abstraction for Nethuns sockets.
 #[derive(Debug, Getters, MutGetters)]
-pub(crate) struct NethunsRing {
+pub struct NethunsRing {
     #[getset(get = "pub")]
     #[allow(dead_code)]
     pktsize: usize,

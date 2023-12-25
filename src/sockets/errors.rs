@@ -158,7 +158,7 @@ pub enum NethunsPcapWriteError {
 }
 
 
-/// Error type for [`NethunsSocketPcapTrait::store`](crate::sockets::pcap::NethunsSocketPcap::store)
+/// Error type for [`NethunsSocketPcap::store`](crate::sockets::pcap::NethunsSocketPcap::store)
 #[derive(Debug, Error)]
 pub enum NethunsPcapStoreError {
     // STANDARD_PCAP_READER
@@ -171,7 +171,7 @@ pub enum NethunsPcapStoreError {
 }
 
 
-/// Error type for [`NethunsSocketPcapTrait::rewind`](crate::sockets::pcap::NethunsSocketPcap::rewind)
+/// Error type for [`NethunsSocketPcap::rewind`](crate::sockets::pcap::NethunsSocketPcap::rewind)
 #[derive(Debug, Error)]
 pub enum NethunsPcapRewindError {
     // STANDARD_PCAP_READER

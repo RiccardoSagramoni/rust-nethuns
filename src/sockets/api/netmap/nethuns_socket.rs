@@ -277,7 +277,13 @@ impl NethunsSocketInnerTrait for NethunsSocketNetmap {
                     .get_slot(ring.head as _)
                     .map_err(NethunsFlushError::FrameworkError)?;
                 mem::swap(&mut netmap_slot.buf_idx, &mut slot.pkthdr.buf_idx);
-                netmap_slot.len = slot.len as _;
+                netmap_slot.len =
+                    u16::try_from(slot.len).unwrap_or_else(|_| {
+                        panic!(
+                            "integer overflow: couldn't convert {} to u16",
+                            slot.len
+                        )
+                    });
                 netmap_slot.flags = NS_BUF_CHANGED as _;
                 // remember the nethuns slot in the netmap slot ptr field
                 netmap_slot.ptr = &*slot as *const NethunsRingSlot as _;
