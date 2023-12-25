@@ -34,10 +34,7 @@ fn assert_io_framework_mutual_exclusivity() {
         }
     };
     
-    if found == 0 {
-        panic!("Error: no I/O framework found. Enable one of the following features: netmap, libpcap, xdp, tpacket_v3.");
-    }
-    if found > 1 {
-        panic!("Error: more than one I/O framework found. Enable only one of the following features: netmap, libpcap, xdp, tpacket_v3.");
-    }
+    assert!(found >= 1, "Error: no I/O framework found. Enable one of the following features: netmap, libpcap, xdp, tpacket_v3.");
+    assert!(found <= 1, "Error: more than one I/O framework found. Enable only one of the following features: netmap, libpcap, xdp, tpacket_v3.");
+    assert_eq!(found, 1);
 }

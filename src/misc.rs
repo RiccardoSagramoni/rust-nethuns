@@ -24,7 +24,7 @@ pub fn nethuns_dev_queue_name(
         None => "unspec".to_owned(),
         Some(dev) => match queue {
             NethunsQueue::Some(idx) => {
-                format!("{}:{}", dev, idx)
+                format!("{dev}:{idx}")
             }
             NethunsQueue::Any => dev.to_owned(),
         },
@@ -67,8 +67,7 @@ pub(crate) fn nethuns_set_if_promisc(devname: &CStr) -> Result<(), String> {
                 mutex_guard
                     .insert(devname.to_owned(), NethunsNetInfo::default());
                 let info = mutex_guard.get_mut(devname).ok_or(format!(
-                    "failed to get info for device {:?}",
-                    devname
+                    "failed to get info for device {devname:?}"
                 ))?;
                 info.promisc_refcnt = if (flags & libc::IFF_PROMISC as u32) == 0
                 {
@@ -97,9 +96,9 @@ pub(crate) fn nethuns_set_if_promisc(devname: &CStr) -> Result<(), String> {
         }
         
         if do_promisc {
-            eprintln!("device {:?} promisc mode set", devname);
+            eprintln!("device {devname:?} promisc mode set");
         } else {
-            eprintln!("device {:?} (already) promisc mode set", devname);
+            eprintln!("device {devname:?} (already) promisc mode set");
         }
     };
     
@@ -145,7 +144,7 @@ pub(crate) fn nethuns_clear_if_promisc(devname: &CStr) -> Result<(), String> {
                     "[nethuns_clear_if_promisc] nethuns_ioctl_if failed: {e}"
                 ));
             }
-            eprintln!("device {:?} promisc mode unset", devname);
+            eprintln!("device {devname:?} promisc mode unset");
         }
     };
     

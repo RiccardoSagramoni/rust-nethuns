@@ -92,13 +92,13 @@ impl<T> CircularQueue<T> {
     /// Advance the head index of one position
     #[inline(always)]
     pub fn advance_head(&mut self) {
-        self.head += 1
+        self.head += 1;
     }
     
     /// Advance the tail index of one position
     #[inline(always)]
     pub fn advance_tail(&mut self) {
-        self.tail += 1
+        self.tail += 1;
     }
     
     /// Returns a cycle iterator over the buffer
