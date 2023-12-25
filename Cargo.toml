@@ -38,7 +38,7 @@ cfg-if = "1.0.0"
 
 [dev-dependencies]
 anyhow = "1.0.75"
-ctrlc = "3.4.1"
+ctrlc = "3.4.2"
 num-format = "0.4.4"
 pico-args = "0.5.0"
 rand = "0.8.5"
