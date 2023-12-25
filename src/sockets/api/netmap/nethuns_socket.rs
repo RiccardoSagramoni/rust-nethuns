@@ -11,7 +11,7 @@ use c_netmap_wrapper::constants::{NIOCRXSYNC, NIOCTXSYNC};
 use c_netmap_wrapper::macros::{netmap_buf, netmap_txring};
 use c_netmap_wrapper::{netmap_buf_pkt, NetmapRing, NmPortDescriptor};
 
-use crate::misc::circular_buffer::CircularBuffer;
+use crate::misc::circular_queue::CircularQueue;
 use crate::misc::nethuns_clear_if_promisc;
 use crate::sockets::api::NethunsSocketInnerTrait;
 use crate::sockets::base::{NethunsSocketBase, RecvPacketData};
@@ -55,7 +55,7 @@ pub struct NethunsSocketNetmap {
     /// the user, and it puts a new buffer extracted from the free_ring
     /// in the `netmap_slot`, so that it can be given back to
     /// netmap to receive more packets.
-    free_ring: CircularBuffer<u32>,
+    free_ring: CircularQueue<u32>,
 }
 // fields rx and tx removed because redundant with
 // base.rx_ring.is_some() and base.tx_ring.is_some()
@@ -67,7 +67,7 @@ impl NethunsSocketNetmap {
         base: NethunsSocketBase,
         p: NmPortDescriptor,
         some_ring: NetmapRing,
-        free_ring: CircularBuffer<u32>,
+        free_ring: CircularQueue<u32>,
     ) -> Self {
         Self {
             base,
@@ -277,7 +277,13 @@ impl NethunsSocketInnerTrait for NethunsSocketNetmap {
                     .get_slot(ring.head as _)
                     .map_err(NethunsFlushError::FrameworkError)?;
                 mem::swap(&mut netmap_slot.buf_idx, &mut slot.pkthdr.buf_idx);
-                netmap_slot.len = slot.len as _;
+                netmap_slot.len =
+                    u16::try_from(slot.len).unwrap_or_else(|_| {
+                        panic!(
+                            "integer overflow: couldn't convert {} to u16",
+                            slot.len
+                        )
+                    });
                 netmap_slot.flags = NS_BUF_CHANGED as _;
                 // remember the nethuns slot in the netmap slot ptr field
                 netmap_slot.ptr = &*slot as *const NethunsRingSlot as _;

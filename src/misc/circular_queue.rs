@@ -1,4 +1,4 @@
-//! Module which provides [`CircularBuffer`], an optimized circular buffer with head and tail indexes.
+//! Module which provides [`CircularQueue`], an optimized circular queue with head and tail indexes.
 
 #![allow(dead_code)]
 
@@ -9,17 +9,17 @@ use std::slice::Iter;
 use derivative::Derivative;
 
 
-/// An optimized circular buffer with head and tail indexes.
+/// An optimized circular queue with head and tail indexes.
 ///
-/// In order to avoid an integer division for each push, we allocate a buffer of actual
+/// In order to avoid an integer division for each push, we allocate a array of actual
 /// size equals to the closest power of 2 larger or equal than the requested `max_items` size.
 /// In this way, we can increment the head and tail indexes relying on wrapping overflow
-/// and filter them with a bit mask when accessing any buffer item.
+/// and filter them with a bit mask when accessing any array item.
 ///
-/// The buffer is empty when `head == tail` and is full when `(tail - head) >= max_items`.
+/// The queue is empty when `head == tail` and is full when `(tail - head) >= max_items`.
 #[derive(Default, Derivative)]
 #[derivative(Debug)]
-pub struct CircularBuffer<T> {
+pub struct CircularQueue<T> {
     #[derivative(Debug = "ignore")]
     buffer: Vec<T>,
     head: Wrapping<usize>,
@@ -29,7 +29,7 @@ pub struct CircularBuffer<T> {
 }
 
 
-impl<T> CircularBuffer<T> {
+impl<T> CircularQueue<T> {
     /// Generate a new circular buffer.
     ///
     /// # Parameters
@@ -50,7 +50,7 @@ impl<T> CircularBuffer<T> {
             buffer.push(generator());
         }
         
-        CircularBuffer {
+        CircularQueue {
             buffer,
             head: Wrapping(0),
             tail: Wrapping(0),
@@ -173,7 +173,7 @@ impl<T> CircularBuffer<T> {
 }
 
 
-impl<T: Clone> CircularBuffer<T> {
+impl<T: Clone> CircularQueue<T> {
     /// Return a cloned instance of the item specified by the `head` index
     /// and advance the `head` index of one position.
     #[inline(always)]
@@ -213,7 +213,7 @@ mod tests {
     fn test_small_buffer() {
         // Create new buffer
         let num_items = 1;
-        let mut b = CircularBuffer::new(num_items, &|| 0_u8);
+        let mut b = CircularQueue::new(num_items, &|| 0_u8);
         assert!(b.is_empty());
         assert!(!b.is_full());
         assert_eq!(b.head(), 0);
@@ -239,7 +239,7 @@ mod tests {
     fn test_normal_buffer() {
         // Create new buffer
         let num_items = 10;
-        let mut b = CircularBuffer::new(num_items, &|| 0);
+        let mut b = CircularQueue::new(num_items, &|| 0);
         assert!(b.is_empty());
         assert!(!b.is_full());
         assert_eq!(b.head(), 0);

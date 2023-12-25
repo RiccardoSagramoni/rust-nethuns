@@ -55,8 +55,9 @@ impl BindableNethunsSocket {
     /// * `Ok(BindableNethunsSocket)` - A new nethuns socket, in no error occurs.
     /// * `Err(NethunsOpenError::InvalidOptions)` - If at least one of the options holds a invalid value.
     /// * `Err(NethunsOpenError::Error)` - If an unexpected error occurs.
+    #[inline(always)]
     pub fn open(opt: NethunsSocketOptions) -> Result<Self, NethunsOpenError> {
-        api::nethuns_socket_open(opt).map(|inner| Self {
+        BindableNethunsSocketInner::open(opt).map(|inner| Self {
             inner: Box::new(inner),
         })
     }
@@ -68,13 +69,16 @@ impl BindableNethunsSocket {
     /// * `Err(NethunsBindError::IllegalArgument)` - If the device name contains an interior null character.
     /// * `Err(NethunsBindError::FrameworkError)` - If an error from the interaction with underlying I/O framework occurs.
     /// * `Err(NethunsBindError::Error)` - If an unexpected error occurs.
+    #[inline(always)]
     pub fn bind(
         self,
         dev: &str,
         queue: NethunsQueue,
     ) -> Result<NethunsSocket, (NethunsBindError, Self)> {
         match self.inner.bind(dev, queue) {
-            Ok(inner) => Ok(NethunsSocket::new(inner)),
+            Ok(nethuns_socket_inner) => {
+                Ok(NethunsSocket::new(nethuns_socket_inner))
+            }
             Err((err, inner)) => Err((err, Self { inner })),
         }
     }
@@ -108,6 +112,7 @@ static_assertions::assert_not_impl_any!(NethunsSocket: Sync);
 
 impl NethunsSocket {
     /// Create a new `NethunsSocket`.
+    #[inline(always)]
     fn new(inner: Box<NethunsSocketInner>) -> Self {
         Self {
             inner: UnsafeCell::new(inner),
@@ -131,6 +136,7 @@ impl NethunsSocket {
     /// * `Err(NethunsRecvError::PacketFiltered)` - If the packet is filtered out by the `filter` function specified during socket configuration.
     /// * `Err(NethunsRecvError::FrameworkError)` - If an error from the unsafe interaction with underlying I/O framework occurs.
     /// * `Err(NethunsRecvError::Error)` - If an unexpected error occurs.
+    #[inline(always)]
     pub fn recv(&self) -> Result<RecvPacket, NethunsRecvError> {
         unsafe { (*UnsafeCell::get(&self.inner)).recv() }.map(RecvPacket::new)
     }
@@ -143,6 +149,7 @@ impl NethunsSocket {
     /// * `Err(NethunsSendError::NotTx)` -  If the socket is not configured in TX mode. Check the configuration parameters passed to [`BindableNethunsSocket::open`].
     /// * `Err(NethunsSendError::InvalidPacketSize)` - If the packet is too large.
     /// * `Err(NethunsSendError::InUse)` - If the slot at the tail of the TX ring is not released yet and it's currently in use by the application.
+    #[inline(always)]
     pub fn send(&self, packet: &[u8]) -> Result<(), NethunsSendError> {
         unsafe { (*UnsafeCell::get(&self.inner)).send(packet) }
     }
@@ -155,6 +162,7 @@ impl NethunsSocket {
     /// * `Err(NethunsFlushError::NotTx)` -  If the socket is not configured in TX mode. Check the configuration parameters passed to [`BindableNethunsSocket::open`].
     /// * `Err(NethunsFlushError::FrameworkError)` - If an error from the unsafe interaction with underlying I/O framework occurs.
     /// * `Err(NethunsFlushError::Error)` - If an unexpected error occurs.
+    #[inline(always)]
     pub fn flush(&self) -> Result<(), NethunsFlushError> {
         unsafe { (*UnsafeCell::get(&self.inner)).flush() }
     }
@@ -170,6 +178,7 @@ impl NethunsSocket {
     /// # Returns
     /// * `Ok(())` - On success.
     /// * `Err(NethunsSendError::InUse)` - If the slot is not released yet and it's currently in use by the application.
+    #[inline(always)]
     pub fn send_slot(
         &self,
         id: usize,
@@ -190,6 +199,7 @@ impl NethunsSocket {
     
     
     /// Get the file descriptor of the socket.
+    #[inline(always)]
     pub fn fd(&self) -> std::os::raw::c_int {
         unsafe { (*UnsafeCell::get(&self.inner)).fd() }
     }
@@ -207,6 +217,7 @@ impl NethunsSocket {
     /// # Returns
     /// * `Some(&mut [u8])` - buffer reference.
     /// * `None` - if the socket is not in TX mode.
+    #[inline(always)]
     pub fn get_packet_buffer_ref(&mut self, pktid: usize) -> Option<&mut [u8]> {
         // Enforce unique access to the socket, since we are modifying a packet buffer
         UnsafeCell::get_mut(&mut self.inner).get_packet_buffer_ref(pktid)
@@ -218,18 +229,21 @@ impl NethunsSocket {
     /// # Arguments
     /// * `group` - The group id.
     /// * `fanout` - A string encoding the details of the fanout mode.
+    #[inline(always)]
     pub fn fanout(&self, group: i32, fanout: &CStr) -> bool {
         unsafe { (*UnsafeCell::get(&self.inner)).fanout(group, fanout) }
     }
     
     
     /// Dump the rings of the socket.
+    #[inline(always)]
     pub fn dump_rings(&self) {
         unsafe { (*UnsafeCell::get(&self.inner)).dump_rings() }
     }
     
     /// Get some statistics about the socket
     /// or `None` on error.
+    #[inline(always)]
     pub fn stats(&self) -> Option<NethunsStat> {
         unsafe { (*UnsafeCell::get(&self.inner)).stats() }
     }

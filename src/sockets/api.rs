@@ -51,36 +51,25 @@ static_assertions::assert_impl_all!(
 //
 
 
-/// Open a new Nethuns socket, by calling the `open` function
-/// of the struct belonging to the I/O framework selected at compile time.
-///
-/// # Arguments
-/// * `opt`: The options for the socket.
-///
-/// # Returns
-/// * `Ok(BindableNethunsSocketInner)` - A new nethuns socket, in no error occurs.
-/// * `Err(NethunsOpenError::InvalidOptions)` - If at least one of the options holds a invalid value.
-/// * `Err(NethunsOpenError::Error)` - If an unexpected error occurs.
-pub(super) fn nethuns_socket_open(
-    opt: NethunsSocketOptions,
-) -> Result<BindableNethunsSocketInner, NethunsOpenError> {
-    cfg_if::cfg_if! {
-        if #[cfg(feature="netmap")] {
-            netmap::BindableNethunsSocketNetmap::open(opt)
-        }
-        else {
-            std::compile_error!("The support for the specified I/O framework is not available yet. Check the documentation for more information.");
-        }
-    }
-}
-
-
-//
-
-
 /// Trait which defines the interface for the framework-specific
 /// implementation of a [`BindableNethunsSocketInner`].
 pub(super) trait BindableNethunsSocketInnerTrait: Debug + Send {
+    /// Open a new Nethuns socket, by calling the `open` function
+    /// of the struct belonging to the I/O framework selected at compile time.
+    ///
+    /// # Arguments
+    /// * `opt`: The options for the socket.
+    ///
+    /// # Returns
+    /// * `Ok(BindableNethunsSocketInner)` - A new nethuns socket, in no error occurs.
+    /// * `Err(NethunsOpenError::InvalidOptions)` - If at least one of the options holds a invalid value.
+    /// * `Err(NethunsOpenError::Error)` - If an unexpected error occurs.
+    fn open(
+        opt: NethunsSocketOptions,
+    ) -> Result<Self, NethunsOpenError>
+    where
+        Self: Sized;
+    
     /// Bind an opened socket to a specific queue / any queue of interface/device `dev`.
     ///
     /// # Returns
