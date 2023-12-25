@@ -1,6 +1,6 @@
 //! Miscellaneous and utility functions.
 
-pub(crate) mod circular_buffer;
+pub(crate) mod circular_queue;
 
 use std::ffi::CStr;
 use std::mem;

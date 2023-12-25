@@ -8,7 +8,7 @@ use std::{thread, time};
 use c_netmap_wrapper::macros::{netmap_buf, netmap_rxring};
 use c_netmap_wrapper::{NetmapRing, NmPortDescriptor};
 
-use crate::misc::circular_buffer::CircularBuffer;
+use crate::misc::circular_queue::CircularBuffer;
 use crate::misc::{nethuns_set_if_promisc, nethuns_dev_queue_name};
 use crate::sockets::api::{
     BindableNethunsSocketInnerTrait, NethunsSocketInner,

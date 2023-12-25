@@ -11,7 +11,7 @@ use c_netmap_wrapper::constants::{NIOCRXSYNC, NIOCTXSYNC};
 use c_netmap_wrapper::macros::{netmap_buf, netmap_txring};
 use c_netmap_wrapper::{netmap_buf_pkt, NetmapRing, NmPortDescriptor};
 
-use crate::misc::circular_buffer::CircularBuffer;
+use crate::misc::circular_queue::CircularBuffer;
 use crate::misc::nethuns_clear_if_promisc;
 use crate::sockets::api::NethunsSocketInnerTrait;
 use crate::sockets::base::{NethunsSocketBase, RecvPacketData};

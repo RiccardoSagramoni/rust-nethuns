@@ -8,7 +8,7 @@ use getset::{Getters, MutGetters};
 
 use super::api::Pkthdr;
 
-use crate::misc::circular_buffer::CircularBuffer;
+use crate::misc::circular_queue::CircularBuffer;
 
 
 /// Ring abstraction for Nethuns sockets.
