@@ -8,7 +8,7 @@ use getset::{Getters, MutGetters};
 
 use super::api::Pkthdr;
 
-use crate::misc::circular_queue::CircularBuffer;
+use crate::misc::circular_queue::CircularQueue;
 
 
 /// Ring abstraction for Nethuns sockets.
@@ -19,7 +19,7 @@ pub struct NethunsRing {
     pktsize: usize,
     
     #[getset(get = "pub", get_mut = "pub")]
-    rings: CircularBuffer<NethunsRingSlot>,
+    rings: CircularQueue<NethunsRingSlot>,
 }
 
 
@@ -33,7 +33,7 @@ impl NethunsRing {
         
         NethunsRing {
             pktsize,
-            rings: CircularBuffer::new(nslots, &builder),
+            rings: CircularQueue::new(nslots, &builder),
         }
     }
     

@@ -11,7 +11,7 @@ use c_netmap_wrapper::constants::{NIOCRXSYNC, NIOCTXSYNC};
 use c_netmap_wrapper::macros::{netmap_buf, netmap_txring};
 use c_netmap_wrapper::{netmap_buf_pkt, NetmapRing, NmPortDescriptor};
 
-use crate::misc::circular_queue::CircularBuffer;
+use crate::misc::circular_queue::CircularQueue;
 use crate::misc::nethuns_clear_if_promisc;
 use crate::sockets::api::NethunsSocketInnerTrait;
 use crate::sockets::base::{NethunsSocketBase, RecvPacketData};
@@ -55,7 +55,7 @@ pub struct NethunsSocketNetmap {
     /// the user, and it puts a new buffer extracted from the free_ring
     /// in the `netmap_slot`, so that it can be given back to
     /// netmap to receive more packets.
-    free_ring: CircularBuffer<u32>,
+    free_ring: CircularQueue<u32>,
 }
 // fields rx and tx removed because redundant with
 // base.rx_ring.is_some() and base.tx_ring.is_some()
@@ -67,7 +67,7 @@ impl NethunsSocketNetmap {
         base: NethunsSocketBase,
         p: NmPortDescriptor,
         some_ring: NetmapRing,
-        free_ring: CircularBuffer<u32>,
+        free_ring: CircularQueue<u32>,
     ) -> Self {
         Self {
             base,
