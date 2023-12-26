@@ -210,7 +210,7 @@ mod tests {
     use super::*;
     
     #[test]
-    fn test_small_buffer() {
+    fn test_small_size() {
         // Create new buffer
         let num_items = 1;
         let mut b = CircularQueue::new(num_items, &|| 0_u8);
@@ -236,7 +236,7 @@ mod tests {
     
     
     #[test]
-    fn test_normal_buffer() {
+    fn test_medium_size() {
         // Create new buffer
         let num_items = 10;
         let mut b = CircularQueue::new(num_items, &|| 0);
