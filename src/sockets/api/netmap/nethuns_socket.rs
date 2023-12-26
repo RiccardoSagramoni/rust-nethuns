@@ -14,7 +14,7 @@ use c_netmap_wrapper::{netmap_buf_pkt, NetmapRing, NmPortDescriptor};
 use crate::misc::circular_queue::CircularQueue;
 use crate::misc::nethuns_clear_if_promisc;
 use crate::sockets::api::NethunsSocketInnerTrait;
-use crate::sockets::base::{NethunsSocketBase, RecvPacketData};
+use crate::sockets::base::{NethunsSocketBase, RecvPacket};
 use crate::sockets::errors::{
     NethunsFlushError, NethunsRecvError, NethunsSendError,
 };
@@ -80,7 +80,7 @@ impl NethunsSocketNetmap {
 
 
 impl NethunsSocketInnerTrait for NethunsSocketNetmap {
-    fn recv(&mut self) -> Result<RecvPacketData, NethunsRecvError> {
+    fn recv(&mut self) -> Result<RecvPacket, NethunsRecvError> {
         // Check if the ring has been binded to a queue and if it's in RX mode
         let rx_ring = match &mut self.base.rx_ring {
             Some(r) => r,
@@ -181,7 +181,7 @@ impl NethunsSocketInnerTrait for NethunsSocketNetmap {
             // otherwise the Rust memory model rules will be broken.
             let slot = rx_ring.get_slot(head_idx);
             
-            RecvPacketData::new(
+            RecvPacket::new(
                 rx_ring.head() as _,
                 &slot.pkthdr,
                 pkt,

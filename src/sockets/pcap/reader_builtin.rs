@@ -8,7 +8,7 @@ use std::io::SeekFrom;
 use std::sync::atomic::Ordering;
 use std::{cmp, mem};
 
-use crate::sockets::base::{NethunsSocketBase, RecvPacketData};
+use crate::sockets::base::{NethunsSocketBase, RecvPacket};
 use crate::sockets::errors::{
     NethunsPcapOpenError, NethunsPcapReadError, NethunsPcapRewindError,
     NethunsPcapStoreError, NethunsPcapWriteError,
@@ -119,7 +119,7 @@ impl NethunsSocketPcapTrait for NethunsSocketPcapInner {
     }
     
     
-    fn read(&mut self) -> Result<RecvPacketData, NethunsPcapReadError> {
+    fn read(&mut self) -> Result<RecvPacket, NethunsPcapReadError> {
         let rx_ring =
             self.base.rx_ring.as_mut().expect(
                 "[pcap_read] rx_ring should have been set during `open`",
@@ -173,7 +173,7 @@ impl NethunsSocketPcapTrait for NethunsSocketPcapInner {
             // otherwise the Rust memory model rules will be broken.
             let slot = rx_ring.get_slot(head_idx);
             
-            RecvPacketData::new(
+            RecvPacket::new(
                 rx_ring.head() as _,
                 &slot.pkthdr,
                 &slot.packet[..bytes as _],

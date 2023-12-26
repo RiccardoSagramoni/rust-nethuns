@@ -13,7 +13,7 @@ use std::fmt::Debug;
 
 use crate::types::{NethunsQueue, NethunsSocketOptions, NethunsStat};
 
-use super::base::{NethunsSocketBase, RecvPacketData};
+use super::base::{NethunsSocketBase, RecvPacket};
 use super::errors::{
     NethunsBindError, NethunsFlushError, NethunsOpenError, NethunsRecvError,
     NethunsSendError,
@@ -64,9 +64,7 @@ pub(super) trait BindableNethunsSocketInnerTrait: Debug + Send {
     /// * `Ok(BindableNethunsSocketInner)` - A new nethuns socket, in no error occurs.
     /// * `Err(NethunsOpenError::InvalidOptions)` - If at least one of the options holds a invalid value.
     /// * `Err(NethunsOpenError::Error)` - If an unexpected error occurs.
-    fn open(
-        opt: NethunsSocketOptions,
-    ) -> Result<Self, NethunsOpenError>
+    fn open(opt: NethunsSocketOptions) -> Result<Self, NethunsOpenError>
     where
         Self: Sized;
     
@@ -121,7 +119,7 @@ pub(super) trait NethunsSocketInnerTrait: Debug + Send {
     /// * `Err(NethunsRecvError::PacketFiltered)` - If the packet is filtered out by the `filter` function specified during socket configuration.
     /// * `Err(NethunsRecvError::FrameworkError)` - If an error from the unsafe interaction with underlying I/O framework occurs.
     /// * `Err(NethunsRecvError::Error)` - If an unexpected error occurs.
-    fn recv(&mut self) -> Result<RecvPacketData, NethunsRecvError>;
+    fn recv(&mut self) -> Result<RecvPacket, NethunsRecvError>;
     
     
     /// Queue up a packet for transmission.
