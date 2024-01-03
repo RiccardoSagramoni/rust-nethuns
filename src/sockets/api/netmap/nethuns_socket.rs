@@ -120,8 +120,8 @@ impl NethunsSocketInnerTrait for NethunsSocketNetmap {
             Ok(r) => r,
             Err(_) => {
                 // All netmap rings are empty.
-                // Try again after telling the hardware of consumed packets
-                // and asking for newly available packets.
+                // Try again after synchronizing the rx rings
+                // of the socket.
                 // If it still fails, return an error
                 // (no packets available at the moment).
                 unsafe { libc::ioctl(self.p.fd, NIOCRXSYNC) };
@@ -138,7 +138,8 @@ impl NethunsSocketInnerTrait for NethunsSocketNetmap {
         let idx = cur_netmap_slot.buf_idx;
         let pkt = unsafe { netmap_buf_pkt!(netmap_ring, idx) };
         
-        // Update the packet header metadata of the nethuns ring abstraction against the actual netmap packet.
+        // Update the packet header metadata of the nethuns ring abstraction
+        // against the actual netmap packet.
         {
             let slot = rx_ring.get_slot_mut(head_idx);
             slot.pkthdr.ts = netmap_ring.ts;

@@ -23,10 +23,10 @@ pub(crate) struct NethunsSocketBase {
     /// Configuration options
     pub opt: NethunsSocketOptions,
     
-    /// Rings used for transmission
+    /// Ring used for transmission
     pub tx_ring: Option<NethunsRing>,
     
-    /// Rings used for reception
+    /// Ring used for reception
     pub rx_ring: Option<NethunsRing>,
     
     /// Name of the binded device
