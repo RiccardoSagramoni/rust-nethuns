@@ -36,7 +36,7 @@ pub(crate) struct NethunsSocketBase {
     pub queue: NethunsQueue,
     
     /// Index of the interface
-    pub ifindex: libc::c_int,
+    pub ifindex: i32,
     
     /// Closure used for filtering received packets.
     #[derivative(Debug = "ignore")]

@@ -1,7 +1,5 @@
 //! Module which provides [`CircularQueue`], an optimized circular queue with head and tail indexes.
 
-#![allow(dead_code)]
-
 use std::iter::Cycle;
 use std::num::Wrapping;
 use std::slice::Iter;
