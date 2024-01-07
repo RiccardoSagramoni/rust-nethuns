@@ -60,7 +60,7 @@ impl NethunsSocketPcapTrait for NethunsSocketPcapInner {
             };
             
             // Read PCAP file header
-            file.read_exact(unsafe { any_as_u8_slice_mut(&mut file_header) })?;
+            file.read_exact(any_as_u8_slice_mut(&mut file_header))?;
             
             // Check if the file format is supported
             if file_header.magic != TCPDUMP_MAGIC
@@ -99,7 +99,7 @@ impl NethunsSocketPcapTrait for NethunsSocketPcapInner {
                 linktype: 1, // DLT_EN10MB
             };
             
-            file.write_all(unsafe { any_as_u8_slice(&file_header) })?;
+            file.write_all(any_as_u8_slice(&file_header))?;
             file.flush()?;
             file
         };
@@ -135,9 +135,9 @@ impl NethunsSocketPcapTrait for NethunsSocketPcapInner {
         // Read a new packet (header + payload) from the file
         let mut header = nethuns_pcap_patched_pkthdr::default();
         let header_slice = if self.magic == KUZNETZOV_TCPDUMP_MAGIC {
-            unsafe { any_as_u8_slice_mut(&mut header) }
+            any_as_u8_slice_mut(&mut header)
         } else {
-            unsafe { any_as_u8_slice_mut(&mut header.hdr) }
+            any_as_u8_slice_mut(&mut header.hdr)
         };
         
         self.reader.read_exact(header_slice)?;
@@ -191,7 +191,7 @@ impl NethunsSocketPcapTrait for NethunsSocketPcapInner {
         packet: &[u8],
     ) -> Result<usize, NethunsPcapWriteError> {
         // Write the header + packet into the file
-        self.reader.write_all(unsafe { any_as_u8_slice(header) })?;
+        self.reader.write_all(any_as_u8_slice(header))?;
         self.reader.write_all(packet)?;
         self.reader.flush()?;
         Ok(packet.len())
@@ -219,7 +219,7 @@ impl NethunsSocketPcapTrait for NethunsSocketPcapInner {
         };
         
         // Write the packet header
-        self.reader.write_all(unsafe { any_as_u8_slice(&header) })?;
+        self.reader.write_all(any_as_u8_slice(&header))?;
         
         let mut clen: u32 = header.caplen;
         
@@ -228,7 +228,7 @@ impl NethunsSocketPcapTrait for NethunsSocketPcapInner {
             let h8021q: [u16; 2] =
                 [pkthdr.offvlan_tpid().to_be(), pkthdr.offvlan_tci().to_be()];
             self.reader.write_all(&packet[..12])?;
-            self.reader.write_all(unsafe { any_as_u8_slice(&h8021q) })?;
+            self.reader.write_all(any_as_u8_slice(&h8021q))?;
             clen = header.caplen - 16;
             self.reader.write_all(&packet[12..(clen + 12) as _])?;
         } else {
@@ -250,31 +250,27 @@ impl NethunsSocketPcapTrait for NethunsSocketPcapInner {
 
 
 /// Convert any reference to a slice of `u8`.
-///
-/// # Safety
-/// This function is unsafe because any padding bytes in the struct
-/// may be uninitialized memory (giving undefined behavior).
-/// The struct should have been created with the `#[repr(C)]` attribute
-/// for safe behavior and compatibility with C.
-unsafe fn any_as_u8_slice<'a, T: Sized>(p: &'a T) -> &[u8] {
-    core::slice::from_raw_parts::<'a, _>(
-        (p as *const T) as *const u8,
-        mem::size_of::<T>(),
-    )
+fn any_as_u8_slice<'a, T: Sized>(p: &'a T) -> &[u8] {
+    // [SAFETY] since we are parsing an unique object into an array of bytes,
+    // all the safety requirements of `from_raw_parts_mut` are met
+    unsafe {
+        core::slice::from_raw_parts::<'a, _>(
+            p as *const T as *const u8,
+            mem::size_of::<T>(),
+        )
+    }
 }
 
 /// Convert any reference to a mutable slice of `u8`.
-///
-/// # Safety
-/// This function is unsafe because any padding bytes in the struct
-/// may be uninitialized memory (giving undefined behavior).
-/// The struct should have been created with the `#[repr(C)]` attribute
-/// for safe behavior and compatibility with C.
-unsafe fn any_as_u8_slice_mut<'a, T: Sized>(p: &'a mut T) -> &mut [u8] {
-    core::slice::from_raw_parts_mut::<'a, _>(
-        (p as *mut T) as *mut u8,
-        mem::size_of::<T>(),
-    )
+fn any_as_u8_slice_mut<'a, T: Sized>(p: &'a mut T) -> &mut [u8] {
+    // [SAFETY] since we are parsing an unique object into an array of bytes,
+    // all the safety requirements of `from_raw_parts_mut` are met
+    unsafe {
+        core::slice::from_raw_parts_mut::<'a, _>(
+            p as *mut T as *mut u8,
+            mem::size_of::<T>(),
+        )
+    }
 }
 
 
