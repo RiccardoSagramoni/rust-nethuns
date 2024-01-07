@@ -1,9 +1,9 @@
 use std::sync::mpsc;
 use std::{env, mem, thread};
 
-use nethuns::sockets::base::RecvPacket;
 use nethuns::sockets::errors::NethunsPcapReadError;
 use nethuns::sockets::pcap::NethunsSocketPcap;
+use nethuns::sockets::RecvPacket;
 use nethuns::types::{
     NethunsCaptureDir, NethunsCaptureMode, NethunsSocketMode,
     NethunsSocketOptions,
@@ -63,10 +63,6 @@ fn main() {
             }
         }
         
-        println!(
-            "head: {}\n",
-            socket.base().rx_ring().as_ref().unwrap().head()
-        );
         stop_tx
             .send(())
             .expect("unable to send signal in mpsc channel");
