@@ -28,7 +28,7 @@ pcap-parser = "0.14.1"
 rustix = "0.38.28"
 small_ctor = "0.1.1"
 static_assertions = "1.1.0"
-thiserror = "1.0.51"
+thiserror = "1.0.56"
 
 
 [build-dependencies]
