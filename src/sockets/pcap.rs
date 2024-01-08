@@ -17,7 +17,7 @@ use crate::sockets::errors::{
 use crate::sockets::PkthdrTrait;
 use crate::types::NethunsSocketOptions;
 
-use super::base::{NethunsSocketBase, RecvPacket, RecvPacketData};
+use super::base::{NethunsSocketBase, RecvPacket};
 
 
 /// Nethuns socket for packet capture (PCAP).
@@ -70,7 +70,7 @@ impl NethunsSocketPcap {
     /// * `Err(NethunsPcapOpenError::FileError)` - if an error occurs while accessing the file (BUILTIN_PCAP_READER only).
     /// * `Err(NethunsPcapOpenError::Eof)` - if the end of the file is reached.
     pub fn read(&self) -> Result<RecvPacket, NethunsPcapReadError> {
-        unsafe { (*UnsafeCell::get(&self.inner)).read() }.map(RecvPacket::new)
+        unsafe { (*UnsafeCell::get(&self.inner)).read() }
     }
     
     
@@ -181,7 +181,7 @@ trait NethunsSocketPcapTrait: Debug {
     /// * `Err(NethunsPcapOpenError::PcapError)` - if an error occurs while parsing the pcap file (STANDARD_PCAP_READER only).
     /// * `Err(NethunsPcapOpenError::FileError)` - if an error occurs while accessing the file (BUILTIN_PCAP_READER only).
     /// * `Err(NethunsPcapOpenError::Eof)` - if the end of the file is reached.
-    fn read(&mut self) -> Result<RecvPacketData, NethunsPcapReadError>;
+    fn read(&mut self) -> Result<RecvPacket, NethunsPcapReadError>;
     
     
     /// Write a packet already in pcap format to a pcap file.

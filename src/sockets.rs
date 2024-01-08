@@ -138,7 +138,7 @@ impl NethunsSocket {
     /// * `Err(NethunsRecvError::Error)` - If an unexpected error occurs.
     #[inline(always)]
     pub fn recv(&self) -> Result<RecvPacket, NethunsRecvError> {
-        unsafe { (*UnsafeCell::get(&self.inner)).recv() }.map(RecvPacket::new)
+        unsafe { (*UnsafeCell::get(&self.inner)).recv() }
     }
     
     

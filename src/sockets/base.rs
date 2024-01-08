@@ -23,10 +23,10 @@ pub(crate) struct NethunsSocketBase {
     /// Configuration options
     pub opt: NethunsSocketOptions,
     
-    /// Rings used for transmission
+    /// Ring used for transmission
     pub tx_ring: Option<NethunsRing>,
     
-    /// Rings used for reception
+    /// Ring used for reception
     pub rx_ring: Option<NethunsRing>,
     
     /// Name of the binded device
@@ -36,7 +36,7 @@ pub(crate) struct NethunsSocketBase {
     pub queue: NethunsQueue,
     
     /// Index of the interface
-    pub ifindex: libc::c_int,
+    pub ifindex: i32,
     
     /// Closure used for filtering received packets.
     #[derivative(Debug = "ignore")]
@@ -53,30 +53,44 @@ pub(crate) struct NethunsSocketBase {
 ///
 /// The lifetime specifier is required to ensure that the references do not outlive the generating socket.
 #[derive(Debug)]
-#[repr(transparent)]
 pub struct RecvPacket<'a> {
-    data: RecvPacketData<'a>,
+    id: usize,
+    pkthdr: &'a dyn PkthdrTrait,
+    buffer: &'a [u8],
+    /// Reference used to set the status flag of the corresponding ring slot
+    /// to `Free` when the `RecPacketData` is dropped.
+    slot_status_flag: &'a AtomicRingSlotStatus,
 }
 
 
 impl<'a> RecvPacket<'a> {
-    pub(super) fn new(data: RecvPacketData<'a>) -> Self {
-        RecvPacket { data }
+    pub(super) fn new(
+        id: usize,
+        pkthdr: &'a dyn PkthdrTrait,
+        buffer: &'a [u8],
+        slot_status_flag: &'a AtomicRingSlotStatus,
+    ) -> Self {
+        Self {
+            id,
+            pkthdr,
+            buffer,
+            slot_status_flag,
+        }
     }
     
     #[inline(always)]
     pub fn id(&self) -> usize {
-        self.data.id
+        self.id
     }
     
     #[inline(always)]
     pub fn pkthdr(&self) -> &dyn PkthdrTrait {
-        self.data.pkthdr
+        self.pkthdr
     }
     
     #[inline(always)]
     pub fn buffer(&self) -> &[u8] {
-        self.data.buffer
+        self.buffer
     }
 }
 
@@ -93,40 +107,7 @@ impl Display for RecvPacket<'_> {
     }
 }
 
-
-//
-
-
-/// Inner data structure for a packet received when calling [`NethunsSocket::recv()`](crate::sockets::NethunsSocket::recv) or [`NethunsSocketPcap::read()`](crate::sockets::pcap::NethunsSocketPcap::read).
-///
-/// It must be encapsulated inside `RecvPacket` struct before being handed to the user.
-#[derive(Debug)]
-pub(super) struct RecvPacketData<'a> {
-    id: usize,
-    pkthdr: &'a dyn PkthdrTrait,
-    buffer: &'a [u8],
-    /// Reference used to set the status flag of the corresponding ring slot
-    /// to `Free` when the `RecPacketData` is dropped.
-    slot_status_flag: &'a AtomicRingSlotStatus,
-}
-
-impl<'a> RecvPacketData<'a> {
-    pub fn new(
-        id: usize,
-        pkthdr: &'a dyn PkthdrTrait,
-        buffer: &'a [u8],
-        slot_status_flag: &'a AtomicRingSlotStatus,
-    ) -> Self {
-        Self {
-            id,
-            pkthdr,
-            buffer,
-            slot_status_flag,
-        }
-    }
-}
-
-impl Drop for RecvPacketData<'_> {
+impl Drop for RecvPacket<'_> {
     /// Release the buffer by resetting the status flag of
     /// the corresponding ring slot.
     fn drop(&mut self) {

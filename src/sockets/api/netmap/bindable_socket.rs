@@ -9,7 +9,7 @@ use c_netmap_wrapper::macros::{netmap_buf, netmap_rxring};
 use c_netmap_wrapper::{NetmapRing, NmPortDescriptor};
 
 use crate::misc::circular_queue::CircularQueue;
-use crate::misc::{nethuns_set_if_promisc, nethuns_dev_queue_name};
+use crate::misc::{nethuns_dev_queue_name, nethuns_set_if_promisc};
 use crate::sockets::api::{
     BindableNethunsSocketInnerTrait, NethunsSocketInner,
 };
@@ -30,9 +30,7 @@ pub struct BindableNethunsSocketNetmap {
 
 
 impl BindableNethunsSocketInnerTrait for BindableNethunsSocketNetmap {
-    fn open(
-        opt: NethunsSocketOptions,
-    ) -> Result<Self, NethunsOpenError> {
+    fn open(opt: NethunsSocketOptions) -> Result<Self, NethunsOpenError> {
         let rx = opt.mode == NethunsSocketMode::RxTx
             || opt.mode == NethunsSocketMode::RxOnly;
         let tx = opt.mode == NethunsSocketMode::RxTx
@@ -90,7 +88,7 @@ impl BindableNethunsSocketInnerTrait for BindableNethunsSocketNetmap {
         let connector = if dev.starts_with("vale") {
             ":".to_owned()
         } else {
-            "-".to_owned() // ?? are you sure?
+            "-".to_owned() // FIXME: I'm not sure about this, but it's taken directly from the original code
         };
         
         // Build the device name

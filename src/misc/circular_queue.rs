@@ -1,7 +1,5 @@
 //! Module which provides [`CircularQueue`], an optimized circular queue with head and tail indexes.
 
-#![allow(dead_code)]
-
 use std::iter::Cycle;
 use std::num::Wrapping;
 use std::slice::Iter;
@@ -92,13 +90,13 @@ impl<T> CircularQueue<T> {
     /// Advance the head index of one position
     #[inline(always)]
     pub fn advance_head(&mut self) {
-        self.head += 1
+        self.head += 1;
     }
     
     /// Advance the tail index of one position
     #[inline(always)]
     pub fn advance_tail(&mut self) {
-        self.tail += 1
+        self.tail += 1;
     }
     
     /// Returns a cycle iterator over the buffer
@@ -210,7 +208,7 @@ mod tests {
     use super::*;
     
     #[test]
-    fn test_small_buffer() {
+    fn test_small_size() {
         // Create new buffer
         let num_items = 1;
         let mut b = CircularQueue::new(num_items, &|| 0_u8);
@@ -236,7 +234,7 @@ mod tests {
     
     
     #[test]
-    fn test_normal_buffer() {
+    fn test_medium_size() {
         // Create new buffer
         let num_items = 10;
         let mut b = CircularQueue::new(num_items, &|| 0);
