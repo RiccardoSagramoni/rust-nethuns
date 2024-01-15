@@ -11,7 +11,7 @@ libc = "0.2.150"
 uapi = "0.2.10"
 
 [build-dependencies]
-bindgen = { version = "0.69.1", features = ["experimental"] }
+bindgen = { version = "0.69.2", features = ["experimental"] }
 cfg-if = "1.0.0"
 regex = "1.10.2"
 
