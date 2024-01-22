@@ -13,6 +13,6 @@ uapi = "0.2.10"
 [build-dependencies]
 bindgen = { version = "0.69.1", features = ["experimental"] }
 cfg-if = "1.0.0"
-regex = "1.10.2"
+regex = "1.10.3"
 
 [dev-dependencies]
