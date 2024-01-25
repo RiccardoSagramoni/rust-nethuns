@@ -127,10 +127,6 @@ fn meter(total: Arc<AtomicU64>, term: Arc<AtomicBool>) {
 /// Set an handler for the SIGINT signal (Ctrl-C),
 /// which will notify the other threads
 /// to gracefully stop their execution.
-///
-/// # Arguments
-/// - `bus`: Bus for SPMC (single-producer/multiple-consumers) communication
-///   between threads.
 fn set_sigint_handler(term: Arc<AtomicBool>) {
     ctrlc::set_handler(move || {
         println!("Ctrl-C detected. Shutting down...");
