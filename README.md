@@ -1,115 +1,73 @@
-# rust-nethuns
+# RustNethuns: a rewrite in Rust of the Nethuns unified API for fast and portable network programming
 
-## WIP: files
-```
-├── api.h MERGED (in lib.rs for API and misc.rs for utility functions)
-├── define.h MERGED (in vlan.rs)
-├── global.c OK
-├── global.h OK
-├── misc
-│   ├── compiler.h CAN'T
-│   ├── hashmap.h NOT NECESSARY (use `std::collections::HashMap`)
-│   └── macro.h OK
-├── nethuns.c OK
-├── nethuns.h OK
-├── queue.h NOT NECESSARY (use `rtrb` crate)
-├── sockets
-│   ├── base.h OK
-│   ├── file.inc MERGED (in pcap.rs)
-│   ├── netmap.c OK
-│   ├── netmap.h OK
-│   ├── netmap_pkthdr.h OK
-│   ├── ring.h OK
-│   ├── types.h OK (in sockets.rs with traits)
-├── stub.h OK (included in sockets.rs and vlan.rs)
-├── types.h OK
-├── version.c.in NOT NECESSARY (Rust already has a versioning system)
-└── vlan.h OK
-```
+RustNethuns is a rewrite in Rust of [Nethuns](https://github.com/larthia/nethuns), a fast C-based network I/O library.
+The aim of this work has been to evaluate the *high performance* and *strong safety* claims made by the Rust programming language, specifically in the domain of low-level network programming.
 
-Unable to rewrite in Rust
-- `compiler.h`
+This project serves as the central element of Riccardo Sagramoni's MSc thesis in Computer Engineering.
+
+## Related resources
+
+- Final thesis document ([GitHub](https://github.com/RiccardoSagramoni/rust-nethuns-thesis))
+- Performance evaluation of the RustNethuns library ([GitHub](https://github.com/RiccardoSagramoni/rust-nethuns-performance-analysis))
+- Safety analysis of the RustNethuns’s socket model with the Miri interpreter ([GitHub](https://github.com/RiccardoSagramoni/rust-nethuns-miri))
 
 
+## What is Nethuns?
 
-## WIP: Framework API (stub.h)
+Nethuns is a software library (originally written in C) that provides a unified API to access and manage low-level network operations over different underlying network I/O frameworks, and consequently operating systems.
+The design of Nethuns originates from the practical requirement of developing portable network applications with extremely high data rate target.
+Instead of re-writing the applications to match the underlying network I/O engines available over the different operating systems, Nethuns offers a unified abstraction layer that allows programmers to implement their applications regardless of the underlying technology.
+Therefore, network applications that use the Nethuns library only need to be re-compiled to run on top of a different engine (chosen in the set of the ones available for the OS), with no need for code adaptation.
 
-- [X] `nethuns_pcap_open(...)`
-- [X] `nethuns_pcap_close(...)`
-- [X] `nethuns_pcap_read(...)`
-- [X] `nethuns_pcap_write(...)`
-- [X] `nethuns_pcap_store(...)`
-- [X] `nethuns_pcap_rewind(...)`
+Nethuns would like to fill the lack of a unified network abstraction in the software domain, which is instead present in the hardware domain thanks to [P4](https://p4.org/).
+Nethuns should play a similar role to that entrusted to the [pcap](https://www.tcpdump.org/) library in the past.
+In addition, it adds support for recent technologies such as [AF_XDP](https://www.kernel.org/doc/Documentation/networking/af_xdp.rst) and concurrency.
+Of course, all of this is provided to network programmers while minimizing the overhead, in order not to impact the performance of native underlying network I/O frameworks.
+The API exposed by Nethuns recalls the interface of UNIX sockets to make immediate and simple its adoption to experienced network programmers.
 
-- [X] `nethuns_open(...)`
-- [X] `nethuns_close(...)`
-- [X] `nethuns_bind(...)`
-- [X] `nethuns_fd(...)`
-- [X] `nethuns_recv(...)`
-- [X] `nethuns_flush(...)`
-- [X] `nethuns_send(...)`
-- [X] `nethuns_get_buf_addr(...)`
-- [X] `nethuns_fanout(...)`
+Currently, the C-based Nethuns library fully supports:
 
-- [X] `nethuns_tstamp_sec(...)`
-- [X] `nethuns_tstamp_usec(...)`
-- [X] `nethuns_tstamp_nsec(...)`
-- [X] `nethuns_tstamp_set_sec(...)`
-- [X] `nethuns_tstamp_set_usec(...)`
-- [X] `nethuns_tstamp_set_nsec(...)`
-
-- [X] `nethuns_snaplen(...)`
-- [X] `nethuns_len(...)`
-- [X] `nethuns_set_snaplen(...)`
-- [X] `nethuns_set_len(...)`
-`
-- [X] `nethuns_rxhash(...)`
-- [X] `nethuns_dump_rings(...)`
-- [X] `nethuns_stats(...)`
-
-- [X] `nethuns_offvlan_tci(...)`
-- [X] `nethuns_offvlan_tpid(...)`
+- AF_PACKET and [AF_XDP](https://www.kernel.org/doc/Documentation/networking/af_xdp.rst) sockets for fast packet handling over Linux
+- the [netmap](https://github.com/luigirizzo/netmap) framework for fast packet I/O over Linux and FreeBSD
+- the [pcap](https://www.tcpdump.org/) library for use in BSD, MacOS and Windows operating systems
 
 
-## Examples
-
-To load `/dev/netmap` and generate VALE ports:
-
-```sh
-sudo modprobe netmap
-
-sudo vale-ctl -n vi0
-sudo vale-ctl -a vale0:vi0
-sudo vale-ctl -n vi1
-sudo vale-ctl -a vale0:vi1
-```
+## Why a Rust-based Nethuns library?
+...
 
 
-### send
-
-PC1
-
-```sh
-./run_example.sh send "-i vi0 -b 64 -z"
-```
-
-PC2
-
-```sh
-sudo pkt-gen -i vi1 -f rx
-```
+## RustNethuns API
+...
 
 
-### meter
+## Dependencies
 
-PC1
+The RustNethuns library relies on the following dependencies:
 
-```sh
-pkt-gen -i vi0 -f tx
-```
+- **rustc** compiler.
+- [**libclang**](https://clang.llvm.org/doxygen/group__CINDEX.html) library with *Clang 5.0 or greater*, needed to automatically generate the bindings to the underlying C-based I/O frameworks.
+- [**netmap**](https://github.com/luigirizzo/netmap) library, needed to enable netmap support.
 
-PC2
 
-```sh
-./run_example.sh meter "-i vi1"
-```
+## Cargo features
+...
+
+
+## Using the library to implement a brand new application
+...
+
+
+## Credits
+
+### Author
+
+- Riccardo Sagramoni
+
+### Supervisors
+
+- Prof. Giuseppe Lettieri
+- Prof. Gregorio Procissi
+
+### Others
+
+The [Lartia group](https://larthia.com/) for the original C-based [Nethuns](https://github.com/larthia/nethuns) library.
