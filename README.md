@@ -5,6 +5,7 @@ The aim of this work has been to evaluate the *high performance* and *strong saf
 
 This project serves as the central element of Riccardo Sagramoni's MSc thesis in Computer Engineering.
 
+
 ## Related resources
 
 - Final thesis document ([GitHub](https://github.com/RiccardoSagramoni/rust-nethuns-thesis))
@@ -33,11 +34,54 @@ Currently, the C-based Nethuns library fully supports:
 
 
 ## Why a Rust-based Nethuns library?
-...
+
+The Rust programming language is able to maintains *analogous performance* of the C programming language, while ensuring a **significant higher level of memory and thread safety**, mostly at compilation time.
+These features makes Rust a suitable candidate for replacing C and C++ (which are unsafe and error-prone to use) in the domain of network programming.
 
 
-## RustNethuns API
-...
+## RustNethuns basic API
+
+- Open a new socket using the options in `opt`
+
+```rust
+let socket: BindableNethunsSocket = BindableNethunsSocket::open(options).unwrap();
+```
+
+- Bind the socket to a specific queue/any queue of `dev`
+
+```rust
+let socket: NethunsSocket = socket.bind(dev, queue).unwrap();
+```
+
+- Get the next unprocessed received packet
+
+```rust
+let packet: RecvPacket = socket.recv().unwrap()
+```
+
+- Release a buffer previously obtained from `NethunsSocket::recv()`
+
+```rust
+drop(packet); // <-- optional (it will automatically called when `packet` goes out of scope)
+```
+
+- Queue up a packet for transmission
+
+```rust
+socket.send(packet).unwrap();
+```
+
+- Send all queued up packets
+
+```rust
+socket.flush().unwrap();
+```
+
+- Unbind the device and destroy the socket
+
+```rust
+drop(socket); // <-- optional (it will automatically called when `socket` goes out of scope)
+```
 
 
 ## Dependencies
@@ -50,11 +94,14 @@ The RustNethuns library relies on the following dependencies:
 
 
 ## Cargo features
-...
+
+- `netmap`: enables the netmap framework for network I/O.
+- `NETHUNS_USE_BUILTIN_PCAP_READER`: use a built-in reader for PCAP files in place of the standard one for `NethunsSocketPcap`. The built-in reader gives both reading and writing capabilities to the programmer, whereas the standard one allows only reading.
 
 
 ## Using the library to implement a brand new application
-...
+
+The current version of the library is not ready to be published on [crates.io](crates.io), so you need to specify RustNethuns as a [*git* dependency](https://doc.rust-lang.org/cargo/reference/specifying-dependencies.html#specifying-dependencies-from-git-repositories).
 
 
 ## Credits
