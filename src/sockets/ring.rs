@@ -151,7 +151,7 @@ pub struct NethunsRingSlot {
     pub id: usize,
     pub len: usize,
     
-    pub packet: Vec<u8>,
+    pub packet: Box<[u8]>,
 }
 
 
@@ -164,7 +164,7 @@ impl NethunsRingSlot {
             pkthdr: Pkthdr::default(),
             id: 0,
             len: 0,
-            packet: vec![0; pktsize],
+            packet: vec![0; pktsize].into_boxed_slice(),
         }
     }
 }

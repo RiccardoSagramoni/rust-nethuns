@@ -19,7 +19,7 @@ use derivative::Derivative;
 #[derivative(Debug)]
 pub struct CircularQueue<T> {
     #[derivative(Debug = "ignore")]
-    buffer: Vec<T>,
+    buffer: Box<[T]>,
     head: Wrapping<usize>,
     tail: Wrapping<usize>,
     mask: usize,
@@ -49,7 +49,7 @@ impl<T> CircularQueue<T> {
         }
         
         CircularQueue {
-            buffer,
+            buffer: buffer.into_boxed_slice(),
             head: Wrapping(0),
             tail: Wrapping(0),
             mask: size - 1,
