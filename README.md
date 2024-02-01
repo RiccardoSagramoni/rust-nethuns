@@ -26,11 +26,7 @@ In addition, it adds support for recent technologies such as [AF_XDP](https://ww
 Of course, all of this is provided to network programmers while minimizing the overhead, in order not to impact the performance of native underlying network I/O frameworks.
 The API exposed by Nethuns recalls the interface of UNIX sockets to make immediate and simple its adoption to experienced network programmers.
 
-Currently, the C-based Nethuns library fully supports:
-
-- AF_PACKET and [AF_XDP](https://www.kernel.org/doc/Documentation/networking/af_xdp.rst) sockets for fast packet handling over Linux
-- the [netmap](https://github.com/luigirizzo/netmap) framework for fast packet I/O over Linux and FreeBSD
-- the [pcap](https://www.tcpdump.org/) library for use in BSD, MacOS and Windows operating systems
+Currently, the Rust-based Nethuns library fully supports only the [netmap](https://github.com/luigirizzo/netmap) framework for fast packet I/O over Linux.
 
 
 ## Why a Rust-based Nethuns library?
