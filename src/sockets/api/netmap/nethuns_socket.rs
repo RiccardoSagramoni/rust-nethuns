@@ -242,7 +242,7 @@ impl NethunsSocketInnerTrait for NethunsSocketNetmap {
         };
         
         let mut prev_tails: Vec<u32> =
-            vec![0; (self.p.last_tx_ring - self.p.last_rx_ring + 1) as _];
+            vec![0; (self.p.last_tx_ring - self.p.first_tx_ring + 1) as _];
         
         let mut head = tx_ring.head();
         
