@@ -242,12 +242,12 @@ impl NethunsSocketInnerTrait for NethunsSocketNetmap {
         };
         
         let mut prev_tails: Vec<u32> =
-            vec![0; (self.p.last_tx_ring - self.p.last_rx_ring + 1) as _];
+            vec![0; (self.p.last_tx_ring - self.p.first_tx_ring + 1) as _];
         
         let mut head = tx_ring.head();
         
         // Try to push packets marked for transmission
-        for i in self.p.first_tx_ring as _..=self.p.last_tx_ring as _ {
+        for i in (self.p.first_tx_ring as _)..=(self.p.last_tx_ring as _) {
             let mut ring = NetmapRing::new(
                 NonNull::new(
                     unsafe { netmap_txring(self.p.nifp, i) }
@@ -308,7 +308,7 @@ impl NethunsSocketInnerTrait for NethunsSocketNetmap {
         // cleanup completed transmissions: for each completed
         // netmap slot, mark the corresponding nethuns slot as
         // available (status <- Free)
-        for i in self.p.first_tx_ring as _..=self.p.last_tx_ring as _ {
+        for i in (self.p.first_tx_ring as _)..=(self.p.last_tx_ring as _) {
             let ring = NetmapRing::new(
                 NonNull::new(
                     unsafe { netmap_txring(self.p.nifp, i) }
