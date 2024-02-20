@@ -28,7 +28,7 @@ use crate::sockets::errors::NethunsRecvError;
 ///
 /// # Safety
 ///
-/// This function makes use of unsafe code due to the interaction with the 
+/// This function makes use of unsafe code due to the interaction with the
 /// Netmap C API through the `netmap_rxring` function.
 /// Be sure that the Netmap port descriptor is properly initialized.
 pub(super) fn non_empty_rx_ring(
@@ -82,7 +82,7 @@ pub(super) fn non_empty_rx_ring(
 macro_rules! nethuns_blocks_free {
     ($socket: expr, $slot: expr, $block_id: expr) => {
         $block_id; // trigger compile check for block_id field
-        $socket.free_ring.push_unchecked($slot.pkthdr.buf_idx);
+        unsafe { $socket.free_ring.push_unchecked($slot.pkthdr.buf_idx) };
     };
 }
 pub(super) use nethuns_blocks_free;
@@ -101,7 +101,10 @@ pub(super) use nethuns_blocks_free;
 macro_rules! nethuns_get_buf_addr_netmap {
     ($some_ring: expr, $tx_ring: expr, $pktid: expr) => {
         slice::from_raw_parts_mut(
-            netmap_buf($some_ring, $tx_ring.get_slot($pktid).pkthdr.buf_idx as _) as *mut u8,
+            netmap_buf(
+                $some_ring,
+                $tx_ring.get_slot($pktid).pkthdr.buf_idx as _,
+            ) as *mut u8,
             $some_ring.nr_buf_size as _,
         )
     };
