@@ -19,7 +19,7 @@ use derivative::Derivative;
 #[derivative(Debug)]
 pub struct CircularQueue<T> {
     #[derivative(Debug = "ignore")]
-    buffer: Vec<T>,
+    buffer: Box<[T]>,
     head: Wrapping<usize>,
     tail: Wrapping<usize>,
     mask: usize,
@@ -49,7 +49,7 @@ impl<T> CircularQueue<T> {
         }
         
         CircularQueue {
-            buffer,
+            buffer: buffer.into_boxed_slice(),
             head: Wrapping(0),
             tail: Wrapping(0),
             mask: size - 1,
@@ -114,16 +114,17 @@ impl<T> CircularQueue<T> {
         if self.is_empty() {
             None
         } else {
-            Some(self.pop_unchecked())
+            Some(unsafe { self.pop_unchecked() })
         }
     }
     
     /// Return an immutable reference to the item specified by the `head` index
     /// and advance the `head` index of one position.
-    ///
-    /// **It doesn't check if the buffer is empty.**
+    /// 
+    /// # Safety
+    /// The caller must ensure that the buffer is not empty.
     #[inline(always)]
-    pub fn pop_unchecked(&mut self) -> &T {
+    pub unsafe fn pop_unchecked(&mut self) -> &T {
         let head_idx = self.head.0;
         self.advance_head();
         &self.buffer[head_idx & self.mask]
@@ -141,17 +142,20 @@ impl<T> CircularQueue<T> {
         if self.is_full() {
             false
         } else {
-            self.push_unchecked(value);
+            unsafe {
+                self.push_unchecked(value);
+            }
             true
         }
     }
     
     /// Add a new item to the buffer at the position specified by the `tail` index
     /// and advance the `tail` index of one position.
-    ///  
-    /// **It doesn't check if the buffer is full.**
+    /// 
+    /// # Safety
+    /// The caller must ensure that the buffer is not full.
     #[inline(always)]
-    pub fn push_unchecked(&mut self, value: T) {
+    pub unsafe fn push_unchecked(&mut self, value: T) {
         self.buffer[self.tail.0 & self.mask] = value;
         self.advance_tail();
     }
@@ -160,13 +164,15 @@ impl<T> CircularQueue<T> {
     /// Get an immutable reference to an element of the buffer
     #[inline(always)]
     pub fn get(&self, index: usize) -> &T {
-        &self.buffer[index & self.mask]
+        // [SAFETY]: `index & self.mask` is guaranteed to be in bounds
+        unsafe { self.buffer.get_unchecked(index & self.mask) }
     }
     
     /// Get a mutable reference to an element of the buffer
     #[inline(always)]
     pub fn get_mut(&mut self, index: usize) -> &mut T {
-        &mut self.buffer[index & self.mask]
+        // [SAFETY]: `index & self.mask` is guaranteed to be in bounds
+        unsafe { self.buffer.get_unchecked_mut(index & self.mask) }
     }
 }
 

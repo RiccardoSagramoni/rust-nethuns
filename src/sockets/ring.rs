@@ -110,15 +110,6 @@ impl NethunsRing {
     }
     
     
-    /// Get a reference to the head slot in the ring
-    /// and shift the head to the following slot.
-    #[inline(always)]
-    #[allow(dead_code)]
-    pub fn next_slot(&mut self) -> &NethunsRingSlot {
-        self.rings.pop_unchecked()
-    }
-    
-    
     /// Mark the packet contained in a specific slot of a TX ring
     /// as *ready for transmission*, by setting to 1 the `status` field.
     ///
@@ -151,7 +142,7 @@ pub struct NethunsRingSlot {
     pub id: usize,
     pub len: usize,
     
-    pub packet: Vec<u8>,
+    pub packet: Box<[u8]>,
 }
 
 
@@ -164,7 +155,7 @@ impl NethunsRingSlot {
             pkthdr: Pkthdr::default(),
             id: 0,
             len: 0,
-            packet: vec![0; pktsize],
+            packet: vec![0; pktsize].into_boxed_slice(),
         }
     }
 }
