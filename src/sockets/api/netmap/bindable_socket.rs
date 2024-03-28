@@ -223,7 +223,7 @@ impl BindableNethunsSocketInnerTrait for BindableNethunsSocketNetmap {
         // Case 2: RX
         if self.rx() {
             while scan != 0 {
-                free_ring.push_unchecked(scan);
+                unsafe { free_ring.push_unchecked(scan) };
                 scan = unsafe {
                     let ptr = netmap_buf(&some_ring, scan as _) as *const u32;
                     debug_assert!(!ptr.is_null());
