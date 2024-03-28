@@ -241,9 +241,8 @@ impl NethunsSocketInnerTrait for NethunsSocketNetmap {
             None => return Err(NethunsFlushError::NotTx),
         };
         
-        let mut prev_tails: Box<[u32]> =
-            vec![0; (self.p.last_tx_ring - self.p.first_tx_ring + 1) as _]
-                .into_boxed_slice();
+        let mut prev_tails: Vec<u32> =
+            vec![0; (self.p.last_tx_ring - self.p.first_tx_ring + 1) as _];
         
         let mut head = tx_ring.head();
         
